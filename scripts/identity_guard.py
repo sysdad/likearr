@@ -34,7 +34,9 @@ is skipped, for a real third-party false positive.
 The output names where a hit is (a path and line, a commit and field, or a commit, path and line)
 and WHICH entry matched, by its number, never the matched text or the entry: CI logs are readable
 and the list is secret. A path that itself matches an entry is shown by its position instead (in
-the file list, or in the commit's diff).
+the file list, or in the commit's diff). `--counts-only` leaves out the where and the which, and
+prints only how many hits there are: CI uses it, because a public repository's logs can be read by
+anyone, and a red run there should not point at the line.
 
 Exit status: 0 clean, 1 at least one hit, 2 the check could not run (no denylist, a git error).
 """
@@ -572,6 +574,11 @@ def _parser() -> argparse.ArgumentParser:
         metavar="NAME",
         help="with --commits: leave out commits already on this remote's tracking branches",
     )
+    parser.add_argument(
+        "--counts-only",
+        action="store_true",
+        help="on a hit, print only how many hits there are, not where or which entry (for public CI logs)",
+    )
     return parser
 
 
@@ -599,12 +606,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         # itself be an entry, so only its type is shown. Exit 2, not a traceback's 1 (a "hit").
         sys.stderr.write(f"identity guard: cannot run: a file could not be read ({type(exc).__name__})\n")
         return 2
-    for hit in hits:
-        sys.stderr.write(f"identity guard: {hit}\n")
+    if not args.counts_only:
+        for hit in hits:
+            sys.stderr.write(f"identity guard: {hit}\n")
     if hits:
+        where = "Run the guard locally with the denylist file to see where. " if args.counts_only else ""
         sys.stderr.write(
             f"identity guard: FAILED, {len(hits)} hit(s) in {scope} against {len(entries)} entries. "
-            f"Remove them, or mark a real third-party false positive with '{ALLOW_MARKER}' on that line.\n"
+            f"{where}Remove them, or mark a real third-party false positive with '{ALLOW_MARKER}' on that line.\n"
         )
         return 1
     sys.stdout.write(f"identity guard: ok, {scope} clean against {len(entries)} entries.\n")
