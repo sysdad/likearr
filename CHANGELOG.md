@@ -20,6 +20,9 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
 
 ### Fixed
 
+- The Status page and the Not added page rebuilt a set of monitored releases for every wanted
+  release, so `coverage()` slowed down quadratically with the library's size (a few seconds at
+  several thousand wanted releases). The set is now built once.
 - A Lidarr API key ending in a carriage return or line feed, as a Windows-line-ending env file or a
   Kubernetes Secret created from a file leaves it, made every Lidarr request fail and printed the
   whole key in the error, which then reached `doctor`, the run's error, the webhook and the MQTT

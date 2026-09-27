@@ -617,6 +617,20 @@ def test_coverage_counts_each_intent_once_and_the_outcomes_add_up() -> None:
     assert not c.dry
 
 
+def test_not_monitored_matches_a_naive_membership_check() -> None:
+    """#8: the monitored set is built once, before the comprehension. Its count must still match
+    a naive per-item membership check over the unbuilt list."""
+    last = _last_run()
+    c = coverage(last)
+
+    wanted = list(last.desired.releases)
+    albums = {key: last.view.album(key) for key in wanted}
+    monitored = [k for k, a in albums.items() if a is not None and a.monitored]
+    naive_unmonitored = [k for k in wanted if k not in monitored]
+
+    assert c.not_monitored == len(naive_unmonitored)
+
+
 def test_an_ambiguous_same_name_match_has_its_own_line() -> None:
     """Issue #32: two artists share the name, so nothing is monitored. Its own line since #60, so
     each line equals the Not added page's card for it."""
