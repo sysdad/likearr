@@ -1,0 +1,96 @@
+{# "Finish the clean up" (#58): the checklist after Export. The page previews what it can, read-only,
+   as child jobs; the two steps that change something are commands, shown exactly. No command here
+   carries --force, and none deletes anything. Refreshes itself while a preview runs. #}
+{% macro changes(tone, text) %}<span class="pill tone-{{ tone }}">{{ text }}</span>{% endmacro %}
+{% macro running_or_failed(step, what) %}
+  {% if step.state == "running" %}<p class="note">{{ what }}...</p>
+  {% elif step.meta is none %}<p class="note">Not previewed yet: use Preview again below.</p>
+  {% else %}<p class="warn">{{ what }} didn't finish ({{ step.state }}). <a href="/jobs/{{ step.meta.id }}">See why</a>.</p>{% endif %}
+{% endmacro %}
+<div id="finish-body"{% if finish and finish.running %} hx-get="/prune/{{ finish.job_id }}/finish" hx-trigger="load delay:2s" hx-swap="outerHTML"{% endif %}>
+{% if finish %}{% set f = finish %}
+{% if f.config_error %}
+<p class="error">config.toml does not load, so the steps can't be shown: {{ f.config_error }}</p>
+{% else %}
+<h2>Finish the clean up</h2>
+<p>The page previews what it can. The steps that change something are commands you run in a terminal on the likearr host, in this order. Nothing is ever deleted.</p>
+<p class="note">Each command starts with <code>{{ f.cli_command }}</code>, your <code>[ui] cli_command</code> in config.toml. It must run the <code>likearr-cli</code> service, the one with the library mounted, and pass the rest through as it is.</p>
+{% for e in f.prune_errors %}<p class="warn">{{ e }}</p>{% endfor %}
+<ol class="finish-steps">
+  <li>
+    <h3>Preview the move {{ changes("ok", "changes nothing") }}</h3>
+    {% if f.stage %}{% set s = f.stage %}
+    <p>{{ s.files }} file{{ "" if s.files == 1 else "s" }}, {{ s.bytes | human_bytes }}, from {{ s.albums }} album{{ "" if s.albums == 1 else "s" }}. Clean up said {{ f.summary.trash_albums }} album{{ "" if f.summary.trash_albums == 1 else "s" }}, {{ f.summary.trash_size }}.</p>
+    {% if s.albums != f.summary.trash_albums %}<p class="warn">The preview and Clean up count different albums. Build a new report if Lidarr changed since this one.</p>{% endif %}
+    <p>Then Lidarr removes {{ s.remove | length }} artist{{ "" if s.remove | length == 1 else "s" }} (the row only, never files) and rescans {{ s.rescan | length }}.</p>
+    {% if s.remove or s.rescan %}<details><summary>Which artists, and why</summary><ul>
+      {% for name, why in s.remove %}<li>Remove {{ name }}: {{ why }}</li>{% endfor %}
+      {% for name, why in s.rescan %}<li>Rescan {{ name }}: {{ why }}</li>{% endfor %}
+    </ul></details>{% endif %}
+    <p class="note">The mount isn't checked here: the web UI has no library mount. Step 3 checks it.</p>
+    {% else %}{{ running_or_failed(f.steps.stage, "Previewing the move") }}{% endif %}
+  </li>
+  <li>
+    <h3>Check Lidarr {{ changes("ok", "changes nothing") }}</h3>
+    {% if f.checks %}{% set c = f.checks %}
+    {% if c.auto_add is none %}<p class="warn">Couldn't read Lidarr's import lists.</p>
+    {% elif c.auto_add %}<p class="warn">Turn off automatic add on {{ c.auto_add | join(", ") }}{% if f.lidarr_url %} in <a href="{{ f.lidarr_url }}/settings/importlists" target="_blank" rel="noopener noreferrer">Lidarr's import lists</a>{% endif %}: it would add back what the move removes.</p>
+    {% else %}<p>No import list adds artists automatically.</p>{% endif %}
+    {% if c.queue is none %}<p class="warn">Couldn't read Lidarr's command queue.</p>
+    {% elif c.queue %}<p class="warn">Lidarr is busy: {{ c.queue | length }} command{{ "" if c.queue | length == 1 else "s" }} queued or running ({{ c.queue | map(attribute="0") | unique | join(", ") }}). Wait for it to finish before step 4.</p>
+    {% else %}<p>Lidarr's command queue is idle.</p>{% endif %}
+    {% for e in c.errors %}<p class="note">{{ e }}</p>{% endfor %}
+    {% if c.checked_at %}<p class="note">Checked {{ c.checked_at }}.</p>{% endif %}
+    {% else %}{{ running_or_failed(f.steps.checks, "Checking Lidarr") }}{% endif %}
+    <form method="post" action="/prune/{{ f.job_id }}/checks" class="inline"><button type="submit" class="small">Check again</button></form>
+  </li>
+  <li>
+    <h3>Preview in a terminal, with the mount check {{ changes("ok", "changes nothing") }}</h3>
+    <pre>{{ f.commands.stage_preview }}</pre>
+    <p class="note">It should show the totals from step 1. If the library isn't mounted where Lidarr keeps it, or the holding folder isn't beside it on the same filesystem, it refuses and says what to mount (docs/DEPLOY.md).</p>
+  </li>
+  <li>
+    <h3>Move the files {{ changes("warn", "changes your library") }}</h3>
+    <p>When step 2 shows an idle queue:</p>
+    <pre>{{ f.commands.stage_apply }}</pre>
+    <p class="note">The files move into {{ f.holding }}, one folder per day, each move recorded as it happens. Then Lidarr removes and rescans the artists from step 1.</p>
+  </li>
+  {% if f.asks_spotify %}
+  <li>
+    <h3>Preview the Spotify changes {{ changes("ok", "reads Spotify only") }}</h3>
+    {% if f.missing_scopes %}<p class="warn">The stored Spotify token can't follow or save: it's missing {{ f.missing_scopes | join(", ") }}. Authorize again with write access, then use Preview again:</p><pre>{{ f.commands.auth }}</pre>
+    {% if f.callback_mode %}<form method="post" action="/settings/spotify/connect" class="inline"><input type="hidden" name="promote_save" value="1"><button type="submit" class="small">Authorize write access on Spotify</button></form>{% endif %}
+    {% elif f.missing_scopes is none %}<p class="note">The Spotify token file can't be read here, so its permissions aren't known.</p>{% endif %}
+    {% if f.spotify %}{% set p = f.spotify %}
+    <p>Follow {{ p.follow | length }} artist{{ "" if p.follow | length == 1 else "s" }}, save {{ p.save | length }} album{{ "" if p.save | length == 1 else "s" }}{% if p.already %}; {{ p.already }} already done{% endif %}.</p>
+    {% if p.follow or p.save %}<details><summary>What would change</summary><ul>
+      {% for name in p.follow %}<li>Follow {{ name }}</li>{% endfor %}
+      {% for name in p.save %}<li>Save {{ name }}</li>{% endfor %}
+    </ul></details>{% endif %}
+    {% if p.unmatched %}<p class="warn">{{ p.unmatched | length }} couldn't be matched on Spotify, so they're left alone:</p><ul>{% for name, why in p.unmatched %}<li>{{ name }}: {{ why }}</li>{% endfor %}</ul>{% endif %}
+    {% if p.excluded_unreviewed %}<details><summary>{{ p.excluded_unreviewed | length }} album{{ "" if p.excluded_unreviewed | length == 1 else "s" }} not in your review, so never saved</summary><ul>{% for name, why in p.excluded_unreviewed %}<li>{{ name }}: {{ why }}</li>{% endfor %}</ul></details>{% endif %}
+    {% if p.budget_exhausted %}<p class="warn">Spotify's search budget ran out part-way; preview again later to finish matching.</p>{% endif %}
+    {% else %}{{ running_or_failed(f.steps.spotify, "Previewing the Spotify changes") }}{% endif %}
+  </li>
+  <li>
+    <h3>Follow and save on Spotify {{ changes("warn", "changes Spotify") }}</h3>
+    {% if f.commands.spotify_apply %}
+    <p>After step 4, apply the plan step 5 made:</p>
+    <pre>{{ f.commands.spotify_apply }}</pre>
+    <p class="note">If it says the plan is stale, make a fresh one and apply that:</p>
+    {% else %}<p>After step 4, make the plan and apply it:</p>{% endif %}
+    <pre>{{ f.commands.spotify_plan }}</pre>
+    <pre>{{ f.commands.spotify_apply_fresh }}</pre>
+  </li>
+  {% else %}
+  <li><h3>Spotify</h3><p>Nothing to do: this export follows and saves nothing.</p></li>
+  {% endif %}
+  <li>
+    <h3>Afterwards</h3>
+    <p>The moved files sit in {{ f.holding }}. Each day's folder records every move as it happens (moves.jsonl, and manifest.json once the stage ends), so anything can go back by hand, even after a stage that stopped part-way. Nothing is deleted until you empty that folder yourself: keep it a few weeks, until you're sure.</p>
+  </li>
+</ol>
+<form method="post" action="/prune/{{ f.job_id }}/preview" class="inline"><button type="submit">Preview again</button><span class="note">Runs steps 1, 2 and 5 again for this export.</span></form>
+{% endif %}
+{% endif %}
+</div>

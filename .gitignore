@@ -1,0 +1,18 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+.coverage
+htmlcov/
+# runtime state - never commit
+*.sqlite
+*.sqlite-journal
+*-token.json
+diff*.json
+.env
+likearr-data/
+deploy/local/

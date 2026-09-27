@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% block title %}Settings - likearr{% endblock %}
+{% block content %}
+<h1>Settings</h1>
+{% if config_error %}
+<p class="error">config.toml does not load, so it cannot be edited here: {{ config_error }}</p>
+{% else %}
+<p class="note">These are the only settings the browser can see or change. Paths, URLs and credentials stay in config.toml and the environment. Every save backs the file up first.</p>
+{% if errors.get("") %}<p class="error">{{ errors[""] }}</p>{% endif %}
+
+<fieldset class="spotify-connect" id="spotify">
+  <legend>Spotify connection</legend>
+  {% if spotify_error %}<p class="error">{{ spotify_error }}</p>{% endif %}
+  {% if not spotify.configured %}
+  <p class="error">Spotify is not configured: {{ spotify.client_id_error }}. Set LIKEARR_SPOTIFY_CLIENT_ID and restart likearr.</p>
+  {% else %}
+    {% if spotify.has_token %}
+    <p class="{{ 'error' if spotify.reauth.tone == 'bad' else ('warn' if spotify.reauth.tone == 'warn' else 'note') }}">
+      {% if spotify.granted_scopes %}Granted scopes: <code>{{ spotify.granted_scopes | join(" ") }}</code>.{% endif %}
+      {% if spotify.reauth.due is none %}The re-authorization date is unknown.
+      {% elif spotify.reauth.days_left < 0 %}Re-authorization was due {{ spotify.reauth.due | when }}.
+      {% else %}Re-authorize by {{ spotify.reauth.due | when }}.{% endif %}
+    </p>
+    {% else %}
+    <p class="warn">Spotify has never been connected. Scheduled runs will fail until it is.</p>
+    {% endif %}
+    {% if spotify.callback_mode %}
+    <p class="note">A public URL is configured ({{ spotify.public_url }}), so this connects directly: Spotify redirects back here with no copy/paste. <code>{{ spotify.public_url }}/spotify/callback</code> must be registered as a redirect URI in the Spotify developer app.</p>
+    {% else %}
+    <p class="note">You will be shown a link to open, and asked to paste back the address it sends you to (it will fail to load - that is expected). <code>{{ spotify.redirect_uri }}</code> must be registered as a redirect URI in the Spotify developer app.</p>
+    {% endif %}
+    {% if spotify.keeps_write %}
+    <p class="note">This token can follow artists and save albums for promote-save, so re-authorizing keeps the write access.</p>
+    {% endif %}
+    {% if spotify.needs_collaborative %}
+    <p class="warn">Re-authorize Spotify to also sync playlists you collaborate on: this authorization is from before likearr asked to read them. Everything else keeps syncing as it is.</p>
+    {% endif %}
+    {% if spotify_continue_url %}
+    {# The attempt is already started, with the scopes it asked for; a second Connect form here
+       would restart it, possibly without the write access Clean up's button asked for. #}
+    <div class="spotify-continue">
+      <p><a class="button primary" id="spotify-continue" href="{{ spotify_continue_url }}">Continue to Spotify</a> to approve access. Spotify then sends you back here.</p>
+    </div>
+    {% else %}
+    <form method="post" action="/settings/spotify/connect">
+      {% if cleanup.enabled and not spotify.keeps_write %}
+      <label class="check"><input type="checkbox" name="promote_save" value="1"> Also let promote-save follow artists and save albums on Spotify. <span class="optional">Asks Spotify for write access. Without it, likearr asks to read only, which is all everything else needs.</span></label>
+      {% endif %}
+      <button type="submit" class="spotify-button">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.36-.66.48-1.021.24-2.82-1.74-6.36-2.1-10.561-1.14-.418.12-.779-.18-.899-.54-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.18.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.18-1.2-.181-1.38-.721-.18-.6.18-1.2.72-1.381 4.26-1.26 11.28-1.021 15.721 1.62.539.3.719 1.021.419 1.561-.299.421-1.02.599-1.559.3z"/></svg>
+        {{ "Re-authorize Spotify" if spotify.has_token else "Connect Spotify" }}
+      </button>
+    </form>
+    {% endif %}
+    {% if spotify_authorize_url %}
+    <div class="spotify-paste-back">
+      <p><a href="{{ spotify_authorize_url }}" target="_blank" rel="noopener">Open this link and approve access</a>. It redirects to a page that fails to load - that is expected.</p>
+      <form method="post" action="/settings/spotify/finish">
+        <label for="spotify-redirect-url">Paste the full address it sent you to</label>
+        <input id="spotify-redirect-url" name="redirect_url" placeholder="{{ spotify.redirect_uri }}?code=...">
+        <button type="submit" class="primary">Finish connecting</button>
+      </form>
+    </div>
+    {% endif %}
+  {% endif %}
+</fieldset>
+
+<fieldset class="lidarr-setup" id="lidarr-setup">
+  <legend>Lidarr setup</legend>
+  <p class="note">Creates the Lean and Full metadata profiles, the likearr tag, and safe root-folder defaults.</p>
+  {# A stable live region (#142), outside what the panel's own outerHTML poll swaps - see job.html. #}
+  <div role="status" aria-live="polite">
+  {% include "_lidarr_setup.html" %}
+  </div>
+</fieldset>
+
+<fieldset class="schedule">
+  <legend>Schedule</legend>
+  <form method="post" action="/settings/schedule">
+    <input type="hidden" name="file_hash" value="{{ file_hash }}">
+    <label for="schedule-cron">Cron (minute hour day month weekday)</label>
+    <input id="schedule-cron" name="schedule.cron" value="{{ schedule.cron }}"
+      hx-get="/settings/schedule/preview" hx-trigger="input changed delay:300ms"
+      hx-include="#schedule-cron, #schedule-timezone" hx-target="#schedule-preview" hx-swap="outerHTML">
+    <label for="schedule-timezone">Timezone</label>
+    <input id="schedule-timezone" name="schedule.timezone" value="{{ schedule.timezone }}"
+      hx-get="/settings/schedule/preview" hx-trigger="input changed delay:300ms"
+      hx-include="#schedule-cron, #schedule-timezone" hx-target="#schedule-preview" hx-swap="outerHTML">
+    {% include "_schedule_preview.html" %}
+    {% if errors.get("schedule.cron") %}<p class="error">{{ errors["schedule.cron"] }}</p>{% endif %}
+    <button type="submit">Save schedule</button>
+  </form>
+  <p class="note">A saved schedule change takes effect within about 5 minutes, not instantly - the running scheduler notices it the next time it re-reads config.toml.</p>
+  {% if not first_applied %}
+  <p class="note">Scheduled runs start after your first reviewed apply. Until then a scheduled run, or &quot;Run and apply now&quot; on Status, changes nothing and says so. Review changes and apply them once, in the browser or a terminal, and the schedule takes over from there.</p>
+  {% endif %}
+  {% if schedule.enabled %}
+  <p class="note">Scheduled runs are enabled. Pausing stops them, including &quot;Run and apply now&quot; on Status, which starts the same scheduled run. A plan and apply you review yourself, in the browser or a terminal, is never affected.</p>
+  <form method="post" action="/settings/pause">
+    <input type="hidden" name="file_hash" value="{{ file_hash }}">
+    <label for="pause-reason">Reason (optional)</label>
+    <input id="pause-reason" name="reason" maxlength="200" placeholder="e.g. away this week">
+    <button type="submit">Pause scheduled runs</button>
+  </form>
+  {% else %}
+  <p class="warn">{% if paused_at_local %}Paused since {{ paused_at_local | when }}{% else %}Scheduled runs are off in config.toml{% endif %}{% if schedule.paused_reason %} - {{ schedule.paused_reason }}{% endif %}. No scheduled run will fire until you resume.</p>
+  <form method="post" action="/settings/resume">
+    <input type="hidden" name="file_hash" value="{{ file_hash }}">
+    <button type="submit" class="primary">Resume scheduled runs</button>
+  </form>
+  {% endif %}
+  {% if errors.get("schedule.paused_reason") %}<p class="error">{{ errors["schedule.paused_reason"] }}</p>{% endif %}
+  {% if errors.get("schedule.enabled") %}<p class="error">{{ errors["schedule.enabled"] }}</p>{% endif %}
+</fieldset>
+
+<form method="post" action="/settings" class="settings">
+  <input type="hidden" name="file_hash" value="{{ file_hash }}">
+  {% for section, title in (("spotify", "What to mirror from Spotify"), ("rules", "Rules"), ("guards", "Guards")) %}
+  <fieldset>
+    <legend>{{ title }}</legend>
+    {% for f in fields if f.section == section %}
+      <div class="field{% if errors.get(f.name) %} has-error{% endif %}" id="field-{{ f.name }}">
+      {% if f.key == "playlists" %}
+        <span class="label">{{ f.label }}</span>
+        {% include "_picker.html" %}
+      {% elif f.kind == "bool" %}
+        <label class="check"><input type="checkbox" name="{{ f.name }}" {% if values[f.name] %}checked{% endif %}> {{ f.label }}</label>
+      {% elif f.kind == "choice" %}
+        <label for="{{ f.name }}">{{ f.label }}</label>
+        <select id="{{ f.name }}" name="{{ f.name }}">
+          {% for c in f.choices %}<option value="{{ c }}" {% if values[f.name] == c %}selected{% endif %}>{{ f.choice_labels.get(c, c) }}</option>{% endfor %}
+        </select>
+      {% elif f.kind == "list" %}
+        <label for="{{ f.name }}">{{ f.label }}</label>
+        <textarea id="{{ f.name }}" name="{{ f.name }}" rows="4" spellcheck="false">{{ values[f.name] | join("\n") if values[f.name] is not string else values[f.name] }}</textarea>
+      {% else %}
+        <label for="{{ f.name }}">{{ f.label }}</label>
+        <input id="{{ f.name }}" name="{{ f.name }}" value="{{ values[f.name] }}" {% if f.kind in ("int", "float") %}inputmode="decimal"{% endif %}>
+      {% endif %}
+      {% if f.help %}<p class="help">{{ f.help }}</p>{% endif %}
+      {% if errors.get(f.name) %}<p class="error">{{ errors[f.name] }}</p>{% endif %}
+      </div>
+    {% endfor %}
+    <button type="submit" class="primary">Save</button>
+  </fieldset>
+  {% endfor %}
+</form>
+{% endif %}
+
+{# Outside the config_error branch: Doctor is most useful exactly when config.toml is broken. #}
+<fieldset class="doctor" id="doctor">
+  <legend>Doctor</legend>
+  <p class="note">Checks config, Lidarr, MusicBrainz and Spotify. Read-only: nothing here changes anything. It asks Spotify, so it runs only when you press the button.</p>
+  {# A stable live region (#142), outside what the panel's own outerHTML poll swaps - see job.html. #}
+  <div role="status" aria-live="polite">
+  {% include "_doctor.html" %}
+  </div>
+</fieldset>
+
+{% if not config_error %}
+<details class="panel advanced" id="advanced"{% if errors.get("prune.enabled") %} open{% endif %}>
+  <summary>Advanced</summary>
+  <fieldset class="cleanup" id="cleanup">
+    <legend>Clean up</legend>
+    <p class="note">Clean up reviews the albums on disk that nothing on Spotify asks for, and exports what you decide to keep or trash. Carrying it out needs the library mounted at Lidarr's exact path in the <code>likearr-cli</code> container, and a holding folder on the same filesystem, outside the library: <code>prune-stage</code> moves trash there, and <code>promote-save</code> follows artists and saves albums on Spotify. Both are commands you run yourself. Turning Clean up on adds it to the menu and offers promote-save's Spotify write access above; turning it off hides both and forgets no decision.</p>
+    {% for e in cleanup.errors %}<p class="warn">{{ e }}</p>{% endfor %}
+    <form method="post" action="/settings/cleanup">
+      <input type="hidden" name="file_hash" value="{{ file_hash }}">
+      {% if cleanup.enabled %}
+      <input type="hidden" name="enabled" value="0">
+      <p>Clean up is on.</p>
+      <button type="submit">Turn Clean up off</button>
+      {% else %}
+      <input type="hidden" name="enabled" value="1">
+      <p>Clean up is off.</p>
+      <button type="submit" class="primary">Turn Clean up on</button>
+      {% endif %}
+    </form>
+    {% if errors.get("prune.enabled") %}<p class="error">{{ errors["prune.enabled"] }}</p>{% endif %}
+  </fieldset>
+</details>
+{% endif %}
+{% endblock %}

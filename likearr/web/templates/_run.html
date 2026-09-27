@@ -1,0 +1,9 @@
+<div class="run tone-{{ run.tone }}">
+  <p class="headline">{{ run.headline }}</p>
+  <p class="when">{{ run.when | when }}</p>
+  {% if run.conditions %}<p>Newly wrong:</p><ul>{% for c in run.conditions %}<li>{{ c }}</li>{% endfor %}</ul>{% endif %}
+  {% if run.newly %}<p>What moved since the last apply:</p><ul>{% for n in run.newly %}<li>{{ n }}</li>{% endfor %}</ul>{% endif %}
+  {% if run.guards %}<p>Guards that held something back:</p><ul>{% for g in run.guards %}<li>{{ g }}</li>{% endfor %}</ul>{% endif %}
+  {% if run.baseline_note %}<p class="note">{{ run.baseline_note }}</p>{% endif %}
+  {% if run.message and not run.conditions %}<p class="note">{{ run.message }}</p>{% endif %}
+</div>

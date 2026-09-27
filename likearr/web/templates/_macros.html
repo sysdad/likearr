@@ -1,0 +1,45 @@
+{# Small shared pieces. Icons are inline SVG in currentColor, so they follow the status colours. #}
+{% macro icon(name) -%}
+<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+{%- if name == "ok" %}<circle cx="12" cy="12" r="10"/><path d="m8 12.5 2.5 2.5L16 9.5"/>
+{%- elif name == "bad" %}<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/>
+{%- else %}<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/>
+{%- endif %}</svg>
+{%- endmacro %}
+
+{% macro nav_link(request, href, label, prefixes) -%}
+{%- set path = request.url.path -%}
+{%- set here = path == href or (prefixes and path.startswith(prefixes)) -%}
+<a href="{{ href }}"{% if here %} aria-current="page"{% endif %}>{{ label }}</a>
+{%- endmacro %}
+
+{% macro state_pill(m, label=none) -%}
+{%- set oom = m | oom_note -%}
+{%- if oom %}<span class="pill tone-bad">out of memory</span> <span class="note">{{ oom }}</span>
+{%- else %}<span class="pill">{{ label or m.state }}</span>{% endif -%}
+{%- endmacro %}
+
+{# The Status banner's Spotify re-authorization line (#138): `note` is one of the keys
+   `reauth_banner_note` returns - "no-token" is #118's wording, unchanged. #}
+{% macro reauth_sentence(reauth, note) -%}
+{%- if note == "no-token" -%}
+Spotify is not connected. Connect it in <a href="/settings#spotify">Settings</a>.
+{%- elif note == "unknown-date" -%}
+Spotify: the re-authorization date is unknown. Re-authorize from <a href="/settings">Settings</a> to record it.
+{%- elif note == "overdue" -%}
+Spotify: re-authorization was due {{ reauth.due | when }}. Re-authorize from <a href="/settings">Settings</a>, or run <code>likearr auth --manual</code>.
+{%- elif note == "due-soon" -%}
+Spotify: re-authorize by {{ reauth.due | when }} from <a href="/settings">Settings</a>, or run <code>likearr auth --manual</code>.
+{%- endif -%}
+{%- endmacro %}
+
+{# The Coverage card shared by Status and Not added: percent downloaded of what you want in Lidarr. #}
+{% macro coverage_card(c) -%}
+{% set pct = (100 * c.downloaded / c.releases) | round | int if c.releases else 0 %}
+<div class="card stat">
+  <span class="label">In Lidarr</span>
+  <span class="value{% if c.releases and pct >= 90 %} tone-ok{% endif %}">{{ pct }}% downloaded</span>
+  <progress class="meter" max="100" value="{{ pct }}" aria-label="{{ pct }}% downloaded">{{ pct }}%</progress>
+  <span class="sub">{{ c.downloaded }} of the {{ c.releases }} releases you want{% if c.waiting %} · {{ c.waiting }} waiting for download{% endif %}</span>
+</div>
+{%- endmacro %}

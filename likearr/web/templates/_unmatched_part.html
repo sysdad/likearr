@@ -1,0 +1,36 @@
+{# One reason inside a group: the reason as its heading (so every row under it shows why), what
+   can be done, one row per release, and a pager. Every action is a link; there is no form that writes. The Lidarr and MusicBrainz hrefs are
+   built from MBIDs checked in likearr.web.unmatched. #}
+<div id="{{ part.anchor }}" class="unmatched-part">
+  <h3>{{ part.reason.label }} <span class="note">({{ part.matched }} {{ part.unit if part.matched != 1 else part.unit_one }})</span></h3>
+  <p class="note">{{ part.reason.guidance }}{% if part.reason.setting %} <a href="/settings#field-{{ part.reason.setting }}">Change it on Settings</a>{% endif %}</p>
+  <div class="table-wrap"><table class="unmatched-rows">
+    <thead><tr><th>Release</th><th>From</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
+    <tbody>
+    {% for row in part.rows %}
+    <tr>
+      <td>
+        <strong>{{ row.headline }}</strong>
+        {% if row.songs %}
+        <details><summary>{{ row.what }}</summary><ul class="songs">{% for song in row.songs %}<li>{{ song }}</li>{% endfor %}</ul></details>
+        {% elif row.what %}<br><span class="note">{{ row.what }}</span>{% endif %}
+      </td>
+      <td>{{ row.source_text or "-" }}</td>
+      <td><div class="card-actions">
+        <a class="button small" href="/explain?{{ {'query': row.lookup} | urlencode }}">Look up</a>
+        {% set mb = row.musicbrainz %}<a class="button small" href="{{ mb[1] }}" target="_blank" rel="noopener noreferrer">{{ mb[0] }}</a>
+        {% if lidarr_url and row.lidarr_path %}<a class="button small" href="{{ lidarr_url }}{{ row.lidarr_path }}" target="_blank" rel="noopener noreferrer">Open in Lidarr</a>{% endif %}
+      </div></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% if part.pages > 1 %}
+  <p class="pager">
+    {% set here = {"group": part.group.code, "reason": part.reason.code} %}
+    {% if part.page > 1 %}<button type="button" hx-get="/unmatched/part?{{ dict(here, page=part.page - 1) | urlencode }}" hx-include="#unmatched-filter" hx-target="#{{ part.anchor }}" hx-swap="outerHTML">Previous</button>{% endif %}
+    <span class="note">Page {{ part.page }} of {{ part.pages }}{% if part.matched != part.total %}, {{ part.matched }} of {{ part.total }} matching{% endif %}</span>
+    {% if part.page < part.pages %}<button type="button" hx-get="/unmatched/part?{{ dict(here, page=part.page + 1) | urlencode }}" hx-include="#unmatched-filter" hx-target="#{{ part.anchor }}" hx-swap="outerHTML">Next</button>{% endif %}
+  </p>
+  {% endif %}
+</div>

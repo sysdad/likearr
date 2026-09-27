@@ -1,0 +1,89 @@
+name: integration
+# Advisory only: catches Lidarr API drift (linked to #11, #7, #8, #18) without ever blocking a
+# merge, because it depends on services likearr does not control (Lidarr's own metadata server).
+# See #135 for the decision record. Do not add this as a required status check.
+on:
+  schedule:
+    - cron: "14 3 * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - likearr/adapters/lidarr.py
+      - likearr/shell/run.py
+      - tests/integration/**
+      - .github/workflows/integration.yml
+permissions:
+  contents: read
+concurrency:
+  group: integration-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  live-lidarr:
+    name: live-lidarr (${{ matrix.variant }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The version verified live for likearr today (see #135). Pinned by digest, not tag,
+          # so a retag upstream can't silently change what this leg runs.
+          - variant: pinned
+            image: linuxserver/lidarr@sha256:044d616beb43c5e7810991242c6a9c42b93ff238c8c0850684939634ea751208
+            allow_failure: false
+          # An early warning about upstream API drift. Never blocks the run.
+          - variant: latest
+            image: linuxserver/lidarr:latest
+            allow_failure: true
+    continue-on-error: ${{ matrix.allow_failure }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { fetch-depth: 0 }
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - run: uv python install 3.12
+
+      - name: Start Lidarr (${{ matrix.variant }})
+        run: docker run -d --name lidarr -p 8686:8686 ${{ matrix.image }}
+
+      - name: Wait for Lidarr to answer /ping
+        run: |
+          for i in $(seq 1 60); do
+            if curl --silent --fail --connect-timeout 5 --max-time 10 http://127.0.0.1:8686/ping >/dev/null 2>&1; then
+              echo "Lidarr answered /ping after ${i} attempt(s)"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::Lidarr never answered /ping within 60 attempts (5s apart, 300s total)"
+          exit 1
+
+      # The pinned image is not confirmed to honour Lidarr's LIDARR__AUTH__APIKEY env override
+      # (unverified here: this environment can't run Docker), so this reads the key Lidarr
+      # itself writes to config.xml on first boot - true for every Servarr image regardless of
+      # env-var support. Masked before it is used anywhere, and never echoed.
+      - name: Read the API key from the container
+        run: |
+          key=""
+          for i in $(seq 1 30); do
+            key=$(docker exec lidarr cat /config/config.xml 2>/dev/null | grep -oP '(?<=<ApiKey>)[^<]+' || true)
+            if [ -n "$key" ]; then
+              break
+            fi
+            sleep 2
+          done
+          if [ -z "$key" ]; then
+            echo "::error::could not read ApiKey from /config/config.xml within 60s"
+            exit 1
+          fi
+          echo "::add-mask::${key}"
+          {
+            echo "LIKEARR_TEST_LIDARR_API_KEY=${key}"
+            echo "LIKEARR_TEST_LIDARR_URL=http://127.0.0.1:8686"
+          } >> "$GITHUB_ENV"
+
+      - run: uv sync --extra dev --locked
+      - run: uv run pytest tests/integration -m integration -q
+
+      - name: Dump Lidarr container logs
+        if: failure()
+        run: docker logs lidarr

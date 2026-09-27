@@ -1,0 +1,104 @@
+{# The Lidarr setup section of Settings (#85): preview, the inline confirm, the apply and its
+   re-check, all swapped in place. Polls only while its job runs. Nothing writes to Lidarr
+   without "Yes, apply", the only button that sends confirmed=yes. #}
+{% set setup_job = setup.job %}
+{% set view = setup.view %}
+{% set preview_form %}
+  <form method="post" action="/settings/lidarr-setup/preview" hx-post="/settings/lidarr-setup/preview">
+    <button type="submit">{{ "Preview Lidarr setup" if not setup_job else "Check again" }}</button>
+  </form>
+{% endset %}
+<div id="lidarr-setup-panel" hx-target="this" hx-swap="outerHTML"
+  {% if setup_job and not setup_job.finished %}hx-get="/settings/lidarr-setup/{{ setup_job.id }}" hx-trigger="every 2s"{% endif %}>
+  {% if setup.note %}<p class="warn">{{ setup.note }}</p>{% endif %}
+
+  {% if not setup_job %}
+  {{ preview_form }}
+
+  {% elif not setup_job.finished %}
+  <p class="note">{{ "Applying to Lidarr" if setup_job.kind == "lidarr-setup-apply" else "Checking Lidarr" }}&hellip; <a href="/jobs/{{ setup_job.id }}">See progress</a>.</p>
+
+  {% elif setup_job.kind == "lidarr-setup-apply" %}
+  {% if setup_job.state == "done" %}
+  <p class="note">Applied {{ setup_job.started_at | when }}.{% if setup.recheck %} Checking Lidarr again&hellip;{% endif %}</p>
+  {% else %}
+  <p class="error">The apply did not finish cleanly. <a href="/jobs/{{ setup_job.id }}">See the log</a>.</p>
+  {% endif %}
+  {% if setup.output %}<pre class="answer">{{ setup.output }}</pre>{% endif %}
+  {% if setup.recheck %}
+  <div hx-post="/settings/lidarr-setup/preview" hx-trigger="load"></div>
+  {% else %}
+  {{ preview_form }}
+  {% endif %}
+
+  {% elif view is none %}
+  <p class="error">The preview did not finish cleanly. <a href="/jobs/{{ setup_job.id }}">See the log</a>.</p>
+  {{ preview_form }}
+
+  {% elif view.error %}
+  <p class="error">{{ view.error }}</p>
+  {{ preview_form }}
+
+  {% else %}
+  <p class="note">Checked {{ setup_job.started_at | when }}.</p>
+  <table class="lidarr-setup-profiles">
+    <thead><tr><th>Metadata profile</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for p in view.profiles %}
+      <tr class="tone-{{ 'ok' if p.status == 'ok' else ('warn' if p.status == 'differs' else 'bad') }}">
+        <td>{{ p.name }} ({{ p.kind }})</td>
+        <td>
+          {% if p.status == "ok" %}exists, matches (id {{ p.id }})
+          {% elif p.status == "missing" %}will be created
+          {% else %}exists (id {{ p.id }}) but differs - kept as is, never overwritten:
+            primary album types has {{ p.diff.actual_primary | join(", ") }}, likearr wants {{ p.diff.expected_primary | join(", ") }};
+            secondary has {{ p.diff.actual_secondary | join(", ") }}, likearr wants {{ p.diff.expected_secondary | join(", ") }}
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+      <tr class="tone-{{ 'ok' if view.tag.get('status') == 'ok' else 'bad' }}">
+        <td>Tag {{ view.tag.get("name") }}</td>
+        <td>{% if view.tag.get("status") == "ok" %}exists (id {{ view.tag.get("id") }}){% else %}will be created{% endif %}</td>
+      </tr>
+      <tr class="tone-{{ 'ok' if view.root_folder.get('status') == 'ok' else ('warn' if view.root_folder.get('status') == 'differs' else 'bad') }}">
+        <td>Root folder {{ view.root_folder.get("path") }}</td>
+        <td>
+          {% if view.root_folder.get("status") == "ok" %}already defaults to monitor none
+          {% elif view.root_folder.get("status") == "missing" %}will be created
+          {% else %}defaults will be set to monitor none / new items none{% endif %}
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  {% if view.needs_apply and setup.confirm %}
+  <p class="warn">This writes to Lidarr:</p>
+  <ul>{% for item in view.todo %}<li>{{ item }}</li>{% endfor %}</ul>
+  {% if view.kept_as_is %}
+  <p class="note">It will not touch {{ view.kept_as_is | map(attribute="name") | join(", ") }} - a metadata profile that differs from what likearr expects (see above) is always kept as is; applying never edits one it finds already there.</p>
+  {% endif %}
+  <form method="post" action="/settings/lidarr-setup/{{ setup_job.id }}/apply" hx-post="/settings/lidarr-setup/{{ setup_job.id }}/apply">
+    <input type="hidden" name="confirmed" value="yes">
+    <button type="submit" class="primary">Yes, apply</button>
+    <a href="/settings#lidarr-setup" hx-get="/settings/lidarr-setup/{{ setup_job.id }}">Cancel</a>
+  </form>
+  {% elif view.needs_apply %}
+  <p class="note">Applying will:</p>
+  <ul>{% for item in view.todo %}<li>{{ item }}</li>{% endfor %}</ul>
+  {% if view.kept_as_is %}
+  <p class="note">It will not touch {{ view.kept_as_is | map(attribute="name") | join(", ") }} - a metadata profile that already exists under that name is always kept as is, shown above.</p>
+  {% endif %}
+  <form method="post" action="/settings/lidarr-setup/{{ setup_job.id }}/apply" hx-post="/settings/lidarr-setup/{{ setup_job.id }}/apply">
+    <button type="submit" class="primary">Apply</button>
+  </form>
+  {{ preview_form }}
+  {% elif view.kept_as_is %}
+  <p class="note">Nothing to apply. {{ view.kept_as_is | map(attribute="name") | join(", ") }} differs from what likearr would create, as shown above, but is kept as is - likearr never edits a metadata profile it finds already there.</p>
+  {{ preview_form }}
+  {% else %}
+  <p class="note">Nothing to do - Lidarr already matches what likearr expects.</p>
+  {{ preview_form }}
+  {% endif %}
+  {% endif %}
+</div>

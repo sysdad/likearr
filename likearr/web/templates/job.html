@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}{{ meta.kind | job_title }} - likearr{% endblock %}
+{% block content %}
+<h1>{{ meta.kind | job_title }}{% if meta.kind == "explain" and meta.label %}: {{ meta.label }}{% endif %}</h1>
+{# A stable live region (#142): the poll's outerHTML swap replaces all of #job, including any
+   role="status" inside it, on every trigger, and a screen reader does not reliably announce a
+   live region that was itself just inserted along with its content. This wrapper sits outside
+   what htmx swaps, so it stays the same element across every poll. #}
+<div role="status" aria-live="polite">
+{% include "_job.html" %}
+</div>
+{% endblock %}

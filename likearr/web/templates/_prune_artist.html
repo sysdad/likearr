@@ -1,0 +1,65 @@
+{# One artist of the prune review. Each control posts only its own change, with the revision this
+   row shows (hx-vals, inherited by the controls): a second tab still showing an older row gets 409
+   and this row re-rendered as saved, never a silent overwrite. Not a <form>: htmx would post every
+   field of an enclosing form, which is exactly what must not happen.
+   Every choice says which Spotify action it asks for, if any: keeping with no change, saving an
+   album, and following an artist are three different things. An album defaults to "Same as
+   artist", which says what that means right now; its own choice always beats the artist's. #}
+{% set a = row.artist %}
+{% set past_labels = {"promote": "followed on Spotify", "save": "saved their albums on Spotify"} %}
+<div class="card prune-artist decision-{{ row.decision }}" id="artist-{{ a.mbid }}"
+  hx-vals='{{ {"artist": a.mbid, "rev": row.rev | string} | tojson }}'
+  hx-target="#artist-{{ a.mbid }}" hx-swap="outerHTML">
+  {% if conflict %}<p class="warn" role="alert">{{ conflict }}</p>{% endif %}
+  <div class="head">
+    <strong>{{ a.name }}</strong>
+    {% if a.followed %}<span class="pill tone-ok">Followed on Spotify</span>{% endif %}
+    <span class="note">{{ a.candidates | length }} album{{ "" if a.candidates | length == 1 else "s" }} · {{ a.size | human_bytes }}{% if a.releases | length > a.candidates | length %} · {{ a.releases | length - a.candidates | length }} always kept{% endif %}{% if row.needs %} · {{ row.needs }} to decide{% endif %}</span>
+  </div>
+  {% if row.past_artist %}<p class="note">Earlier, on {{ row.past_artist_on }}: {{ past_labels[row.past_artist.decision] }}. That is not asked of Spotify again unless you choose it here.</p>{% endif %}
+  {% if row.follow_done %}<p class="note">You chose to follow {{ a.name }}, and they are followed on Spotify now, so this is a keep with no change on Spotify.</p>{% endif %}
+  <fieldset class="choices">
+    <legend class="visually-hidden">What to do with the albums of {{ a.name }} listed here</legend>
+    {% for value, label in [("undecided", "Undecided"), ("keep", "Keep - no change on Spotify"), ("promote", "Keep and follow the artist on Spotify"), ("save", "Keep and save all their albums on Spotify"), ("trash", "Trash all listed albums")] %}
+    {% if not (value == "promote" and a.followed) %}
+    <label class="choice"><input type="radio" name="decision" value="{{ value }}"{% if row.decision == value %} checked{% endif %}
+      hx-post="/prune/{{ job_id }}/decide" hx-trigger="change"> {{ label }}</label>
+    {% endif %}
+    {% endfor %}
+  </fieldset>
+  {% if row.effects %}
+  <ul class="note effects" aria-label="What this does">
+    {% for line in row.effects %}<li>{{ line }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+  <details{% if row.needs or row.overrides.values() | select | list %} open{% endif %}>
+    <summary>Albums ({{ a.releases | length }}){% if row.overrides.values() | select | list %} - some decided one by one{% endif %}</summary>
+    <div class="table-wrap"><table class="prune-releases">
+      <thead><tr><th>Album</th><th>Year</th><th>Type</th><th class="num">Size</th><th>This album</th></tr></thead>
+      <tbody>
+      {% for r in a.releases %}
+        {% set past = row.past.get(r.rg_mbid) %}
+        {% set override = row.overrides[r.rg_mbid] %}
+        <tr{% if r.rg_mbid in row.trashed %} class="trashed"{% endif %}>
+          <td>{{ r.title }}
+            {% if r.protected %}{% set k = row.kept[r.rg_mbid] %}<span class="pill tone-ok">Always kept</span>
+            <span class="kept-why">{{ k.lead }}{% if k.album_url %}<a href="{{ k.album_url }}" target="_blank" rel="noopener noreferrer">{{ k.album }}</a>{% else %}{{ k.album }}{% endif %}{{ k.tail }}</span>
+            {%- elif r.why %}<br><span class="note">{{ r.why }}</span>{% endif %}
+            {% if r.rg_mbid in row.past_notes %}<br><span class="note{% if past.decision == 'trash' %} warn{% endif %}">{{ row.past_notes[r.rg_mbid] }}</span>{% endif %}
+          </td>
+          <td>{{ r.released }}</td><td>{{ r.kind }}</td><td class="num">{{ r.size | human_bytes }}</td>
+          <td>
+            <select name="value" aria-label="What to do with {{ r.title }}"
+              hx-post="/prune/{{ job_id }}/decide" hx-trigger="change" hx-vals='{{ {"release": r.rg_mbid} | tojson }}'>
+              <option value=""{% if not override %} selected{% endif %}>{{ row.same_as_artist[r.rg_mbid] }}</option>
+              <option value="keep"{% if override == "keep" %} selected{% endif %}>Keep - no change on Spotify</option>
+              <option value="save"{% if override == "save" %} selected{% endif %}>Keep and save this album on Spotify</option>
+              {% if not r.protected %}<option value="trash"{% if override == "trash" %} selected{% endif %}>Trash</option>{% endif %}
+            </select></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+  </details>
+</div>
+{% if oob %}{% include "_prune_summary.html" %}{% with oob_export = True %}{% include "_prune_export_status.html" %}{% endwith %}{% endif %}

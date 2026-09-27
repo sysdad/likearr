@@ -1,0 +1,29 @@
+name: Feature request
+description: Something you'd like likearr to do.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before requesting, worth a read: likearr's
+        [safety model](https://github.com/sysdad/likearr#safety-model) - it's built to be
+        wrong in the safe direction - and that it
+        [never searches or downloads](https://github.com/sysdad/likearr#safety-model); Lidarr
+        and your existing tools do that. A request that needs either is out of scope.
+
+        Also worth a read: the README's [Scope](https://github.com/sysdad/likearr#scope)
+        section for what's not planned and what's possible later. A new source (anything besides
+        Spotify) is welcome as a feature request here - describe it below.
+  - type: textarea
+    id: what
+    attributes:
+      label: What you want
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: What problem this solves, or what it lets you stop doing by hand.
+    validations:
+      required: true

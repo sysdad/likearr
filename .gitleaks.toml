@@ -1,0 +1,13 @@
+title = "likearr gitleaks config"
+[extend]
+useDefault = true
+[allowlist]
+paths = ['''tests/fixtures/.*\.json''']
+regexes = [
+  '''LIKEARR_[A-Z_]+=<.*>''',
+  # Fake credentials in the web UI tests, each matched exactly: they exist to prove a real secret
+  # would be redacted or stripped, so they have to look like one.
+  '''^lidarr-key-SENTINEL-0123456789$''',
+  '''^lidarr-key-0123456789abcdef$''',
+  '''^abcdefghijklmnop0123456789$''',
+]

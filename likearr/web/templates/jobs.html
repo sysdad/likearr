@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}All jobs - likearr{% endblock %}
+{% block content %}
+<h1>All jobs</h1>
+{% from "_macros.html" import state_pill %}
+{% if jobs %}
+<ul class="jobs">
+{% for m in jobs %}
+  <li><a href="/jobs/{{ m.id }}">{{ m.kind | job_title }}{% if m.kind == "explain" and m.label %}: {{ m.label }}{% endif %}</a> {{ state_pill(m) }} {{ m.started_at | when }}
+    {% if job_run_ids.get(m.id) %} &middot; <a href="/runs/{{ job_run_ids[m.id] }}">What changed</a>{% endif %}
+    {% if m.state == "interrupted" %}<span class="note">likearr restarted while this ran</span>{% endif %}</li>
+{% endfor %}
+</ul>
+{% else %}
+<p class="note">No jobs yet.</p>
+{% endif %}
+<p><a href="/">&larr; Status</a></p>
+{% endblock %}

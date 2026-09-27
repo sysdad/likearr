@@ -1,0 +1,184 @@
+name: image-publish
+# Publishes multi-arch images to GHCR. This is the ONLY workflow (and job) that can push there,
+# and its ONLY trigger is a `v*` tag push below - no branch push, no pull_request, no
+# workflow_dispatch, no schedule (issue #105, publish half). ci.yml's `docker` job builds the same
+# image on every PR and push to main, but never logs in and never pushes.
+on:
+  push:
+    tags:
+      - "v*"
+# Least privilege at the top level; the one job below re-declares packages: write because it is
+# the only thing in this repo that pushes to GHCR.
+permissions:
+  contents: read
+concurrency:
+  group: image-publish-${{ github.ref }}
+  # A tag push should always finish publishing what it started, not be cancelled by another one
+  # arriving mid-push and leave a registry tag half-written.
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Lowercase the repository owner
+        id: owner
+        # GHCR image paths must be all-lowercase; github.repository_owner can contain capitals,
+        # and this workflow has to work for whichever owner the repo lives under (#105).
+        run: |
+          echo "name=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          # Only arm64 needs emulation; amd64 is the runner's native platform.
+          platforms: linux/arm64
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ghcr.io/${{ steps.owner.outputs.name }}/likearr
+          # {{version}} strips the leading "v" (v0.5.0 -> 0.5.0, matching the tag trigger above),
+          # and every publish also moves :latest - there is no other trigger that could push a
+          # stale build under that tag.
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest
+
+      - name: Build amd64 image for the smoke test
+        # The same Dockerfile the push step below uses, built and tested BEFORE anything reaches
+        # GHCR, so a broken image never publishes (#105). A multi-platform build can't be
+        # `load`ed into the local daemon to run, so this is a single-arch (amd64, the runner's
+        # native platform) build purely to smoke-test; its GHA cache is reused by the amd64 leg
+        # of the push build below.
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: likearr:publish-smoke
+          build-args: |
+            VCS_REF=${{ github.sha }}
+            VERSION=${{ github.ref_name }}
+          cache-from: type=gha,scope=docker-linux/amd64
+          cache-to: type=gha,mode=max,scope=docker-linux/amd64
+
+      # Identical to ci.yml's amd64 smoke test (#105, #171): a broken published image is worse
+      # than a broken PR build, so this is not abbreviated.
+      - name: Smoke test
+        run: |
+          set -euo pipefail
+
+          workdir="$(mktemp -d)"
+          cat > "${workdir}/config.toml" <<'EOF'
+          [lidarr]
+          url = "http://127.0.0.1:9"
+          root_folder = "/data/media/music"
+          quality_profile = "Standard"
+
+          [spotify]
+          token_file = "spotify-token.json"
+
+          [musicbrainz]
+          contact = "ci@example.invalid"
+
+          [state]
+          db = "state.sqlite"
+          EOF
+          # --user 1030:100 (#105) is an arbitrary uid/gid with no /etc/passwd
+          # entry in the image, so the bind mount has to be world-writable rather than owned by it.
+          chmod -R a+rwX "${workdir}"
+
+          echo "::group::likearr --help"
+          docker run --rm --user 1030:100 likearr:publish-smoke --help
+          echo "::endgroup::"
+
+          echo "::group::likearr doctor --help"
+          docker run --rm --user 1030:100 likearr:publish-smoke doctor --help
+          echo "::endgroup::"
+
+          # #171: the code is root-owned, nothing under /app is world-writable, neither the default
+          # user nor 1030:100 can write it, likearr itself ships precompiled, and the working directory
+          # (/data) is not on sys.path. A published image is worse to get this wrong on than a PR
+          # build, so this is the same check ci.yml's docker job runs, not a smaller version of it.
+          echo "::group::image code is root-owned and precompiled"
+          for user in likearr 1030:100; do
+            docker run --rm --user "${user}" --entrypoint sh likearr:publish-smoke -c '
+              fail() { echo "::error::$1"; exit 1; }
+              [ -z "$(find /app/likearr /app/.venv ! -user 0 -print -quit)" ] || fail "a file under /app is not owned by root"
+              [ -z "$(find /app ! -type l -perm -o+w -print -quit)" ] || fail "a file under /app is world-writable"
+              ! touch /app/likearr/__init__.py 2>/dev/null || fail "$(id -u) can write /app/likearr"
+              ! touch /app/.venv/.probe 2>/dev/null || fail "$(id -u) can write /app/.venv"
+              [ -n "$(find /app/likearr -path "*/__pycache__/*.pyc" -print -quit)" ] || fail "likearr is not precompiled"
+              python -c "import likearr.web.app" || fail "$(id -u) cannot import likearr"
+              python -c "import sys; sys.exit(not sys.flags.safe_path)" || fail "the working directory is on sys.path"
+              echo "ok as uid $(id -u)"
+            '
+          done
+          echo "::endgroup::"
+
+          echo "::group::likearr start (smoke)"
+          docker run -d --name likearr-smoke --user 1030:100 \
+            -e LIKEARR_UI_PASSWORD="ci-smoke-test-password-not-a-secret" \
+            -v "${workdir}:/data" \
+            likearr:publish-smoke
+
+          # Bounded wait on the image's own HEALTHCHECK (start-period=20s, interval=60s,
+          # retries=3), not a separate curl loop: this is the exact check the image ships with.
+          status="starting"
+          for i in $(seq 1 24); do
+            status="$(docker inspect --format='{{.State.Health.Status}}' likearr-smoke 2>/dev/null || echo missing)"
+            if [ "${status}" = "healthy" ]; then
+              echo "likearr-smoke reported healthy after ${i} attempt(s) (5s apart)"
+              break
+            fi
+            if [ "${status}" = "unhealthy" ]; then
+              break
+            fi
+            sleep 5
+          done
+
+          docker logs likearr-smoke || true
+          docker rm -f likearr-smoke || true
+          echo "::endgroup::"
+
+          if [ "${status}" != "healthy" ]; then
+            echo "::error::likearr-smoke never reported healthy (last status: ${status}, 24 attempts, 5s apart, 120s total)"
+            exit 1
+          fi
+
+      - name: Log in to GHCR
+        # No PAT: GITHUB_TOKEN is scoped to this job's packages: write above and expires with the
+        # run.
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push multi-arch image
+        # Only reachable if the smoke test above passed.
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VCS_REF=${{ github.sha }}
+            VERSION=${{ github.ref_name }}
+          cache-from: |
+            type=gha,scope=docker-linux/amd64
+            type=gha,scope=docker-linux/arm64
+          cache-to: |
+            type=gha,mode=max,scope=docker-linux/amd64
+            type=gha,mode=max,scope=docker-linux/arm64

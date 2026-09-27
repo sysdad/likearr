@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Clean up - likearr{% endblock %}
+{% block content %}
+{% from "_macros.html" import state_pill %}
+<h1>Clean up your library</h1>
+<p class="subtitle">Albums on disk that nothing on Spotify asks for. Decide what to keep, and what to trash.</p>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+<section class="card">
+  <p>This finds every album with files that no Spotify like, follow or playlist backs, grouped by artist. For each artist you choose to keep it with no change on Spotify, keep it and follow the artist on Spotify, keep it and save all their albums on Spotify, or trash its albums; one album can be decided on its own. What you kept in an earlier review is filled in again as a keep, so you only decide what is new; a follow or save is only asked of Spotify when you choose it in this review. The page only <strong>exports</strong> your decisions: moving files (<code>prune-stage</code>) and anything on Spotify (<code>promote-save</code>) stay commands you run yourself. Trash goes to a holding folder; nothing is deleted until you empty it yourself.</p>
+  {% if latest %}
+  <div class="actions">
+    <a class="button primary" href="/prune/{{ latest.id }}">Continue the review from {{ latest.started_at | when }}</a>
+    <form method="post" action="/prune" class="inline"><button type="submit">Find unneeded albums again</button></form>
+  </div>
+  {% else %}
+  <form method="post" action="/prune"><div class="actions"><button type="submit" class="primary">Find unneeded albums</button>
+    <span class="note">It reads Spotify, MusicBrainz and Lidarr like a check does - a few minutes once the first check has run - and changes nothing.</span></div></form>
+  {% endif %}
+</section>
+{% if jobs %}
+<section>
+  <h2>Earlier searches</h2>
+  <ul class="jobs">
+  {% for m in jobs %}<li><a href="{% if m.state == 'done' %}/prune/{{ m.id }}{% else %}/jobs/{{ m.id }}{% endif %}">Search from {{ m.started_at | when }}</a> {{ state_pill(m) }}</li>{% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endblock %}

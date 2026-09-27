@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}{% if answered %}Look up: {{ query }}{% else %}Look up{% endif %} - likearr{% endblock %}
+{% block content %}
+{% from "_macros.html" import state_pill %}
+<h1>{% if answered %}Look up: {{ query }}{% else %}Look up{% endif %}</h1>
+<p class="subtitle">Why is a song, album or artist in Lidarr - or not?</p>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+<form method="get" action="/explain" class="explain card">
+  <label for="query">Artist, album, song or MusicBrainz id</label>
+  <input id="query" name="query" type="search" value="{{ query }}" maxlength="200" required autofocus
+    placeholder="Why is this song, album or artist here, or not?">
+  <button type="submit" class="primary">Look up</button>
+</form>
+{% if answered %}
+  <div class="lookup-bar">
+    {% if report %}<p class="note caption">As of the last run, {{ as_of | when }} ({{ run_label }}).</p>{% endif %}
+    <form method="post" action="/explain" class="inline">
+      <input type="hidden" name="query" value="{{ query }}">
+      <button type="submit" class="small" title="Reads Spotify and Lidarr as they are now; takes a few minutes once the first check has run, and changes nothing">Check against live Spotify and Lidarr</button>
+    </form>
+  </div>
+  {% if report %}
+    {% include "_explain_summary.html" %}
+  {% else %}
+    <div class="banner tone-warn"><div class="text"><p class="title">No run has been recorded for Look up yet.</p><p>Every run records one when it finishes, so this answers after the next one. Until then, check live.</p></div></div>
+  {% endif %}
+{% endif %}
+{% if recent %}
+<h2>Recent live checks</h2>
+<ul class="jobs">
+{% for m in recent %}<li><a href="/jobs/{{ m.id }}">{{ m.label }}</a> {{ state_pill(m) }} {{ m.started_at | when }}</li>{% endfor %}
+</ul>
+{% endif %}
+{% endblock %}

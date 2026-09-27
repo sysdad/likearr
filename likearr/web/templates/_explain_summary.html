@@ -1,0 +1,26 @@
+{# A Look up report: one card per match - the headline, a status pill, a few labelled facts, small
+   actions, and the rest in "Details". Every href was checked where the report was read
+   (`_lookup_view`): https links, a Lidarr artist/album path, an MBID for "Not this one". #}
+{% set cards = report.summary %}
+{% if cards or report.left_out %}
+<p class="note result-count">{% if cards %}{{ cards | length }} match{{ "" if cards | length == 1 else "es" }}.{% endif %} {{ report.more_note }}</p>
+<div class="lookup-cards">
+{% for item in cards %}
+  <article class="run lookup tone-{{ 'warn' if item.wrong_match or item.tone == 'warn' else item.tone or 'quiet' }}">
+    {% if item.status or item.wrong_match %}<p class="pills">{% if item.status %}<span class="pill{% if item.tone %} tone-{{ item.tone }}{% endif %}">{{ item.status }}</span>{% endif %}{% if item.wrong_match %} <span class="pill tone-warn">Looks like a wrong match</span>{% endif %}</p>{% endif %}
+    <p class="headline">{{ item.headline }}</p>
+    {% if item.facts %}<dl class="facts">{% for label, text in item.facts %}<dt>{{ label }}</dt><dd{% if label == "Why it may be wrong" %} class="tone-warn"{% endif %}>{{ text }}</dd>{% endfor %}</dl>{% endif %}
+    {% if item.links or (lidarr_url and item.lidarr_path) or (deny and item.release) %}
+    <div class="card-actions">
+      {% for link in item.links %}<a class="button small" href="{{ link.url }}" target="_blank" rel="noopener noreferrer">{{ link.label[:1] | upper }}{{ link.label[1:] }}</a>{% endfor %}
+      {% if lidarr_url and item.lidarr_path %}<a class="button small" href="{{ lidarr_url }}{{ item.lidarr_path }}" target="_blank" rel="noopener noreferrer">Open in Lidarr</a>{% endif %}
+      {% if deny and item.release %}<form method="post" action="/explain/deny" class="inline"><input type="hidden" name="release" value="{{ item.release }}"><input type="hidden" name="query" value="{{ query }}"><button type="submit" class="small" title="Never monitor this release: add it to [rules] deny_releases (you confirm first)">Not this one</button></form>{% endif %}
+    </div>
+    {% endif %}
+    {% if item.detail %}<details><summary>Details</summary><pre class="answer">{{ item.detail }}</pre></details>{% endif %}
+  </article>
+{% endfor %}
+</div>
+{% else %}
+<p class="note result-count">No matches{% if report.details %}: {{ report.details | trim }}{% endif %}</p>
+{% endif %}

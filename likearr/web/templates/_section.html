@@ -1,0 +1,21 @@
+<div id="rows-{{ section.name }}" class="section-rows"{% if counting %} hx-get="/plan/{{ job_id }}/section/{{ section.name }}?page={{ page }}" hx-include="#q-{{ section.name }}" hx-trigger="load delay:2s" hx-swap="outerHTML"{% endif %}>
+  {% if rows %}
+  <table class="plan-rows">
+    <thead><tr>{% for c in columns %}<th>{{ c }}</th>{% endfor %}{% if section.name == "monitor" %}<th></th>{% endif %}</tr></thead>
+    <tbody>
+    {% for row in rows %}<tr{% if row._id %} id="{{ row._id }}"{% endif %}>{% for c in columns %}<td>{% set href = row.get("_href:" ~ c) %}{% if href %}<a href="{{ href }}" target="_blank" rel="noopener noreferrer">{{ row[c] }}</a>{% else %}{{ row[c] }}{% endif %}</td>{% endfor %}
+      {% if row._release %}<td><form method="post" action="/plan/{{ job_id }}/deny"><input type="hidden" name="release" value="{{ row._release }}"><button type="submit" title="Never monitor this release: add it to [rules] deny_releases">Not this one</button></form></td>{% elif row._deny_note %}<td class="note">{{ row._deny_note }}</td>{% endif %}
+    </tr>{% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="note">Nothing here matches &ldquo;{{ query }}&rdquo;.</p>
+  {% endif %}
+  {% if pages > 1 %}
+  <p class="pager">
+    {% if page > 1 %}<button type="button" hx-get="/plan/{{ job_id }}/section/{{ section.name }}?page={{ page - 1 }}" hx-include="#q-{{ section.name }}" hx-target="#rows-{{ section.name }}" hx-swap="outerHTML">Previous</button>{% endif %}
+    <span class="note">Page {{ page }} of {{ pages }}{% if query %}, {{ matched }} of {{ total }} matching{% endif %}</span>
+    {% if page < pages %}<button type="button" hx-get="/plan/{{ job_id }}/section/{{ section.name }}?page={{ page + 1 }}" hx-include="#q-{{ section.name }}" hx-target="#rows-{{ section.name }}" hx-swap="outerHTML">Next</button>{% endif %}
+  </p>
+  {% endif %}
+</div>

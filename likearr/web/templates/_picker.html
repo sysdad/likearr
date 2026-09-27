@@ -1,0 +1,63 @@
+{# The selection travels with the picker (hx-include="#picker"), so every swap renders what the form
+   holds, not what the file holds. Spotify is asked only when the button is pressed: opening the page
+   starts nothing. While it waits there is nothing to click, so nothing clicked can be lost to the next
+   swap; the selection rides along as hidden inputs and a save made meanwhile keeps it. Names come from
+   the names file, kept from the last successful refresh; an id with no name links to it on Spotify. #}
+{% macro label(row) -%}
+  {% if row.name %}{{ row.name }}{% if row.tracks is not none %} <span class="note">({{ row.tracks }} songs)</span>{% endif %}
+  {%- elif row.url %}<a href="{{ row.url }}" target="_blank" rel="noopener noreferrer"><code>{{ row.id }}</code></a>
+  {%- else %}<code>{{ row.id }}</code>{% endif %}
+{%- endmacro %}
+<div id="picker" class="picker" hx-swap="outerHTML" hx-include="#picker"
+  {% if picker.poll %}hx-get="/settings/playlists/{{ picker.poll }}" hx-trigger="every 2s"{% endif %}>
+  <input type="hidden" name="picker" value="1">
+  {% if picker.note %}<p class="note">{{ picker.note }}{% if picker.log %} <a href="/jobs/{{ picker.log }}">Why?</a>{% endif %}</p>{% endif %}
+  {% if picker.waiting %}
+    <ul class="waiting">
+    {% for row in picker.rows %}
+      <li><input type="hidden" name="spotify.playlists" value="{{ row.id }}">{{ label(row) }}</li>
+    {% else %}
+      <li class="note">No playlists selected.</li>
+    {% endfor %}
+    </ul>
+  {% else %}
+    {% for row in picker.rows %}
+      {% if row.missing or row.readable %}
+      <label class="check">
+        <input type="checkbox" name="spotify.playlists" value="{{ row.id }}" {% if row.checked %}checked{% endif %}>
+        {{ label(row) }}
+        {% if row.missing %}<span class="warn">not among the playlists this account can see: deleted, or the wrong id</span>{% endif %}
+      </label>
+      {% elif row.checked %}
+      {# Configured, but Spotify won't share its songs: kept through an unrelated save (likearr
+         never changes what you set without saying so) via the hidden input below, not the
+         disabled checkbox. "Remove from settings" is the one way to take it out on purpose. #}
+      <label class="check disabled">
+        <input type="hidden" name="spotify.playlists" value="{{ row.id }}">
+        <input type="checkbox" checked disabled>
+        {{ label(row) }}
+        {% if row.needs_reauth %}<span class="warn">In your settings, but not read yet: {{ picker.collaborative_reauth_reason }}.</span>
+        {% else %}<span class="warn">{{ picker.not_owned_configured_note }}. {{ picker.not_owned_workaround | capitalize }}.</span>{% endif %}
+      </label>
+      <label class="check remove">
+        <input type="checkbox" name="spotify.playlists.remove" value="{{ row.id }}"> Remove from settings
+      </label>
+      {% else %}
+      <label class="check disabled">
+        <input type="checkbox" value="{{ row.id }}" disabled>
+        {{ label(row) }}
+        {% if row.needs_reauth %}<span class="warn">{{ picker.collaborative_reauth_reason[:1] | upper }}{{ picker.collaborative_reauth_reason[1:] }}.</span>
+        {% else %}<span class="warn">{{ picker.not_owned_reason }} - {{ picker.not_owned_workaround }}.</span>{% endif %}
+      </label>
+      {% endif %}
+    {% else %}
+      <p class="note">{% if picker.loaded %}This Spotify account has no playlists.{% else %}No playlists selected.{% endif %}</p>
+    {% endfor %}
+    {% if picker.offer %}
+      <button type="button" hx-post="/settings/playlists" hx-target="#picker" hx-swap="outerHTML" hx-include="#picker">Refresh names from Spotify</button>
+      {% if picker.no_names %}<span class="note">Press Refresh names from Spotify once to show your playlists by name; the names are kept after that.</span>
+      {% else %}<span class="note">(asks Spotify for the playlists you own or collaborate on)</span>{% endif %}
+    {% endif %}
+  {% endif %}
+  {% if picker.names_as_of %}<p class="note">Playlist names as of {{ picker.names_as_of | when }}.</p>{% endif %}
+</div>

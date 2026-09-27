@@ -1,0 +1,158 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { fetch-depth: 0 }
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - run: uv python install 3.12
+      - run: uv sync --locked --extra dev
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pyright
+      - run: uv run pytest --cov=likearr --cov-report=term-missing
+  gitleaks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # The action lists a pull request's commits through the API; without these it cannot.
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { fetch-depth: 0 }
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  docker:
+    name: docker (${{ matrix.platform }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [linux/amd64, linux/arm64]
+    # Build only (#105): no registry login, no push, no tag trigger. Publishing to GHCR is a
+    # separate, held PR (issue #105 decision record). This just proves the image still builds for
+    # both architectures and that the running container is actually usable, so a change like #147
+    # (folding the [web] extra into core) can't ship a container that is missing a dependency.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          platforms: ${{ matrix.platform }}
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          push: false
+          load: true
+          tags: likearr:ci
+          # The footer and doctor show the commit the image was built from (#113).
+          build-args: |
+            VCS_REF=${{ github.sha }}
+          # Per-platform scope: an amd64 and an arm64 layer never share a cache entry, and this
+          # keeps every PR build fast enough for a job in ci.yml rather than a path-filtered
+          # workflow (#105).
+          cache-from: type=gha,scope=docker-${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=docker-${{ matrix.platform }}
+      # Only on the runner's native platform: an emulated (QEMU) `docker run` of the arm64 leg
+      # works, but is slow and adds nothing the arm64 build itself didn't already prove (a missing
+      # arm64 wheel fails `uv sync` at build time, not at run time).
+      - name: Smoke test
+        if: matrix.platform == 'linux/amd64'
+        run: |
+          set -euo pipefail
+
+          workdir="$(mktemp -d)"
+          # Just enough to load (see likearr/config.py): [lidarr], [spotify], [musicbrainz] and
+          # [state] are the only required sections/keys. Nothing here needs to be reachable -
+          # `/healthz` only requires the config to parse and /data to exist and be writable.
+          cat > "${workdir}/config.toml" <<'EOF'
+          [lidarr]
+          url = "http://127.0.0.1:9"
+          root_folder = "/data/media/music"
+          quality_profile = "Standard"
+
+          [spotify]
+          token_file = "spotify-token.json"
+
+          [musicbrainz]
+          contact = "ci@example.invalid"
+
+          [state]
+          db = "state.sqlite"
+          EOF
+          # --user 1030:100 (#105) is an arbitrary uid/gid with no /etc/passwd
+          # entry in the image, so the bind mount has to be world-writable rather than owned by it.
+          chmod -R a+rwX "${workdir}"
+
+          echo "::group::likearr --help"
+          docker run --rm --user 1030:100 likearr:ci --help
+          echo "::endgroup::"
+
+          echo "::group::likearr doctor --help"
+          docker run --rm --user 1030:100 likearr:ci doctor --help
+          echo "::endgroup::"
+
+          # #171: the code is root-owned, nothing under /app is world-writable, neither the default
+          # user nor 1030:100 can write it, likearr itself ships precompiled, and the working directory
+          # (/data) is not on sys.path.
+          echo "::group::image code is root-owned and precompiled"
+          for user in likearr 1030:100; do
+            docker run --rm --user "${user}" --entrypoint sh likearr:ci -c '
+              fail() { echo "::error::$1"; exit 1; }
+              [ -z "$(find /app/likearr /app/.venv ! -user 0 -print -quit)" ] || fail "a file under /app is not owned by root"
+              [ -z "$(find /app ! -type l -perm -o+w -print -quit)" ] || fail "a file under /app is world-writable"
+              ! touch /app/likearr/__init__.py 2>/dev/null || fail "$(id -u) can write /app/likearr"
+              ! touch /app/.venv/.probe 2>/dev/null || fail "$(id -u) can write /app/.venv"
+              [ -n "$(find /app/likearr -path "*/__pycache__/*.pyc" -print -quit)" ] || fail "likearr is not precompiled"
+              python -c "import likearr.web.app" || fail "$(id -u) cannot import likearr"
+              python -c "import sys; sys.exit(not sys.flags.safe_path)" || fail "the working directory is on sys.path"
+              echo "ok as uid $(id -u)"
+            '
+          done
+          echo "::endgroup::"
+
+          echo "::group::likearr start (smoke)"
+          docker run -d --name likearr-smoke --user 1030:100 \
+            -e LIKEARR_UI_PASSWORD="ci-smoke-test-password-not-a-secret" \
+            -v "${workdir}:/data" \
+            likearr:ci
+
+          # Bounded wait on the image's own HEALTHCHECK (start-period=20s, interval=60s,
+          # retries=3), not a separate curl loop: this is the exact check the image ships with.
+          status="starting"
+          for i in $(seq 1 24); do
+            status="$(docker inspect --format='{{.State.Health.Status}}' likearr-smoke 2>/dev/null || echo missing)"
+            if [ "${status}" = "healthy" ]; then
+              echo "likearr-smoke reported healthy after ${i} attempt(s) (5s apart)"
+              break
+            fi
+            if [ "${status}" = "unhealthy" ]; then
+              break
+            fi
+            sleep 5
+          done
+
+          docker logs likearr-smoke || true
+          docker rm -f likearr-smoke || true
+          echo "::endgroup::"
+
+          if [ "${status}" != "healthy" ]; then
+            echo "::error::likearr-smoke never reported healthy (last status: ${status}, 24 attempts, 5s apart, 120s total)"
+            exit 1
+          fi

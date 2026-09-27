@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Review changes - likearr{% endblock %}
+{% block content %}
+{% from "_macros.html" import state_pill %}
+<h1>Review changes</h1>
+<p class="subtitle">See what likearr would change in Lidarr, then apply it.</p>
+{% if config_error %}
+<p class="error">config.toml does not load: {{ config_error }}</p>
+{% else %}
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+<section class="card">
+  <p>A check reads Spotify, MusicBrainz and Lidarr and works out what applying would change. It changes nothing by itself: you see the changes first, and applying them is a separate step.</p>
+  {% if first_check %}
+  <p class="note">The first check can take several hours while likearr looks every song up in MusicBrainz. Later checks take minutes. Progress is kept if you stop it.</p>
+  {% endif %}
+  {% if next_fire %}
+  <p class="note">The next scheduled run is {{ next_fire | when }}.
+    {% if overlaps %}<span class="warn">A check took about {{ estimate_minutes }} minutes last time, so this one may still be running then. The scheduled run would find it holding the lock and skip itself, and {% if has_mqtt %}Home Assistant's retained record would show that skip, with no counts, until the next apply{% else %}the health status would show that skip, with no counts, until the next apply{% endif %}.</span>{% endif %}</p>
+  {% endif %}
+  <form method="post" action="/plan" class="plan">
+    <div class="actions"><button type="submit" class="primary">Check for changes</button></div>
+    <details{% if shrinks %} open{% endif %}>
+      <summary>Advanced (optional)</summary>
+      {% if shrinks %}
+        <p class="warn">Shrink guards held unmonitors back at the last check:</p>
+        <ul>{% for s in shrinks %}<li>{{ s }}</li>{% endfor %}</ul>
+      {% elif shrinks_accepted %}
+        <p class="note">Nothing held back: the shrink guards were skipped (accepted) at the last plan.</p>
+      {% elif shrink_known %}
+        <p class="note">None fired at the last plan.</p>
+      {% else %}
+        <p class="note">No check recorded yet.</p>
+      {% endif %}
+      <label class="check"><input type="checkbox" name="accept_shrink"> Let this check unmonitor what a shrink guard held back. <span class="optional">Only for a shrink you know is real - a playlist you emptied on purpose, not a Spotify hiccup. You don't need this to check.</span></label>
+    </details>
+  </form>
+</section>
+
+{% if plans %}
+<section>
+  <h2>Recent checks</h2>
+  <ul class="jobs">
+  {% for p in plans %}
+    <li><a href="{% if p.state.name in ('reviewable', 'superseded', 'expired') %}/plan/{{ p.meta.id }}{% else %}/jobs/{{ p.meta.id }}{% endif %}">{{ p.meta.label or "check" }}</a> {{ state_pill(p.meta, p.state.name) }}, {{ p.meta.started_at | when }}</li>
+  {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endif %}
+{% endblock %}

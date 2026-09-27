@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+{% block title %}Status - likearr{% endblock %}
+{% block content %}
+<h1>Status</h1>
+{% if config_error %}
+<p class="error">config.toml does not load: {{ config_error }}</p>
+{% else %}
+{% for problem in ui_errors %}<p class="error">config.toml: {{ problem }}. Fix it and restart likearr start; runs are not affected.</p>{% endfor %}
+{% if state_missing %}<p class="error">No state database at the configured path yet. It appears after the first run; if runs have happened, the path or the mount is wrong.</p>{% endif %}
+{% if lost_state %}<p class="error">{{ lost_state }}</p>{% endif %}
+{% from "_macros.html" import icon, state_pill, coverage_card, reauth_sentence %}
+{% if job %}<p class="flash">A job is running: <a href="/jobs/{{ job.id }}">{{ job.kind }} {{ job.label }}</a>.</p>{% endif %}
+
+<section class="glance" id="glance" aria-label="At a glance">
+  {% if checklist %}
+  <div class="banner tone-warn" role="status">
+    {{ icon("warn") }}
+    <div class="text">
+      <p class="title">Get set up</p>
+      <p>A few steps first, from Settings.</p>
+      <ol class="checklist">
+        {% for step in checklist %}
+        <li>{% if step.done %}<span class="ok">✓</span> {{ step.label }}{% else %}<a href="{{ step.url }}">{{ step.label }}</a>{% endif %}</li>
+        {% endfor %}
+      </ol>
+      {% if reauth_note %}<p>{{ reauth_sentence(reauth, reauth_note) }}</p>{% endif %}
+    </div>
+  </div>
+  {% elif glance.healthy %}
+  <div class="banner tone-ok" role="status">
+    {{ icon("ok") }}
+    <div class="text">
+      <p class="title">All good.</p>
+      {% if reauth_note %}<p>The last run went fine. {{ reauth_sentence(reauth, reauth_note) }}</p>
+      {% else %}<p>The last run went fine, and nothing needs you.</p>{% endif %}
+      {% if glance.notes %}<p class="note">For information, holding nothing back: {{ glance.notes | join("; ") }}.</p>{% endif %}
+    </div>
+  </div>
+  {% else %}
+  <div class="banner tone-warn" role="status">
+    {{ icon("warn") }}
+    <div class="text">
+      <p class="title">Needs attention</p>
+      <ul class="problems">{% for text, anchor in glance.problems %}<li>{% if anchor %}<a href="{{ anchor }}">{{ text }}</a>{% else %}{{ text }}{% endif %}</li>{% endfor %}</ul>
+      {% if reauth_note %}<p>{{ reauth_sentence(reauth, reauth_note) }}</p>{% endif %}
+      {% if glance.notes %}<p class="note">For information, holding nothing back: {{ glance.notes | join("; ") }}.</p>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="stats">
+    <div class="card stat">
+      <span class="label">Last run</span>
+      {% if view.last_any %}
+      <span class="value">{{ view.last_any.ago }}</span>
+      <span class="sub">{{ view.last_any.headline }}</span>
+      {% else %}<span class="value">None yet</span><span class="sub">Runs appear here once the scheduled job has run.</span>{% endif %}
+    </div>
+    <div class="card stat">
+      <span class="label">Next scheduled run</span>
+      {% if schedule_paused %}<span class="value tone-warn">Paused</span><span class="sub">{% if paused_at_local %}since {{ paused_at_local.strftime("%a %d %b %H:%M %Z") }}{% else %}off in config.toml{% endif %}{% if paused_reason %} - {{ paused_reason }}{% endif %} - <a href="/settings">Resume</a></span>
+      {% elif not first_applied %}<span class="value">Waiting</span><span class="sub" id="first-apply-note">Scheduled runs start after your first reviewed apply - <a href="/plan">Review changes</a></span>
+      <form method="post" action="/run-now">
+        <button type="submit" disabled aria-describedby="first-apply-note">Run and apply now</button>
+      </form>
+      {% else %}
+      {% if next_fire %}<span class="value" title="{{ schedule }}">{{ next_in }}</span><span class="sub">{{ next_fire.strftime("%a %d %b %H:%M %Z") }}</span>
+      {% else %}<span class="value">Never</span><span class="sub">as written: {{ schedule }} - see <a href="/settings">Settings</a></span>{% endif %}
+      <form method="post" action="/run-now">
+        <button type="submit">Run and apply now</button>
+      </form>
+      <span class="sub">The scheduled run: plans and applies within the guards. To review first, use <a href="/plan">Review changes</a>.</span>
+      {% endif %}
+    </div>
+    <div class="card stat">
+      <span class="label">Last scheduled fire</span>
+      {% if last_fire_at %}
+      <span class="value">{% if last_fire_job %}{{ last_fire_job.state | capitalize }}{% else %}{{ last_fire_at | when }}{% endif %}</span>
+      <span class="sub">
+        {{ last_fire_at | when }}{% if last_fire_reason %} - {{ last_fire_reason }}{% endif %}
+        {%- if last_fire_job %} - <a href="/jobs/{{ last_fire_job.id }}">details</a>{% else %} (its job details are no longer kept){% endif -%}
+      </span>
+      {% else %}<span class="value">None yet</span><span class="sub">The scheduler has not fired since this service started.</span>{% endif %}
+    </div>
+    {% if coverage %}{% with c = coverage %}
+    {{ coverage_card(c) }}
+    <div class="card stat">
+      <span class="label">Couldn't be added</span>
+      <span class="value">{{ c.unmatched + c.ambiguous + c.lookup_failed }}</span>
+      <span class="sub">{% if c.unmatched or c.ambiguous or c.lookup_failed or c.excluded %}<a href="/unmatched">{{ c.unmatched }} not found{% if c.ambiguous %} · {{ c.ambiguous }} where two artists share the name{% endif %}{% if c.lookup_failed %} · {{ c.lookup_failed }} lookups failed{% endif %}{% if c.excluded %} · {{ c.excluded }} left out by your settings{% endif %} →</a>{% else %}Everything you like was matched.{% endif %}</span>
+    </div>
+    {% endwith %}{% elif view.last_planned %}{% with r = view.last_planned %}
+    <div class="card stat">
+      <span class="label">Couldn't be added</span>
+      <span class="value">{{ r.unmapped }}</span>
+      <span class="sub">At the last run. The full picture - matched, monitored, downloaded - appears after the next run.</span>
+    </div>
+    {% endwith %}{% endif %}
+  </div>
+</section>
+
+{% if view.collisions %}{% with collisions = view.collisions %}{% include "_collisions.html" %}{% endwith %}{% endif %}
+
+<section id="last-applied">
+  <h2>Last applied run</h2>
+  {% if view.last_applied %}{% with run = view.last_applied %}{% include "_run.html" %}{% endwith %}
+    {% if run_changes %}
+    <details class="panel">
+      <summary>What changed</summary>
+      {% include "_run_changes.html" %}
+    </details>
+    {% endif %}
+  {% else %}<p class="note">{% if view.history %}No apply is recorded in the last {{ view.history | length }} runs.{% else %}No runs yet.{% endif %}</p>{% endif %}
+</section>
+
+{% if view.last_any and view.last_any is not sameas view.last_applied %}
+<section>
+  <h2>Most recent run</h2>
+  {% with run = view.last_any %}{% include "_run.html" %}{% endwith %}
+</section>
+{% endif %}
+
+<details class="panel" id="details">
+  <summary>Details: what you like, what Lidarr has, Spotify sources</summary>
+  {% if coverage %}{% with c = coverage %}
+  <p class="note">As of the last run, {{ c.as_of | when }} ({{ c.label }}). File counts are as that run read them.</p>
+  <h3>What you like, follow or keep in playlists</h3>
+  <div class="table-wrap"><table class="counts coverage">
+    <tr><td>Songs, albums and artists</td><td class="num">{{ c.intents }}</td></tr>
+    <tr><td>Songs and albums matched to a release</td><td class="num">{{ c.matched_releases }}</td></tr>
+    <tr><td>Followed artists matched</td><td class="num">{{ c.matched_artists }}</td></tr>
+    <tr><td>{% if c.unmatched %}<a href="/unmatched#unmatched">Couldn't be matched</a>{% else %}Couldn't be matched{% endif %}</td><td class="num">{{ c.unmatched }}</td></tr>
+    <tr><td>{% if c.ambiguous %}<a href="/unmatched#ambiguous">Two artists share the name</a>{% else %}Two artists share the name{% endif %}</td><td class="num">{{ c.ambiguous }}</td></tr>
+    <tr><td>{% if c.lookup_failed %}<a href="/unmatched#failed">Lookup failed this run</a>{% else %}Lookup failed this run{% endif %} <span class="note">(retried next run)</span></td><td class="num">{{ c.lookup_failed }}</td></tr>
+    <tr><td>{% if c.excluded %}<a href="/unmatched#excluded">Left out by your settings</a>{% else %}Left out by your settings{% endif %}</td><td class="num">{{ c.excluded }}</td></tr>
+    <tr><td>{% if c.pending %}<a href="/unmatched#pending">Liked singles waiting for their album</a>{% else %}Liked singles waiting for their album{% endif %}</td><td class="num">{{ c.pending }}</td></tr>
+  </table></div>
+  <h3>The releases those want</h3>
+  <div class="table-wrap"><table class="counts coverage">
+    <tr><td>Releases</td><td class="num">{{ c.releases }}</td></tr>
+    <tr><td>Monitored in Lidarr</td><td class="num">{{ c.monitored }}</td></tr>
+    <tr><td>Downloaded (files on disk)</td><td class="num">{{ c.downloaded }}</td></tr>
+    <tr><td>Waiting for a download</td><td class="num">{{ c.waiting }}</td></tr>
+    {% if c.dry %}
+    <tr><td>Not monitored yet{% if c.would_monitor %}: the plan would monitor {{ c.would_monitor }} of these{% endif %}; the rest wait on a name collision, an artist Lidarr couldn't look up, or Lidarr's catalogue</td><td class="num">{{ c.not_monitored }}</td></tr>
+    {% else %}
+    <tr><td>Not monitored: a name collision, an artist Lidarr couldn't look up, or not in Lidarr's catalogue yet</td><td class="num">{{ c.not_monitored }}</td></tr>
+    {% endif %}
+  </table></div>
+  <p class="note">likearr doesn't search. Lidarr grabs new releases on its own; older albums need a search{% if view.wanted_missing_url %}, from <a href="{{ view.wanted_missing_url }}">Lidarr's Wanted &gt; Missing</a>{% endif %}.</p>
+  {% endwith %}{% endif %}
+  <dl>
+    <dt>Spotify</dt>
+    <dd>
+      {% if reauth.authorized_at %}Connected {{ reauth.authorized_at | when }}{% if granted_scopes %} (scopes: {{ granted_scopes | join(" ") }}){% endif %}.{% else %}Not connected yet - see <a href="/settings">Settings</a>.{% endif %}
+      {% if needs_collaborative %}<span class="note">To also sync playlists you collaborate on, re-authorize from <a href="/settings#spotify">Settings</a>; everything else keeps syncing as it is.</span>{% endif %}
+    </dd>
+    <dt>Spotify re-authorization</dt>
+    <dd class="tone-{{ reauth.tone }}">
+      {% if reauth.due is none and not has_token %}not connected yet - see <a href="/settings#spotify">Settings</a>
+      {% elif reauth.due is none %}unknown: re-authorize from <a href="/settings">Settings</a> to record it
+      {% elif reauth.days_left < 0 %}overdue since {{ reauth.due | when }}: re-authorize from <a href="/settings">Settings</a>, or run <code>likearr auth --manual</code>
+      {% else %}due by {{ reauth.due | when }}{% if reauth.tone == "warn" %}: re-authorize from <a href="/settings">Settings</a> soon{% endif %}{% endif %}
+    </dd>
+    <dt>Projected wanted</dt>
+    <dd>{% if view.projected_wanted is not none %}{{ view.projected_wanted }} <span class="note">releases the last plan would leave monitored with no files: a projection, not Lidarr's live wanted list</span>{% else %}<span class="note">no plan recorded yet</span>{% endif %}</dd>
+  </dl>
+  {% if view.sources %}
+  <h3>Spotify sources at the last plan</h3>
+  <div class="table-wrap"><table class="counts">
+    {% for label, count, link in view.sources %}<tr><td>{% if link %}<a href="{{ link }}" target="_blank" rel="noopener noreferrer">{{ label }}</a>{% else %}{{ label }}{% endif %}</td><td class="num">{{ count }}</td></tr>{% endfor %}
+  </table></div>
+  {% endif %}
+</details>
+
+<section id="history">
+  <h2>{% if view.history %}Last {{ view.history | length }} runs{% else %}No runs yet{% endif %}</h2>
+  <div class="table-wrap"><table class="history">
+    <thead><tr><th>When</th><th>Status</th><th>Kind</th><th class="num">Monitored</th><th class="num">Unmonitored</th><th class="num">Added</th><th>Message</th></tr></thead>
+    <tbody>
+    {% for run in view.history %}
+      <tr class="tone-{{ run.tone }}">
+        <td class="nowrap">{% if run.run_id %}<a href="/runs/{{ run.run_id }}">{{ run.when.strftime("%a %d %b %H:%M") }}</a>{% else %}{{ run.when.strftime("%a %d %b %H:%M") }}{% endif %}</td>
+        <td><span class="pill tone-{{ run.tone }}">{{ run.record.status }}</span></td>
+        <td>{{ "dry run" if run.record.dry_run else "apply" }}</td>
+        <td class="num">{{ run.record.counts.get("monitored", "") }}</td>
+        <td class="num">{{ run.record.counts.get("unmonitored", "") }}</td>
+        <td class="num">{{ run.record.counts.get("added", "") }}</td>
+        <td class="msg"{% if run.record.message %} title="{{ run.record.message }}"{% endif %}>{{ run.record.message | short_message }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="7" class="note">No runs recorded yet.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</section>
+
+{% if recent_jobs %}
+<section>
+  <h2>Recent jobs from the browser</h2>
+  <ul class="jobs">
+  {% for m in recent_jobs %}
+    <li><a href="/jobs/{{ m.id }}">{{ m.kind | job_title }}{% if m.kind == "explain" and m.label %}: {{ m.label }}{% endif %}</a> {{ state_pill(m) }} {{ m.started_at | when }}
+      {% if job_run_ids.get(m.id) %} &middot; <a href="/runs/{{ job_run_ids[m.id] }}">What changed</a>{% endif %}
+      {% if m.state == "interrupted" %}<span class="note">likearr restarted while this ran</span>{% endif %}</li>
+  {% endfor %}
+  </ul>
+  <p><a href="/jobs">All jobs</a></p>
+</section>
+{% endif %}
+{% endif %}
+{% endblock %}

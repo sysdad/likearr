@@ -1,0 +1,24 @@
+{# A plan's review: its state, what it changes, every section, and the one action it asks for.
+   Shown on the review page and on a finished check's own job page. Needs `review`. #}
+{% with meta = review.meta, state = review.state, summary = review.summary, sections = review.sections, replaced = review.replaced %}
+{% if not inline %}<p class="when">Checked {{ meta.finished_at | when }}{% if review.accept_shrink %}, letting shrinks through{% endif %}.</p>{% elif review.accept_shrink %}<p class="note">This check let shrinks through.</p>{% endif %}
+{% if not state.reviewable %}
+  <div class="banner tone-warn"><div class="text"><p class="title">This check is {{ state.name }}.</p><p>{{ state.why }}</p></div></div>
+  {% with replan_shrink = review.accept_shrink %}{% include "_replan.html" %}{% endwith %}
+{% endif %}
+{% include "_plan_counts.html" %}
+{% include "_plan_apply_action.html" %}
+{% set empty = sections | selectattr("total", "equalto", 0) | map(attribute="section.title") | list %}
+{% for context in sections if context.total %}
+<section class="plan-section">
+  <h2>{{ context.section.title }} <span class="note">({{ context.total }})</span></h2>
+  <p class="note">{{ context.section.lead }}</p>
+  {% if context.total > 10 %}<input type="search" name="q" id="q-{{ context.section.name }}" placeholder="Filter" aria-label="Filter {{ context.section.title }}"
+    hx-get="/plan/{{ context.job_id }}/section/{{ context.section.name }}" hx-trigger="input changed delay:300ms, search"
+    hx-target="#rows-{{ context.section.name }}" hx-swap="outerHTML">{% endif %}
+  {% with section = context.section, rows = context.rows, columns = context.columns, total = context.total, matched = context.matched, page = context.page, pages = context.pages, query = context.query, job_id = context.job_id %}<div class="table-wrap">{% include "_section.html" %}</div>{% endwith %}
+</section>
+{% endfor %}
+{% if empty %}<p class="note">Nothing in: {{ empty | join(", ") | lower }}.</p>{% endif %}
+{% include "_plan_apply_action.html" %}
+{% endwith %}

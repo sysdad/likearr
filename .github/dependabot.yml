@@ -1,0 +1,32 @@
+version: 2
+updates:
+  # Python dependencies, resolved and locked by uv (pyproject.toml + uv.lock).
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  # Actions used by .github/workflows/ci.yml. CI pins each action to a commit SHA (#136);
+  # these updates keep those pins current.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # Base images in the Dockerfile (python:3.12-slim and, via a named build stage,
+  # ghcr.io/astral-sh/uv:0.6). Both FROM lines are digest-pinned so Dependabot has a
+  # concrete change to propose instead of a floating tag that updates itself.
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # Digest bumps only. Moving Python past 3.12 or uv past 0.6 is a deliberate upgrade (#126),
+    # not bot work.
+    ignore:
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "astral-sh/uv"  # Dependabot drops the registry host from the name
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]

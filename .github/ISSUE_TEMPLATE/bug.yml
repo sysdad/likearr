@@ -1,0 +1,65 @@
+name: Bug report
+description: Something isn't working the way it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug. The version, Lidarr version, install type and doctor output below
+        are what a fix usually needs first, so they're required.
+  - type: input
+    id: version
+    attributes:
+      label: likearr version
+      description: Output of `likearr --version`.
+      placeholder: likearr 0.5.0
+    validations:
+      required: true
+  - type: input
+    id: lidarr-version
+    attributes:
+      label: Lidarr version
+      description: From Lidarr's System > Status, or the `lidarr` line in `likearr doctor`.
+      placeholder: 2.13.3.4692
+    validations:
+      required: true
+  - type: dropdown
+    id: install-type
+    attributes:
+      label: Install type
+      options:
+        - Docker image
+        - Docker built from source
+        - pip / uv
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: likearr doctor output
+      description: >-
+        Run `likearr doctor` (or open the Doctor section in Settings) and paste the output below.
+        Review before pasting: doctor never prints token values, but its details can include your
+        Spotify account name, your Lidarr URL and local file paths. Redact anything you don't want
+        to share.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+    validations:
+      required: true
+  - type: textarea
+    id: what-expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true

@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Not found</h1>
+{% if what == "run" %}
+<p>There is no such run.</p>
+{% elif what == "page" %}
+<p>There is no such page.</p>
+{% else %}
+<p>There is no such job. Only the newest 20 are kept.</p>
+{% endif %}
+{% endblock %}

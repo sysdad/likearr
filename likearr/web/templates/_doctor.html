@@ -1,0 +1,54 @@
+{# The Doctor section of Settings (#85). Polls only while its job runs; the poll that sees it
+   finish gets 286 and stops. Nothing here starts doctor except the button: it calls Spotify. #}
+{% macro checks_table(checks) -%}
+<table class="doctor-checks">
+  <tbody>
+    {% for c in checks %}
+    {% set tone = 'ok' if c.level == 'PASS' else ('bad' if c.level == 'FAIL' else 'warn') %}
+    <tr class="tone-{{ tone }}">
+      <td><span class="pill tone-{{ tone }}">{{ c.level }}</span> {{ c.name }}</td>
+      <td>{{ c.detail }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{%- endmacro %}
+{% set doc_job = doctor.job %}
+{% set view = doctor.view %}
+<div id="doctor-panel" hx-target="this" hx-swap="outerHTML"
+  {% if doc_job and not doc_job.finished %}hx-get="/settings/doctor/{{ doc_job.id }}" hx-trigger="every 2s"{% endif %}>
+  {% if doctor.note %}<p class="error">{{ doctor.note }}</p>{% endif %}
+  {% if doc_job and not doc_job.finished %}
+  <p class="note">Checking config, Lidarr, MusicBrainz and Spotify&hellip; <a href="/jobs/{{ doc_job.id }}">See progress</a>.</p>
+  {% else %}
+  <form method="post" action="/doctor" hx-post="/doctor">
+    <button type="submit" class="{{ 'primary' if not doc_job else '' }}">{{ "Run checks" if not doc_job else "Run checks again" }}</button>
+  </form>
+  {% endif %}
+
+  {% if doc_job and doc_job.finished and view is none %}
+  <p class="error">Doctor did not finish cleanly. <a href="/jobs/{{ doc_job.id }}">See the log</a>.</p>
+  {% elif view %}
+  {# Counted from the checks listed, so the banner always agrees with the table under it. #}
+  {% set fails = view.problems | selectattr("level", "equalto", "FAIL") | list | length %}
+  {% set warns = view.problems | length - fails %}
+  {% set skips = view.skipped_checks | length %}
+  <div class="banner tone-{{ 'bad' if fails else ('warn' if warns else 'ok') }}">
+    <div class="text">
+      <p class="title">
+        {% if fails %}{{ fails }} failed{% if warns %}, {{ warns }} warning{{ "s" if warns != 1 }}{% endif %}
+        {% elif warns %}{{ warns }} warning{{ "s" if warns != 1 }}
+        {% else %}All {{ view.passed | length }} check{{ "s" if view.passed | length != 1 }} passed{% if skips %}, {{ skips }} skipped{% endif %}{% endif %}
+      </p>
+      <p class="note">Checked {{ doc_job.started_at | when }}.</p>
+    </div>
+  </div>
+  {% if view.problems %}{{ checks_table(view.problems) }}{% endif %}
+  {% if view.passed or view.skipped_checks %}
+  <details class="panel">
+    <summary>{{ view.passed | length }} check{{ "s" if view.passed | length != 1 }} passed{% if view.skipped_checks %}, {{ view.skipped_checks | length }} skipped{% endif %}</summary>
+    {{ checks_table(view.passed + view.skipped_checks) }}
+  </details>
+  {% endif %}
+  {% endif %}
+</div>

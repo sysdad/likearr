@@ -1,0 +1,259 @@
+/* likearr web UI: one plain stylesheet, no framework. Light and dark follow the system.
+   One visual system for every page: a spacing scale, a type scale, one accent colour, three
+   status colours (ok, attention, problem), and the same buttons, cards, tables and disclosures. */
+:root {
+  /* colour */
+  --bg: #f6f6f3; --fg: #1c1c1a; --muted: #686862; --line: #e1e1dc; --panel: #ffffff; --panel-2: #fafaf8;
+  --accent: #2e5ea8; --accent-fg: #ffffff; --accent-soft: #e8eef8;
+  --ok: #2c7a4b; --ok-soft: #e6f3eb; --warn: #9a5800; --warn-soft: #fbf0df; --bad: #b3261e; --bad-soft: #fbe7e5;
+  /* Spotify's own brand green and text colour (#86): fixed by their brand guideline, not part of
+     the light/dark system - unlike --accent, this one doesn't change with the theme. */
+  --spotify-green: #1ed760; --spotify-fg: #000000;
+  /* space: 4 8 12 16 24 32 */
+  --s1: .25rem; --s2: .5rem; --s3: .75rem; --s4: 1rem; --s5: 1.5rem; --s6: 2rem;
+  /* type */
+  --t-xs: .78rem; --t-sm: .875rem; --t-base: 1rem; --t-lg: 1.125rem; --t-xl: 1.4rem; --t-2xl: 1.75rem;
+  --radius: 8px; --shadow: 0 1px 2px rgb(0 0 0 / .05), 0 1px 1px rgb(0 0 0 / .03);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141413; --fg: #e9e9e4; --muted: #9d9d96; --line: #31312d; --panel: #1d1d1b; --panel-2: #222220;
+    --accent: #86aee9; --accent-fg: #0f1a2b; --accent-soft: #1f2a3b;
+    --ok: #6cc28f; --ok-soft: #17291e; --warn: #e3a74f; --warn-soft: #2d2415; --bad: #f07a70; --bad-soft: #321a18;
+    --shadow: none;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); }
+a { color: var(--accent); text-underline-offset: 2px; }
+
+/* ---- header and navigation
+   Two groups side by side, never wrapping onto each other: the page links (which may wrap
+   onto their own second line at narrow widths) and a right-hand group of the running
+   indicator plus Log out (which stays together on the first row). */
+header { border-bottom: 1px solid var(--line); background: var(--panel); }
+nav { display: flex; flex-wrap: nowrap; align-items: flex-start; gap: var(--s2); max-width: 64rem; margin: 0 auto; padding: var(--s2) var(--s4); }
+nav a { color: var(--fg); text-decoration: none; padding: var(--s1) var(--s3); border-radius: 999px; font-size: var(--t-sm); }
+nav a:hover { background: var(--panel-2); }
+nav a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+nav .brand { display: inline-flex; align-items: center; gap: var(--s2); font-weight: 700; font-size: var(--t-base); padding-left: 0; margin-right: var(--s3); }
+nav .brand:hover { background: none; }
+nav .brand-mark { width: 1em; height: 1em; flex: none; }
+nav .nav-links { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s2); align-items: center; min-width: 0; }
+nav .nav-right { display: flex; flex: none; flex-wrap: nowrap; gap: var(--s2); align-items: center; margin-left: auto; }
+nav .running { color: var(--warn); background: var(--warn-soft); font-weight: 600; white-space: nowrap; }
+#nav-running:empty { display: none; }  /* no job: don't let the wrapper add a flex gap before Log out */
+nav .logout { display: inline-flex; }
+
+main { max-width: 64rem; margin: 0 auto; padding: var(--s5) var(--s4) var(--s6); }
+.app-footer { max-width: 64rem; margin: 0 auto; padding: 0 var(--s4) var(--s5); color: var(--muted); font-size: var(--t-xs); }
+h1 { font-size: var(--t-2xl); line-height: 1.2; margin: 0 0 var(--s2); }
+.subtitle { color: var(--muted); margin: 0 0 var(--s5); font-size: var(--t-lg); }
+h2 { font-size: var(--t-lg); margin: var(--s6) 0 var(--s3); }
+h3 { font-size: var(--t-base); margin: var(--s4) 0 var(--s2); }
+p { margin: var(--s2) 0; }
+section { margin: 0 0 var(--s5); }
+
+code, pre { font: 13px/1.45 ui-monospace, "SF Mono", Menlo, monospace; }
+pre { background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius); padding: var(--s3); overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
+pre.log { max-height: 24rem; overflow-y: auto; color: var(--muted); }
+
+/* ---- buttons: secondary by default, .primary for the one action a page asks for */
+button, .button { font: inherit; font-size: var(--t-sm); font-weight: 500; line-height: 1.4; padding: var(--s2) var(--s4); border: 1px solid var(--line); background: var(--panel); color: var(--fg); border-radius: var(--radius); cursor: pointer; text-decoration: none; display: inline-block; }
+button:hover, .button:hover { border-color: var(--accent); }
+button.primary, .button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); font-weight: 600; }
+button.primary:hover, .button.primary:hover { filter: brightness(1.08); }
+button.small, .button.small { padding: var(--s1) var(--s3); font-size: var(--t-xs); }
+button:disabled, button:disabled:hover { opacity: .55; cursor: not-allowed; border-color: var(--line); filter: none; }
+.actions { display: flex; flex-wrap: wrap; gap: var(--s3); align-items: center; margin: var(--s4) 0; }
+
+/* ---- the Spotify connect button (#86): brand green pill, black text, the icon unaltered with
+   its own clear space from the button's own padding and gap - never resized or recoloured. */
+.spotify-button { display: inline-flex; align-items: center; gap: var(--s2); border-radius: 999px; background: var(--spotify-green); border-color: var(--spotify-green); color: var(--spotify-fg); font-weight: 700; }
+.spotify-button:hover { border-color: var(--spotify-green); filter: brightness(1.05); }
+.spotify-button svg { width: 20px; height: 20px; flex: none; fill: currentColor; }
+
+input, select, textarea { font: inherit; padding: var(--s2) var(--s3); border: 1px solid var(--line); background: var(--panel); color: var(--fg); border-radius: var(--radius); max-width: 100%; }
+input:focus, select:focus, textarea:focus, button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+textarea { width: 100%; font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
+
+/* ---- text roles */
+.note, .help, .when { color: var(--muted); }
+.note { font-size: var(--t-sm); }
+.help { font-size: var(--t-sm); margin: var(--s1) 0 0; }
+.error { color: var(--bad); }
+.warn { color: var(--warn); }
+.ok { color: var(--ok); }
+
+/* ---- cards and callouts */
+.card > h2:first-child, .card > h3:first-child { margin-top: 0; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: var(--s4); }
+.flash { background: var(--accent-soft); border-radius: var(--radius); padding: var(--s3) var(--s4); }
+.banner { display: flex; gap: var(--s3); align-items: flex-start; border-radius: var(--radius); padding: var(--s4); margin: 0 0 var(--s4); background: var(--accent-soft); border: 1px solid transparent; }
+.banner .icon { flex: none; width: 1.5rem; height: 1.5rem; margin-top: .1rem; }
+.banner .text { flex: 1; min-width: 0; }
+.banner .title { font-weight: 650; font-size: var(--t-lg); margin: 0; }
+.banner ul, .banner ol { margin: var(--s2) 0 0; padding-left: var(--s5); }
+.banner .checklist li { margin: var(--s1) 0; }
+.banner p { margin: var(--s1) 0 0; }
+.banner.tone-ok { background: var(--ok-soft); color: var(--fg); }
+.banner.tone-ok .icon, .banner.tone-ok .title { color: var(--ok); }
+.banner.tone-warn { background: var(--warn-soft); }
+.banner.tone-warn .icon, .banner.tone-warn .title { color: var(--warn); }
+.banner.tone-bad { background: var(--bad-soft); }
+.banner.tone-bad .icon, .banner.tone-bad .title { color: var(--bad); }
+
+/* ---- stat cards (the top of Status) */
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: var(--s3); margin: 0 0 var(--s4); }
+.stat { display: flex; flex-direction: column; gap: var(--s1); }
+.stat .label { color: var(--muted); font-size: var(--t-xs); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+.stat .value { font-size: var(--t-xl); font-weight: 650; line-height: 1.2; }
+.stat .value.tone-ok { color: var(--ok); } .stat .value.tone-warn { color: var(--warn); } .stat .value.tone-bad { color: var(--bad); }
+.stat .sub { color: var(--muted); font-size: var(--t-sm); }
+/* A native <progress>, not a styled div: the CSP (default-src 'self') refuses inline style attributes. */
+progress.meter { appearance: none; -webkit-appearance: none; width: 100%; height: .4rem; border: 0; border-radius: 999px; background: var(--line); overflow: hidden; margin: var(--s1) 0; color: var(--ok); }
+progress.meter::-webkit-progress-bar { background: var(--line); border-radius: 999px; }
+progress.meter::-webkit-progress-value { background: var(--ok); border-radius: 999px; }
+progress.meter::-moz-progress-bar { background: var(--ok); border-radius: 999px; }
+
+/* ---- disclosures */
+details { margin: var(--s3) 0; }
+details > summary { cursor: pointer; color: var(--accent); font-weight: 500; }
+details.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: var(--s3) var(--s4); }
+details.panel[open] > summary { margin-bottom: var(--s3); }
+
+/* ---- runs, collisions */
+.run { background: var(--panel); border: 1px solid var(--line); border-left-width: 4px; border-radius: var(--radius); padding: var(--s3) var(--s4); margin: 0 0 var(--s3); }
+/* After .run: its border shorthand would otherwise reset the stripe colour. */
+.run.tone-ok { border-left-color: var(--ok); }
+.run.tone-warn { border-left-color: var(--warn); }
+.run.tone-bad { border-left-color: var(--bad); }
+.run.tone-quiet { border-left-color: var(--line); }
+.run .headline { font-weight: 600; margin: var(--s1) 0; }
+.run ul { margin: var(--s1) 0 var(--s2); }
+.collision ul.links { padding-left: var(--s5); margin: var(--s2) 0; }
+
+/* ---- lists and tables */
+dl { display: grid; grid-template-columns: max-content 1fr; gap: var(--s2) var(--s4); margin: var(--s2) 0; }
+dt { color: var(--muted); }
+dd { margin: 0; }
+dd.tone-warn { color: var(--warn); }
+dd.tone-bad { color: var(--bad); }
+.table-wrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: var(--s2) var(--s3); border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-size: var(--t-xs); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+tr:last-child td { border-bottom: 0; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+table.counts { width: auto; min-width: 22rem; }
+td.msg { color: var(--muted); font-size: var(--t-sm); }
+.nowrap { white-space: nowrap; }
+/* A long Doctor detail or run message must not push the page wider than the viewport (#142):
+   a fieldset's browser-default min-width (its widest child's content) and an unbroken long
+   string (a path, a URL) both do that unless told they may break. */
+td, dd, .help { overflow-wrap: anywhere; }
+.pill { display: inline-block; font-size: var(--t-xs); font-weight: 600; padding: 0 var(--s2); border-radius: 999px; background: var(--panel-2); border: 1px solid var(--line); }
+.pill.tone-ok { color: var(--ok); background: var(--ok-soft); border-color: transparent; }
+.pill.tone-warn { color: var(--warn); background: var(--warn-soft); border-color: transparent; }
+.pill.tone-bad { color: var(--bad); background: var(--bad-soft); border-color: transparent; }
+ul.jobs { padding-left: var(--s5); }
+
+/* ---- forms */
+/* min-width: 0 overrides the browser default (min-content: as wide as its widest child needs,
+   a long Doctor detail among them), which is what was pushing Settings wider than the phone
+   it's on (#142) even with the table and .help wrap rules above in place. */
+fieldset { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); margin: 0 0 var(--s4); padding: var(--s2) var(--s4) var(--s4); min-width: 0; }
+legend { font-weight: 600; padding: 0 var(--s1); }
+.field { margin: var(--s3) 0; }
+.field > label:not(.check), .field > .label { display: block; font-weight: 500; }
+.field.has-error input, .field.has-error textarea { border-color: var(--bad); }
+label.check { display: block; margin: var(--s1) 0; }
+label.check input { margin-right: var(--s2); }
+label.check.disabled { color: var(--muted); }
+.picker { margin: var(--s1) 0; }
+.picker ul.waiting { list-style: none; padding-left: 0; margin: var(--s1) 0; color: var(--muted); }
+form.inline { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; margin: var(--s2) 0; }
+form.login, form.explain { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; }
+form.login label, form.explain label { flex-basis: 100%; font-weight: 500; }
+form.login .help { flex-basis: 100%; margin: 0; }
+form.explain input { flex: 1; min-width: 14rem; }
+.optional { color: var(--muted); font-weight: 400; }
+
+/* ---- jobs */
+.job .state { font-weight: 600; }
+.state-failed .state { color: var(--bad); }
+.state-busy .state, .state-stale .state, .state-guarded .state, .state-interrupted .state { color: var(--warn); }
+.state-done .state { color: var(--ok); }
+
+/* ---- look up (explain): one card per match */
+.lookup-bar { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); align-items: center; justify-content: space-between; margin: var(--s3) 0; }
+.lookup-bar .caption { margin: 0; }
+.result-count { margin: var(--s3) 0; }
+.lookup .pills { margin: 0 0 var(--s1); display: flex; flex-wrap: wrap; gap: var(--s1); }
+.lookup .headline { font-weight: 500; }
+.lookup dl.facts { font-size: var(--t-sm); margin: var(--s3) 0; }
+.card-actions { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; margin: var(--s3) 0 0; }
+.card-actions form.inline, .lookup-bar form.inline { margin: 0; }
+.lookup details { margin: var(--s3) 0 0; }
+.lookup details > summary { font-size: var(--t-sm); }
+
+/* ---- review changes (plans) */
+.plan-section input[type="search"] { width: 100%; max-width: 24rem; margin: var(--s1) 0 var(--s2); }
+table.plan-rows td { font-size: var(--t-sm); }
+.pager { display: flex; gap: var(--s3); align-items: center; }
+.plan-counts { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: var(--s2); margin: 0 0 var(--s4); }
+.plan-counts .card { padding: var(--s3); }
+.plan-counts .n { font-size: var(--t-xl); font-weight: 650; display: block; }
+.plan-counts .n.zero { color: var(--muted); }
+.plan-counts .what { color: var(--muted); font-size: var(--t-sm); }
+
+@media (max-width: 40rem) {
+  main { padding: var(--s4) var(--s3) var(--s6); }
+  dl { grid-template-columns: 1fr; }
+  dd { margin-bottom: var(--s2); }
+  table.history th:nth-child(n+4), table.history td:nth-child(n+4) { display: none; }
+  table.counts { min-width: 0; width: 100%; }
+  .stats { grid-template-columns: 1fr; }
+  .lookup dl.facts { gap: 0; }
+}
+
+/* ---- action error banner (#129): a failed hx-post (service down, 5xx, a proxy error), drawn by
+   errors.js. Fixed to the top so it is seen regardless of scroll position; one element, reused
+   and re-filled by later failures rather than stacked. */
+.hx-error-banner { position: fixed; top: var(--s3); left: 50%; transform: translateX(-50%); z-index: 100;
+  max-width: 40rem; width: calc(100% - 2 * var(--s4)); background: var(--bad-soft); color: var(--fg);
+  border: 1px solid var(--bad); border-radius: var(--radius); padding: var(--s3) var(--s4); box-shadow: var(--shadow); }
+/* A slow save is visible while htmx has the request in flight - minimal, since includeIndicatorStyles is off. */
+.htmx-request { opacity: .6; }
+
+/* ---- prune review */
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.filters { display: flex; flex-wrap: wrap; gap: var(--s2); margin: 0 0 var(--s4); padding: var(--s3); }
+.filters input { flex: 1; min-width: 12rem; }
+.prune-artist { margin: 0 0 var(--s3); border-left: 4px solid var(--line); }
+.prune-artist.decision-trash { border-left-color: var(--bad); }
+.prune-artist.decision-keep, .prune-artist.decision-promote, .prune-artist.decision-save { border-left-color: var(--ok); }
+.prune-artist .head { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: baseline; }
+.prune-artist fieldset.choices { border: 0; padding: 0; margin: var(--s2) 0; background: none; display: flex; flex-wrap: wrap; gap: var(--s1) var(--s4); }
+.prune-artist label.choice { font-size: var(--t-sm); white-space: nowrap; }
+.prune-artist ul.effects { margin: 0 0 var(--s2); padding-left: var(--s4); }
+table.prune-releases td { font-size: var(--t-sm); }
+table.prune-releases tr.trashed td:first-child { text-decoration: line-through; color: var(--muted); }
+/* why a protected album is always kept: the ok tone of its pill, as a callout, not a grey note */
+table.prune-releases .kept-why { display: block; margin: var(--s1) 0; padding: var(--s1) var(--s2); border-left: 3px solid var(--ok); border-radius: 0 var(--radius) var(--radius) 0; background: var(--ok-soft); color: var(--fg); }
+
+/* ---- what couldn't be added (unmatched) */
+@media (min-width: 56rem) { .stats.five { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+.unmatched-part { margin: 0 0 var(--s5); }
+.unmatched-part h3 { margin: var(--s4) 0 var(--s1); }
+table.unmatched-rows td { font-size: var(--t-sm); }
+table.unmatched-rows .card-actions { margin: 0; }
+table.unmatched-rows ul.songs { margin: var(--s1) 0 0; padding-left: var(--s5); }
+@media (max-width: 40rem) {
+  table.unmatched-rows thead { display: none; }
+  table.unmatched-rows tr { display: block; border-bottom: 1px solid var(--line); padding: var(--s2) 0; }
+  table.unmatched-rows tr:last-child { border-bottom: 0; }
+  table.unmatched-rows td { display: block; border-bottom: 0; padding: var(--s1) var(--s3); }
+}

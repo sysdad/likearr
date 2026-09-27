@@ -1,0 +1,11 @@
+<div id="prune-summary"{% if oob %} hx-swap-oob="true"{% endif %}>
+<div class="stats">
+  <div class="card stat"><span class="label">Reviewed</span><span class="value">{{ summary.decided }} of {{ summary.artists }}</span><span class="sub">artists decided</span></div>
+  <div class="card stat"><span class="label">On disk, unasked-for</span><span class="value">{{ summary.candidate_size }}</span><span class="sub">{{ summary.candidates }} album{{ "" if summary.candidates == 1 else "s" }}</span></div>
+  <div class="card stat"><span class="label">Would trash</span><span class="value">{{ summary.trash_size }}</span><span class="sub">{{ summary.trash_albums }} album{{ "" if summary.trash_albums == 1 else "s" }}</span></div>
+  <div class="card stat"><span class="label">On Spotify, by hand</span><span class="value">{{ summary.promote }} + {{ summary.save_albums }}</span><span class="sub">artist{{ "" if summary.promote == 1 else "s" }} to follow + album{{ "" if summary.save_albums == 1 else "s" }} to save</span></div>
+</div>
+{% if summary.carried %}
+<p class="note">{{ "{:,}".format(summary.carried) }} album{{ "" if summary.carried == 1 else "s" }} carried over from earlier reviews. {{ "{:,}".format(summary.needs) }} need{{ "s" if summary.needs == 1 else "" }} a decision, under {{ summary.needs_artists }} artist{{ "" if summary.needs_artists == 1 else "s" }}{% if summary.returning %} - {{ summary.returning }} of them trashed before and back on disk{% endif %}.</p>
+{% endif %}
+</div>

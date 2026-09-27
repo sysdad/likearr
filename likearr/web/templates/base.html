@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="htmx-config" content='{"includeIndicatorStyles": false, "allowEval": false, "historyCacheSize": 0, "responseHandling": [{"code": "204", "swap": false}, {"code": "[23]..", "swap": true}, {"code": "409", "swap": true, "error": false}, {"code": "[45]..", "swap": false, "error": true}]}'>
+  <title>{% block title %}likearr{% endblock %}</title>
+  <link rel="icon" type="image/svg+xml" href="/static/icon.svg">
+  <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+  <meta name="theme-color" content="#f6f6f3" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#141413" media="(prefers-color-scheme: dark)">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/htmx.min.js" defer></script>
+  <script src="/static/errors.js" defer></script>
+</head>
+<body>
+  <header>
+    {% block nav %}
+    {% from "_macros.html" import nav_link %}
+    <nav>
+      <div class="nav-links">
+        <a href="/" class="brand"><img src="/static/icon.svg" alt="" class="brand-mark" aria-hidden="true">likearr</a>
+        {{ nav_link(request, "/", "Status", none) }}
+        {{ nav_link(request, "/plan", "Review changes", ("/plan/",)) }}
+        {{ nav_link(request, "/explain", "Look up", none) }}
+        {{ nav_link(request, "/unmatched", "Not added", none) }}
+        {% if cleanup_enabled %}{{ nav_link(request, "/prune", "Clean up", ("/prune/",)) }}{% endif %}
+        {{ nav_link(request, "/jobs", "Jobs", ("/jobs/",)) }}
+        {{ nav_link(request, "/settings", "Settings", ("/settings/",)) }}
+      </div>
+      <div class="nav-right">
+        {% with oob = False %}{% include "_nav_running.html" %}{% endwith %}
+        <form method="post" action="/logout" class="logout"><button type="submit" class="small">Log out</button></form>
+      </div>
+    </nav>
+    {% endblock %}
+  </header>
+  <main>
+    {% if flash %}<p class="flash">{{ flash }}</p>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+  {% block footer %}
+  <footer class="app-footer">likearr {{ version }}{% if commit %} ({{ commit }}){% endif %}</footer>
+  {% endblock %}
+</body>
+</html>

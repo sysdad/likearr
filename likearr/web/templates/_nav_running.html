@@ -1,0 +1,7 @@
+{# The nav's running-job pill. Included plainly by base.html, and out of band (`oob`) by `_Web.render`
+   for every htmx fragment response, rendered fresh from `runner.current()` there - the same
+   `_prune_summary.html`/`_prune_export_status.html` convention: one partial, an id on its own root,
+   a passed `oob` flag - so every poll (job, Doctor, Lidarr setup, playlists, Clean up) refreshes the
+   nav, not just the page that started the run. Empty but still carrying the id removes the pill when
+   nothing runs. Needs `job`; `oob` defaults to false. #}
+<span id="nav-running"{% if oob %} hx-swap-oob="true"{% endif %}>{% if job %}<a class="running" href="/jobs/{{ job.id }}" title="{{ job.kind | job_title }}: running" aria-label="{{ job.kind | job_title }}: running">Running&hellip;</a>{% endif %}</span>

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Clean up - likearr{% endblock %}
+{% block content %}
+<h1>Clean up your library</h1>
+<p class="subtitle">Albums on disk that nothing on Spotify asks for, found {{ meta.started_at | when }}. Decide what to keep, and what to trash; every choice is saved as you make it.</p>
+{% with oob = False %}{% include "_prune_summary.html" %}{% endwith %}
+{% if ledger_problem %}
+<div class="banner tone-warn" role="status"><div class="text"><p class="title">Earlier decisions can't be read.</p>
+  <p>The Clean up ledger will not read, so nothing is filled in from earlier reviews and an export will not overwrite it: {{ ledger_problem }}</p></div></div>
+{% endif %}
+
+<form id="prune-filter" class="filters card" role="search">
+  <input type="search" name="q" value="{{ rows_ctx.query }}" placeholder="Filter by artist or album" aria-label="Filter by artist or album"
+    hx-get="/prune/{{ meta.id }}/rows" hx-include="#prune-filter" hx-trigger="input changed delay:300ms, search" hx-target="#prune-rows" hx-swap="outerHTML">
+  <select name="show" aria-label="Show"
+    hx-get="/prune/{{ meta.id }}/rows" hx-include="#prune-filter" hx-trigger="change" hx-target="#prune-rows" hx-swap="outerHTML">
+    {% for value, label in [("needs", "Needs a decision"), ("all", "All artists"), ("undecided", "Undecided"), ("keep", "Keep - no change on Spotify"), ("promote", "Keep and follow the artist on Spotify"), ("save", "Keep and save all their albums on Spotify"), ("trash", "Trash all listed albums")] %}
+    <option value="{{ value }}"{% if rows_ctx.show == value %} selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+</form>
+<p class="note">An artist's choice acts only on their albums listed here. Each album is "Same as artist" until you choose something for it, and its own choice always wins.</p>
+<p class="note">Following an artist makes likearr monitor their studio albums and EPs from now on, but saves nothing. Saving puts the album in your Spotify library.</p>
+<p class="note">Trash goes to the holding folder. Nothing is deleted until you empty it yourself.</p>
+
+{% with job_id = rows_ctx.job_id, rows = rows_ctx.rows, matched = rows_ctx.matched, pages = rows_ctx.pages, page = rows_ctx.page, query = rows_ctx.query, show = rows_ctx.show, total = rows_ctx.total %}{% include "_prune_rows.html" %}{% endwith %}
+
+<section id="export" class="card">
+  <h2>Export</h2>
+  <p>Exporting writes two files beside the report, and remembers your decisions so the next review starts from them. Nothing moves and nothing changes on Spotify until you run the commands below yourself.</p>
+  <p class="note">Trash goes to the holding folder. Nothing is deleted until you empty it yourself.</p>
+  {% with oob_export = False %}{% include "_prune_export_status.html" %}{% endwith %}
+  <form method="post" action="/prune/{{ meta.id }}/export">
+    <label for="notes">Notes (optional, kept in the decisions file)</label>
+    <textarea id="notes" name="notes" rows="3" maxlength="4000">{{ notes }}</textarea>
+    <div class="actions">
+      <button type="submit" class="primary">Export the decisions</button>
+      <a href="/prune/{{ meta.id }}/download/decisions.json">Download decisions.json</a>
+      <a href="/prune/{{ meta.id }}/download/review-data.json">Download review-data.json</a>
+    </div>
+  </form>
+</section>
+
+<section id="finish" class="card">{% include "_prune_finish.html" %}</section>
+{% if output or tail %}
+<details class="panel"><summary>Technical log</summary>
+  {% if output %}<pre class="answer">{{ output }}</pre>{% endif %}
+  {% if tail %}<pre class="log">{{ tail }}</pre>{% endif %}
+</details>
+{% endif %}
+{% endblock %}

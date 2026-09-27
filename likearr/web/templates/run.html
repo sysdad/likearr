@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}{% if run %}Run #{{ run.run_id }}{% else %}Run{% endif %} - likearr{% endblock %}
+{% block content %}
+{% if config_error %}
+<h1>Run</h1>
+<p class="error">config.toml does not load: {{ config_error }}</p>
+{% else %}
+<h1>Run #{{ run.run_id }}</h1>
+{% include "_run.html" %}
+{% if not run.record.dry_run %}
+  {% if job %}<p><a href="/jobs/{{ job.id }}">Job log</a></p>
+  {% else %}<p class="note">Its job details are no longer kept.</p>{% endif %}
+{% endif %}
+{% if run_changes %}
+<section id="changes">
+  <h2>What changed</h2>
+  {% include "_run_changes.html" %}
+</section>
+{% endif %}
+<p><a href="/">&larr; Status</a></p>
+{% endif %}
+{% endblock %}

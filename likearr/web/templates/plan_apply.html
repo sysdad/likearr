@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Apply changes - likearr{% endblock %}
+{% block content %}
+<h1>Apply these changes</h1>
+{% if config_error %}
+<p class="error">config.toml does not load: {{ config_error }}</p>
+{% else %}
+<p class="when">Checked {{ meta.finished_at | when }}.</p>
+{% if error %}<div class="banner tone-bad"><div class="text"><p class="title">Nothing was applied.</p><p>{{ error }}</p></div></div>{% endif %}
+
+{% if not state.reviewable %}
+  <div class="banner tone-warn"><div class="text"><p class="title">This check is {{ state.name }}.</p><p>{{ state.why }}</p></div></div>
+  {% with replan_shrink = accept_shrink %}{% include "_replan.html" %}{% endwith %}
+{% else %}
+<section>
+  {% include "_plan_counts.html" %}
+  {% if guards %}
+  <p>These guards stay in force; what they held back stays as it is:</p>
+  <ul>{% for g in guards %}<li>{{ g }}</li>{% endfor %}</ul>
+  {% endif %}
+  <p class="note">It runs the command below. Before it changes anything it checks that Spotify, Lidarr and the settings still match this check, and stops if they don't. It can't be cancelled once started, so Lidarr is never left half changed.</p>
+  <details><summary>Show the command</summary><code>{{ command }}</code></details>
+</section>
+<form method="post" action="/plan/{{ meta.id }}/apply" class="plan">
+  <input type="hidden" name="plan_token" value="{{ meta.plan_token }}">
+  {% if accept_preset %}
+  <div class="banner tone-warn" id="accept"><div class="text"><p class="title">Accept the name collision as known</p>
+    <p>Applying with the box under Advanced ticked accepts the skip as known: it {% if has_mqtt %}stops showing as needs attention here and stops lighting Home Assistant amber{% else %}stops showing as needs attention on Status{% endif %}. The artist stays skipped.</p>
+    <p>The box accepts everything the apply finds when it checks again just before changing anything - this collision, and any other name collision, skipped artist or oversized catalogue it reports, including ones that appeared after this check. Untick it to apply without accepting.</p></div></div>
+  {% endif %}
+  <div class="actions">
+    <button type="submit" class="primary">{% if changes %}Apply these changes{% else %}Apply anyway{% endif %}</button>
+    <a href="/plan/{{ meta.id }}">Back to the review</a>
+  </div>
+  <details{% if accept_preset %} open{% endif %}>
+    <summary>Advanced (optional)</summary>
+    <label class="check"><input type="checkbox" name="accept_health"{% if accept_preset %} checked{% endif %}> Also stop flagging these as new problems. <span class="optional">The skipped artists, name collisions and oversized catalogues this run reports will stop showing as "needs attention" here{% if has_mqtt %} and in Home Assistant{% endif %}. You don't need this to apply.</span></label>
+  </details>
+</form>
+{% endif %}
+{% endif %}
+{% endblock %}

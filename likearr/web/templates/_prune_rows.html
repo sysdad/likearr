@@ -1,0 +1,12 @@
+<div id="prune-rows">
+  {% for row in rows %}{% with oob = False %}{% include "_prune_artist.html" %}{% endwith %}{% else %}
+  <p class="note">{% if show == "needs" and not query %}Nothing needs a decision: every album here was decided in an earlier review. Choose "All artists" to see them.{% else %}No artist matches{% if query %} &ldquo;{{ query }}&rdquo;{% endif %}.{% endif %}</p>
+  {% endfor %}
+  {% if pages > 1 %}
+  <p class="pager">
+    {% if page > 1 %}<button type="button" hx-get="/prune/{{ job_id }}/rows?page={{ page - 1 }}" hx-include="#prune-filter" hx-target="#prune-rows" hx-swap="outerHTML">Previous</button>{% endif %}
+    <span class="note">Page {{ page }} of {{ pages }} · {{ matched }} of {{ total }} artists</span>
+    {% if page < pages %}<button type="button" hx-get="/prune/{{ job_id }}/rows?page={{ page + 1 }}" hx-include="#prune-filter" hx-target="#prune-rows" hx-swap="outerHTML">Next</button>{% endif %}
+  </p>
+  {% endif %}
+</div>

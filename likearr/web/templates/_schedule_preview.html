@@ -1,0 +1,10 @@
+{# The Schedule fieldset's "Next fires" (#86): swapped by hx-get on every cron/timezone edit,
+   from the fields as typed - not the saved values. Read-only, no file_hash. #}
+<div id="schedule-preview">
+{% if schedule_preview.error %}
+<p class="error">{{ schedule_preview.error }}</p>
+{% else %}
+{% if schedule_preview.summary %}<p class="note">{{ schedule_preview.summary }}</p>{% endif %}
+<p class="note">Next fires: {% for f in schedule_preview.fires %}{{ f | fire_when }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
+{% endif %}
+</div>

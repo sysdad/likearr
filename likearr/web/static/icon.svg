@@ -1,0 +1,13 @@
+<!-- likearr's mark: a heart (likes) cut by an audio waveform (music). Deliberately simple - few
+     shapes, no fine detail - so it still reads at 16px in a browser tab. The accent colour here
+     is a hard-coded hex, not the CSS custom property named accent: a favicon is loaded outside
+     any page's stylesheet, so it cannot see custom properties. Matches that variable in
+     style.css (light mode). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <path fill="#2e5ea8" d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+  <rect x="7.35" y="11" width="1.3" height="2" rx="0.65" fill="#fff"/>
+  <rect x="9.35" y="10" width="1.3" height="4" rx="0.65" fill="#fff"/>
+  <rect x="11.35" y="8.5" width="1.3" height="7" rx="0.65" fill="#fff"/>
+  <rect x="13.35" y="10" width="1.3" height="4" rx="0.65" fill="#fff"/>
+  <rect x="15.35" y="11" width="1.3" height="2" rx="0.65" fill="#fff"/>
+</svg>

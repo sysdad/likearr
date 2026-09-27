@@ -1,0 +1,15 @@
+{# Every group with rows after the filters, each split by why (#60). Swapped whole when the filter
+   bar changes; each part pages on its own (_unmatched_part.html). #}
+{% import "_unmatched_counts.html" as counts %}
+<div id="unmatched-sections">
+{% for group, parts in sections %}
+<section id="{{ group.code }}" class="unmatched-group">
+  {% set c = cards[group.code] %}{% set shown = parts | sum(attribute="matched") %}
+  <h2>{{ group.title }}: {{ c.items }} {{ counts.unit(c.items) }} <span class="note">· {{ counts.releases(c) }}{% if shown != c.releases + c.gaps %} · {{ shown }} match{{ "" if shown != 1 else "es" }} the filters{% endif %}</span></h2>
+  <p class="note">{{ group.guidance }}{% if group.code == "excluded" %} <a href="/settings">Settings</a>{% endif %}</p>
+  {% for part in parts %}{% include "_unmatched_part.html" %}{% endfor %}
+</section>
+{% else %}
+<p class="note">{% if not any_rows %}Nothing: everything the last run read was matched.{% else %}Nothing matches these filters.{% endif %}</p>
+{% endfor %}
+</div>

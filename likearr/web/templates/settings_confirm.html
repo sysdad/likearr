@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Confirm settings - likearr{% endblock %}
+{% block content %}
+<h1>Confirm this change</h1>
+<ul class="changes">
+{% for c in changes %}
+<li>
+  <strong>{{ c.label }}</strong>: {{ c.summary }}
+  <details>
+    <summary>Show config keys and IDs</summary>
+    <code>{{ c.section }}.{{ c.key }}</code>: {{ c.old_raw }} &rarr; {{ c.new_raw }}
+  </details>
+</li>
+{% endfor %}
+</ul>
+{% for reason in reasons %}<p class="warn">{{ reason }}</p>{% endfor %}
+<form method="post" action="{{ confirm_action or "/settings" }}">
+  <input type="hidden" name="file_hash" value="{{ file_hash }}">
+  <input type="hidden" name="confirm_digest" value="{{ confirm_digest }}">
+  {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+  {% for name, value in pairs %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
+  <button type="submit" class="primary">Save anyway</button>
+  <a href="/settings">Back, without saving</a>
+</form>
+{% endblock %}

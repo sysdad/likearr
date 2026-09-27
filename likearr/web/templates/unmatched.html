@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Not added - likearr{% endblock %}
+{% block content %}
+{% import "_unmatched_counts.html" as counts %}
+{% from "_macros.html" import coverage_card %}
+<h1>What couldn't be added</h1>
+{% if config_error %}
+<p class="error">config.toml does not load: {{ config_error }}</p>
+{% elif not last %}
+<p class="note">No run has been recorded yet. Every run records one when it finishes, so this list appears after the next one.</p>
+{% else %}
+<p class="subtitle">What you like, follow or keep in playlists that the last run ({{ last.ran_at | when }}) monitors nothing for, and why. One row per album; <a href="/explain">Look up</a> any of them for the detail.</p>
+{% if coverage %}<div class="stats">{{ coverage_card(coverage) }}</div>{% endif %}
+<div class="stats five">
+  {% for c in card_list %}
+  <div class="card stat"><span class="label">{% if c.items or c.gaps %}<a href="#{{ c.group.code }}">{{ c.group.title }}</a>{% else %}{{ c.group.title }}{% endif %}</span><span class="value{% if c.items and c.group.tone != 'quiet' %} tone-{{ c.group.tone }}{% endif %}">{{ c.items }}</span><span class="sub">{{ counts.unit(c.items) }} · {{ counts.releases(c) }}</span></div>
+  {% endfor %}
+</div>
+{% if any_rows %}
+<form id="unmatched-filter" class="filters card" role="search" action="/unmatched" method="get">
+  <input type="search" name="q" value="{{ filters.query }}" placeholder="Search artist, album or song" aria-label="Search artist, album or song" maxlength="200"
+    hx-get="/unmatched/rows" hx-include="#unmatched-filter" hx-trigger="input changed delay:300ms, search" hx-target="#unmatched-sections" hx-swap="outerHTML">
+  <select name="show" aria-label="Group or reason"
+    hx-get="/unmatched/rows" hx-include="#unmatched-filter" hx-trigger="change" hx-target="#unmatched-sections" hx-swap="outerHTML">
+    <option value="">Every group</option>
+    {% for group, reasons in reason_options %}
+    <optgroup label="{{ group.title }}">
+      <option value="{{ group.code }}"{% if filters.group == group.code %} selected{% endif %}>All: {{ group.title }}</option>
+      {% if reasons | length > 1 %}{% for r in reasons %}<option value="{{ r.code }}"{% if filters.group == r.code %} selected{% endif %}>{{ r.label }}</option>{% endfor %}{% endif %}
+    </optgroup>
+    {% endfor %}
+  </select>
+  <select name="source" aria-label="Where it comes from"
+    hx-get="/unmatched/rows" hx-include="#unmatched-filter" hx-trigger="change" hx-target="#unmatched-sections" hx-swap="outerHTML">
+    <option value="">Any source</option>
+    {% for value, label in source_options %}<option value="{{ value }}"{% if filters.source == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+  </select>
+  <select name="sort" aria-label="Sort"
+    hx-get="/unmatched/rows" hx-include="#unmatched-filter" hx-trigger="change" hx-target="#unmatched-sections" hx-swap="outerHTML">
+    {% for value, label in sorts %}<option value="{{ value }}"{% if filters.sort == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+  </select>
+  <noscript><button type="submit">Filter</button></noscript>
+</form>
+{% endif %}
+{% include "_unmatched_sections.html" %}
+{% endif %}
+{% endblock %}

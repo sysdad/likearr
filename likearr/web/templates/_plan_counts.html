@@ -1,0 +1,16 @@
+{# What a plan changes, as a row of counts. Needs `summary` (`diff_summary`). #}
+{% set items = [
+  ("add_artists", "artists to add"), ("monitor", "releases to monitor"), ("unmonitor", "releases to unmonitor"),
+  ("ratchets", "profiles to widen"), ("monitor_artists", "artists to re-monitor"),
+  ("set_new_items_none", "artists to stop auto-monitoring"), ("refresh_artists", "artists to refresh")] %}
+{% set total = summary.add_artists + summary.monitor + summary.unmonitor + summary.ratchets + summary.monitor_artists + summary.set_new_items_none + summary.refresh_artists %}
+{% if total == 0 %}
+<p class="lead"><strong>Nothing to change.</strong> Lidarr already matches what you like.{% if summary.blocked_unmonitors %} <span class="warn">Guards held {{ summary.blocked_unmonitors }} unmonitor{{ "" if summary.blocked_unmonitors == 1 else "s" }} back.</span>{% endif %}</p>
+{% else %}
+<div class="plan-counts">
+  {% for key, what in items %}
+  <div class="card"><span class="n{% if not summary[key] %} zero{% endif %}">{{ summary[key] }}</span><span class="what">{{ what }}{% if key == "unmonitor" and replaced %} <span class="note">({{ replaced }} replaced by another release of the same thing)</span>{% endif %}{% if key == "unmonitor" and summary.blocked_unmonitors %} <span class="warn">(+{{ summary.blocked_unmonitors }} held back)</span>{% endif %}</span></div>
+  {% endfor %}
+</div>
+{% endif %}
+<p class="note">After this, {{ summary.projected_wanted }} release{{ "" if summary.projected_wanted == 1 else "s" }} would be monitored with no files yet - Lidarr's wanted list, as projected.</p>

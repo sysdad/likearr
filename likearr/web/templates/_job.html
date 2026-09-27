@@ -1,0 +1,59 @@
+<div id="job" class="job state-{{ meta.state }}"
+  {% if not meta.finished %}hx-get="/jobs/{{ meta.id }}/fragment" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+  {% if not (review and meta.finished) %}
+  <p class="state">{{ state_text }}{% if meta.exit_code is not none and meta.state in ("failed", "cancelled") and not (meta | oom_note) %} (exit {{ meta.exit_code }}){% endif %}</p>
+  {% if failure_reason %}
+    <p class="error">{{ failure_reason }}</p>
+    {% if remedy_label %}<p class="error">{{ remedy_text }} <a href="{{ remedy_url }}">{{ remedy_label }}</a>.</p>{% endif %}
+  {% endif %}
+  {% endif %}
+  {# aria-hidden (#142): this ticks every poll while running, and the live region wrapping this
+     page's #job (see job.html) would otherwise announce it every 2s. The finish/fail line above
+     still announces normally. #}
+  <p class="when" aria-hidden="true">Started {{ meta.started_at | when }}; {{ "running for" if not meta.finished else "took" }} {{ elapsed }}.</p>
+  {% if not meta.finished and stopping %}
+    <p class="warn">Stopping. It finishes anything it must not cut short first - a Spotify token save - then stops; at most two minutes.</p>
+  {% elif not meta.finished %}
+    <p>{{ phase }}...</p>
+    {% if progress %}<p class="note">{{ progress }}</p>{% endif %}
+    {% if first_check %}
+      <p class="note">A first check can take hours. Cancelling keeps what it has looked up so far.</p>
+    {% endif %}
+    {% if meta.drain %}
+      <p class="note">Applying changes is never cancelled halfway: stopping it would leave Lidarr partly changed.</p>
+    {% elif meta.adopted %}
+      <p class="note">It isn't a child of this server any more, so there is no Cancel; it ends on its own.</p>
+    {% else %}
+      <form method="post" action="/jobs/{{ meta.id }}/cancel"><button type="submit">Cancel</button></form>
+    {% endif %}
+  {% endif %}
+  {% if cancel_refused %}<p class="error">An apply is not cancelled: stopping it halfway would leave Lidarr partly changed. It finishes on its own.</p>{% endif %}
+  {% if stale_message %}
+    <div class="banner tone-warn"><div class="text"><p class="title">Nothing was applied.</p><p>{{ stale_message }}</p>
+    {% if meta.kind == "apply" %}<p class="note">Status will show this as needing attention{% if has_mqtt %}, and Home Assistant as "stale",{% endif %} until the next scheduled run.</p>{% endif %}</div></div>
+    {% with replan_shrink = replan_accept_shrink %}{% include "_replan.html" %}{% endwith %}
+  {% endif %}
+  {% if review %}
+    {% with inline = True %}{% include "_plan_body.html" %}{% endwith %}
+  {% elif meta.kind == "plan" and meta.state in ("done", "guarded") %}
+    <p><a href="/plan/{{ meta.id }}">Review these changes</a></p>
+  {% endif %}
+  {% if meta.kind in ("apply", "scheduled") and meta.finished and run_id %}
+    <p><a href="/runs/{{ run_id }}">What changed</a></p>
+  {% endif %}
+  {% if report %}
+    <p class="note">The answer below comes from a check that started {{ meta.started_at | when }}.</p>
+    {% include "_explain_summary.html" %}
+  {% elif meta.finished and output and not review and (meta.kind != "playlists" or meta.state != "done") %}
+    <pre class="answer">{{ output }}</pre>
+  {% endif %}
+  {% if tail or (review and output) or run_record %}
+    {% if meta.finished %}
+    <details class="panel"{% if meta.state in ("failed", "skipped") %} open{% endif %}><summary>Technical log</summary>
+      {% if review and output %}<pre class="answer">{{ output }}</pre>{% endif %}
+      {% if tail %}<pre class="log">{{ tail }}</pre>{% endif %}
+      {% if run_record %}<pre class="log">{{ run_record }}</pre>{% endif %}
+    </details>
+    {% else %}<pre class="log">{{ tail }}</pre>{% endif %}
+  {% endif %}
+</div>

@@ -1,0 +1,4 @@
+{# The counting words the Not added page's cards and section headings share (#60), so a heading can
+   never say a different number, or the same number of something else, than its card. #}
+{% macro unit(n) %}{{ "song, album or follow" if n == 1 else "songs, albums or follows" }}{% endmacro %}
+{% macro releases(c) %}{{ c.releases }} release{{ "" if c.releases == 1 else "s" }}{% if c.gaps %}, and {{ c.gaps }} release{{ "" if c.gaps == 1 else "s" }} Lidarr doesn't list{% endif %}{% endmacro %}

@@ -1,0 +1,42 @@
+# Narrative lint: voice and provenance phrases that must not appear in a tracked text file.
+# Read by scripts/narrative_lint.py (its docstring has the details). These phrases are not secret.
+#
+# Three kinds of line (blank lines and lines starting `#` are ignored):
+#
+#   a plain phrase    case-insensitive, whole phrase (no letter, digit or `_` either side, so
+#                     "the author" never matches "the authority"), any run of spaces matching
+#                     any run of whitespace. Checked on every line of every text file.
+#   re:REGEX          a Python regular expression, case-sensitive unless it says `(?i)`.
+#                     Checked on every line of every text file.
+#   voice:REGEX       first-person voice. Checked only in prose: Markdown outside code, and
+#                     comments and docstrings in code. Text inside double quotes or backticks is
+#                     left out first, since a quotation is someone else's voice (a user's
+#                     question, a song title).
+#
+# A real third-party hit (a quoted title, vendored text) is kept with `narrative:allow` on the
+# same line.
+
+# -- provenance: whose install, whose ruling, whose library --------------------------------------
+our own
+the maintainer
+the author
+in production
+the live library
+
+# A dated attribution: "(Name, 2026-09-20)", "(per Some Name, 2026-". Up to three words, then a
+# capitalised one, a comma, and a year that starts a date. "(EP, 2011)" is a release type and a
+# year, not a date.
+re:\((?:[\w'.&-]+\s+){0,3}[A-Z][\w'.&-]*,\s*(?:19|20)\d{2}-
+
+# -- voice: first person in docs and comments ------------------------------------------------------
+# "we", "we're", "We" (the apostrophe ends the word, so contractions count).
+voice:(?i)\bwe\b
+# "our", "ours", "ourselves".
+voice:(?i)\b(?:our|ours|ourselves)\b
+# Lower case only: "US" is the country.
+voice:\bus\b
+# Upper case only: `i` is a loop variable. Not "I/O", "I-frame" or a flag such as `xargs -I`.
+voice:(?<![-/])\bI\b(?![/-])
+# "my", "myself".
+voice:(?i)\b(?:my|myself)\b
+# Not checked: "me", which is Spotify's `/me` endpoint in most comments that say it.

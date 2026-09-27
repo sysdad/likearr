@@ -1,0 +1,25 @@
+{# One run's changes by name: Status's inline "What changed" and /runs/<id> alike (#76). Needs
+   `run_changes` (see `_run_changes` in app.py): `resolver_note`, `part_way_note`, `any_rows`,
+   `sections` (each: `section`, `rows`, `columns`, `total`, `capped`), and `run_id` for the
+   "show all" link a capped section gets. #}
+{% if run_changes.resolver_note %}<p class="note">{{ run_changes.resolver_note }}</p>{% endif %}
+{% if run_changes.part_way_note %}
+<div class="banner tone-warn"><div class="text"><p>{{ run_changes.part_way_note }}</p></div></div>
+{% endif %}
+{% if run_changes.any_rows %}
+{% for ctx in run_changes.sections %}
+<section class="plan-section">
+  <h3>{{ ctx.section.title }} <span class="note">({{ ctx.total }})</span></h3>
+  <p class="note">{{ ctx.section.lead }}</p>
+  <div class="table-wrap"><table class="plan-rows">
+    <thead><tr>{% for c in ctx.columns %}<th>{{ c }}</th>{% endfor %}</tr></thead>
+    <tbody>
+    {% for row in ctx.rows %}<tr>{% for c in ctx.columns %}<td>{% set href = row.get("_href:" ~ c) %}{% if href %}<a href="{{ href }}" target="_blank" rel="noopener noreferrer">{{ row[c] }}</a>{% else %}{{ row[c] }}{% endif %}</td>{% endfor %}</tr>{% endfor %}
+    </tbody>
+  </table></div>
+  {% if ctx.capped %}<p class="note">Showing {{ ctx.rows | length }} of {{ ctx.total }}. <a href="/runs/{{ run_changes.run_id }}">Show all &rarr;</a></p>{% endif %}
+</section>
+{% endfor %}
+{% else %}
+<p class="note">Nothing changed by name in this run's stored diff.</p>
+{% endif %}
