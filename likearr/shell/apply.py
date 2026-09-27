@@ -35,7 +35,14 @@ from likearr.models import (
     ReleaseKey,
     UnmonitorRelease,
 )
-from likearr.ports import CatalogueTooLarge, LidarrArtistUnknown, LidarrError, LidarrMetadataError, MetadataError
+from likearr.ports import (
+    CatalogueTooLarge,
+    LidarrArtistExists,
+    LidarrArtistUnknown,
+    LidarrError,
+    LidarrMetadataError,
+    MetadataError,
+)
 from likearr.shell.context import Context
 from likearr.shell.diff_io import DiffFileError, read_diff
 from likearr.shell.plan import _format_refresh_duration, plan
@@ -120,6 +127,7 @@ def apply(
             diff.set_new_items_none,
             diff.monitor_artists,
             diff.refresh_artists,
+            [a.artist_mbid for a in diff.add_artists],
         )
         if is_stale(diff, fresh.snapshot.digest(), current_lidarr):
             if not force:
@@ -267,6 +275,7 @@ def _execute(
     owned_artists = ctx.state.owned_artists()
     skipped: set[str] = set()  # every artist the later phases leave alone, the unknown ones too
     unknown: set[str] = set()  # of those, the ones Lidarr's metadata does not know yet
+    foreign: set[str] = set()  # and the ones someone else added before likearr could (#4)
     added_artists: dict[str, LidarrArtist] = {}
 
     # (b) -------------------------------------------------------------- add artists
@@ -294,6 +303,25 @@ def _execute(
             skipped.add(add.artist_mbid)
             result.lidarr_metadata_ok = False
             continue
+        except LidarrArtistExists as exc:
+            if tag_id not in exc.artist.tags:
+                # Added by hand or by an import list since the plan was made (issue #4). Recording
+                # it would make it likearr's for good, and every later run would then force its
+                # "Monitor New Albums" to None. Left to whoever added it: no row, no refresh, and
+                # none of this plan's monitors for it; the next plan sees it as theirs.
+                log.info(
+                    "not adding %s (%s): it is already in Lidarr without the %r tag, so someone else "
+                    "added it; leaving it and its albums alone this run",
+                    add.name,
+                    add.artist_mbid,
+                    config.lidarr.tag,
+                )
+                skipped.add(add.artist_mbid)
+                foreign.add(add.artist_mbid)
+                continue
+            # Carrying likearr's tag, it is likearr's own add from a run that stopped between the
+            # add and the record below: finish the job.
+            artist = exc.artist
         with ctx.state.transaction():
             ctx.state.record_artist(
                 OwnedArtist(
@@ -330,8 +358,9 @@ def _execute(
                 refresh_took,
             )
 
-    result.skipped_artists = sorted(skipped - unknown)
+    result.skipped_artists = sorted(skipped - unknown - foreign)
     result.unknown_artists = sorted(unknown)
+    result.foreign_artists = sorted(foreign)
 
     # (c) -------------------------------------------------------------- monitorNewItems: none
     # Before (d): a ratchet's refresh shows more release types, and Lidarr monitors every one it
@@ -360,7 +389,7 @@ def _execute(
             log.warning("ratcheted %s but RefreshArtist failed: %s", ratchet.name, exc)
             skipped.add(ratchet.artist_mbid)
             result.lidarr_metadata_ok = False
-            result.skipped_artists = sorted(skipped - unknown)
+            result.skipped_artists = sorted(skipped - unknown - foreign)
             continue
         previous = owned_artists.get(ratchet.artist_mbid)
         with ctx.state.transaction():

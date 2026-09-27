@@ -28,6 +28,13 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
   new `held` field of the plan file. The plan's existing fields are unchanged.
   When MusicBrainz failed during the plan, a warning at the top of the output says the plan is
   incomplete and suggests re-running `adopt` later. (#6)
+- An artist that a plan adds, but that someone else added to Lidarr first (by hand or through an
+  import list, between the plan and the apply), is no longer recorded as added by likearr. Before,
+  every later run forced that artist's "Monitor New Albums" to None. The apply now leaves such an
+  artist alone and logs why; one that carries likearr's tag is still recorded as likearr's own, as
+  after a run that stopped between adding it and recording it. A reviewed plan is now also refused
+  as stale when an artist it adds has appeared in Lidarr since it was made. A plan made by an
+  earlier version stays valid as long as none of its artists to add has appeared. (#4)
 - The live Lidarr integration tests (`tests/integration/test_lidarr_live.py`) no longer delete an
   artist they did not add, or default to an instance's existing root folder. The session now
   fails immediately, with a clear message, unless the instance has no artists when it starts;

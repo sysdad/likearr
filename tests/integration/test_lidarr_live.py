@@ -47,7 +47,7 @@ from likearr.config import (
     SpotifyConfig,
 )
 from likearr.models import EXIT_OK, LidarrArtist, PrimaryType, Profile, ReleaseKey, SecondaryType
-from likearr.ports import LidarrError
+from likearr.ports import LidarrArtistExists, LidarrError
 from likearr.shell.context import Context
 from likearr.shell.run import ApplyStopped, apply, plan
 from tests.shell.conftest import CapturingSink, FakeSource
@@ -352,8 +352,11 @@ def test_losing_the_reason_unmonitors_and_drops_ownership(
     assert ReleaseKey(artist_mbid=artist_mbid, rg_mbid=ok_computer.mbid) not in ctx.state.owned_releases()
 
 
-def test_adding_the_same_artist_twice_is_idempotent(client: LidarrClient, artist_mbid: str, root_folder: str) -> None:
-    """Lidarr answers the second POST with a 400; the adapter turns that into the existing artist."""
+def test_adding_the_same_artist_twice_reports_the_existing_one(
+    client: LidarrClient, artist_mbid: str, root_folder: str
+) -> None:
+    """Lidarr answers the second POST with a 400; the adapter raises `LidarrArtistExists` carrying
+    the artist Lidarr holds, tag included, so apply can tell its own add from someone else's (#4)."""
     _prepare(client, root_folder)
     lean = client.ensure_metadata_profile(Profile.LEAN, "Lean")
     tag = client.ensure_tag("likearr")
@@ -367,18 +370,20 @@ def test_adding_the_same_artist_twice_is_idempotent(client: LidarrClient, artist
         metadata_profile_id=lean,
         tag_ids=[tag],
     )
-    second = client.add_artist(
-        artist_mbid,
-        TEST_ARTIST_NAME,
-        root_folder=root_folder,
-        quality_profile_id=quality,
-        metadata_profile_id=lean,
-        tag_ids=[tag],
-    )
-    assert first.id == second.id
+    with pytest.raises(LidarrArtistExists) as raised:
+        client.add_artist(
+            artist_mbid,
+            TEST_ARTIST_NAME,
+            root_folder=root_folder,
+            quality_profile_id=quality,
+            metadata_profile_id=lean,
+            tag_ids=[tag],
+        )
+    assert raised.value.artist.id == first.id
+    assert tag in raised.value.artist.tags
     # Adding an artist makes Lidarr queue its own RefreshArtist. Let it finish, exactly as the
     # apply path does, so the teardown is not deleting an artist that is being refreshed.
-    client.refresh_artist(second, timeout_s=300)
+    client.refresh_artist(first, timeout_s=300)
 
 
 def test_a_crashed_apply_is_finished_by_the_next_run(
