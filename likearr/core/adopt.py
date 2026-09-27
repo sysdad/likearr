@@ -8,9 +8,10 @@ recorded, but never removable by the tool), what a Spotify source still backs is
 rest - including anything monitored by hand that is not on the keep-list - is unmonitored once.
 
 A followed artist whose catalogue could not be read this run (too large to browse, or a
-MusicBrainz error) has none of their releases in the desired set, so for them "not wanted" means
-"not known". Their monitored albums are held back, neither claimed nor unmonitored, and the plan
-lists them with the reason (#6).
+MusicBrainz error) has none of their catalogue in the desired set, so for them "not wanted" means
+"not known". What the keep list or another source already settles is kept or claimed as usual;
+only the albums that would otherwise be unmonitored are held back, left monitored and unowned,
+and the plan lists them with the reason (#6).
 
 It is not a casual recovery step after losing the state database. Lost state means owning
 nothing, which is safe for `run` (nothing is unmonitored), but re-running `adopt` treats every
@@ -48,8 +49,9 @@ _KEPT_BY_HAND = Reason(kind=ReasonKind.MANUAL, source_id=ADOPT_SOURCE_ID)
 
 @dataclass(frozen=True, slots=True)
 class HeldRelease:
-    """A monitored release adopt leaves exactly as it is this time, because its artist's catalogue
-    was not read: whether a source wants it is unknown (#6)."""
+    """A monitored release adopt would have unmonitored, left exactly as it is this time because
+    its artist's catalogue was not read: whether a source wants it is unknown (#6). Not on the
+    keep list and not wanted by any source, or it would be kept or claimed instead."""
 
     key: ReleaseKey
     title: str
@@ -77,7 +79,8 @@ class AdoptPlan:
     `manual` when the release is on the keep-list too; Lidarr is not touched, because the release
     is already in the state the desired state asks for."""
     held: list[HeldRelease] = field(default_factory=list)
-    """Monitored, by an artist whose catalogue was not read. Neither claimed nor unmonitored, only
+    """Monitored, not wanted by any source, not on the keep list, by an artist whose catalogue was
+    not read: what would otherwise be in `unmonitor`. Neither claimed nor unmonitored, only
     listed: a later adopt, once the catalogue reads, sorts them. Never executed by `--apply`."""
 
 
@@ -96,8 +99,9 @@ def plan_adoption(
     adoption or was monitored by likearr itself, and re-adopting it would overwrite real reasons
     with `manual` and make it permanently unremovable.
 
-    An album whose artist is in `desired.unmapped` at a catalogue step (`CATALOGUE_UNREAD_STEPS`)
-    is held back instead, the keep list notwithstanding: see `HeldRelease`.
+    An album that would be unmonitored is held back instead when its artist is in
+    `desired.unmapped` at a catalogue step (`CATALOGUE_UNREAD_STEPS`): see `HeldRelease`. Claims
+    and keeps for that artist go ahead, since neither depends on the unread catalogue.
 
     `now` stamps the `monitored_at` of the records this creates; the core never reads the clock.
     """
@@ -115,9 +119,6 @@ def plan_adoption(
                 continue
             key = ReleaseKey(artist_mbid=artist_mbid, rg_mbid=rg_mbid)
             if key in owned:
-                continue
-            if artist_mbid in unread:
-                plan.held.append(HeldRelease(key=key, title=album.title, step=unread[artist_mbid]))
                 continue
             release = desired.releases.get(key)
             kept = rg_mbid in keep or f"artist:{artist_mbid}" in keep
@@ -146,6 +147,9 @@ def plan_adoption(
                         lidarr_album_id=album.id,
                     )
                 )
+                continue
+            if artist_mbid in unread:
+                plan.held.append(HeldRelease(key=key, title=album.title, step=unread[artist_mbid]))
                 continue
             plan.unmonitor.append(UnmonitorRelease(key=key, title=album.title, lost_reasons=frozenset()))
     return plan
