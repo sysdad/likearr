@@ -4,6 +4,10 @@ The same contract as `diff.json` (see `shell.diff_io`): a complete description o
 done plus the digests of the world it was computed against, so `--apply` executes exactly this
 file and refuses one the world has moved out from under. The keep list is baked into the plan -
 which is the point: applying never re-derives what to keep from a file that may not be there.
+
+`held` (#6) lists what the plan leaves alone because its artist's catalogue was not read. It is
+for the reader only: `--apply` does nothing with it, and a plan written before it existed reads
+as holding nothing. The `summary` keeps its original three counts.
 """
 
 from __future__ import annotations
@@ -15,7 +19,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from likearr.core.adopt import AdoptPlan
+from likearr.core.adopt import AdoptPlan, HeldRelease
 from likearr.fsio import write_atomic
 from likearr.models import OwnedRelease, UnmonitorRelease
 from likearr.shell.diff_io import DiffFileError, _key_from_dict, _key_to_dict, _reasons_from_list, _reasons_to_list
@@ -75,6 +79,9 @@ def adopt_plan_to_dict(plan: AdoptPlanFile) -> dict[str, Any]:
         "claim": [_owned_to_dict(r) for r in adoption.claim],
         "keep_as_manual": [_owned_to_dict(r) for r in adoption.keep_as_manual],
         "unmonitor": [{"key": _key_to_dict(u.key), "title": u.title} for u in adoption.unmonitor],
+        "held": [
+            {"key": _key_to_dict(h.key), "title": h.title, "step": h.step, "reason": h.reason} for h in adoption.held
+        ],
     }
 
 
@@ -102,6 +109,12 @@ def adopt_plan_from_dict(raw: Mapping[str, Any]) -> AdoptPlanFile:
                         key=_key_from_dict(u["key"]), title=str(u.get("title") or ""), lost_reasons=frozenset()
                     )
                     for u in _items(raw, "unmonitor")
+                ],
+                held=[
+                    HeldRelease(
+                        key=_key_from_dict(h["key"]), title=str(h.get("title") or ""), step=str(h.get("step") or "")
+                    )
+                    for h in _items(raw, "held")
                 ],
             ),
         )

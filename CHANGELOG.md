@@ -27,6 +27,33 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
   way the MusicBrainz search does, in any script. `RESOLVER_VERSION` is now 12, so every cached
   answer is recomputed on the first run after upgrading; only answers reached through the Lidarr
   album-search fallback can change, and a wrong one becomes unmapped.
+- `adopt` no longer plans to unmonitor every hand-monitored album of a followed artist whose
+  MusicBrainz catalogue could not be read, because it is too large to browse or because
+  MusicBrainz failed for that artist during the plan. Their albums on the keep list, or wanted
+  by a source, are still kept or claimed as usual; the rest are now held back, left monitored and
+  unowned, and the plan lists them as held with the reason, both in its printed output and in a
+  new `held` field of the plan file. The plan's existing fields are unchanged.
+  When MusicBrainz failed during the plan, a warning at the top of the output says the plan is
+  incomplete and suggests re-running `adopt` later. (#6)
+- An artist that a plan adds, but that someone else added to Lidarr first (by hand or through an
+  import list, between the plan and the apply), is no longer recorded as added by likearr. Before,
+  every later run forced that artist's "Monitor New Albums" to None. The apply now leaves such an
+  artist alone and logs why; one that carries likearr's tag is still recorded as likearr's own, as
+  after a run that stopped between adding it and recording it. A reviewed plan is now also refused
+  as stale when an artist it adds has appeared in Lidarr since it was made. A plan made by an
+  earlier version stays valid as long as none of its artists to add has appeared. (#4)
+- The live Lidarr integration tests (`tests/integration/test_lidarr_live.py`) no longer delete an
+  artist they did not add, or default to an instance's existing root folder. The session now
+  fails immediately, with a clear message, unless the instance has no artists when it starts;
+  `LIKEARR_TEST_LIDARR_ROOT` is required and never inferred from the instance's own root folders;
+  and teardown deletes only the artist ids the tests themselves added.
+- The ambiguous-artist explanation ("Nothing of theirs is monitored.") no longer claims nothing is
+  monitored when releases for that artist can in fact still be monitored - by an earlier likearr
+  version that resolved the follow before this check existed, or by hand, a like, a saved album or
+  a playlist. The wording now holds either way.
+- The Status page and the Not added page rebuilt a set of monitored releases for every wanted
+  release, so `coverage()` slowed down quadratically with the library's size (a few seconds at
+  several thousand wanted releases). The set is now built once.
 - A Lidarr API key ending in a carriage return or line feed, as a Windows-line-ending env file or a
   Kubernetes Secret created from a file leaves it, made every Lidarr request fail and printed the
   whole key in the error, which then reached `doctor`, the run's error, the webhook and the MQTT

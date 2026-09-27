@@ -798,6 +798,74 @@ def test_a_bad_request_on_add_still_stops_the_apply(tmp_path: Path, sink: Captur
     assert "Root folder" in sink.last.message
 
 
+# ------------------------------------------------- an artist someone else adds first (issue #4)
+
+
+def test_an_artist_someone_else_added_first_is_left_to_them(
+    tmp_path: Path, sink: CapturingSink, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Lidarr's "already exists" on an artist without likearr's tag: added by hand or by an import
+    list while the run was resolving. Recording it as likearr's would force its "Monitor New
+    Albums" to None on every run after, so it gets no row, no refresh and no re-monitor."""
+    source, lookup, lidarr = two_artist_world()
+    lidarr.added_elsewhere = {"artist-2": False}
+    with make_context(tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink) as ctx:
+        with caplog.at_level(logging.INFO, logger="likearr"):
+            exit_code, applied, _fresh, _diff = apply(ctx, None, now=NOW, scheduled=True)
+        owned_artists = ctx.state.owned_artists()
+        theirs = lidarr.artists["artist-2"]
+        before = len(lidarr.calls)
+        second = plan(ctx, now=NOW, scheduled=True)
+        again = run_command(ctx, now=NOW, out=tmp_path / "diff.json", do_apply=True, scheduled=True)
+
+    assert exit_code == EXIT_OK
+    assert "artist-2" not in owned_artists, "someone else's artist is not likearr's"
+    assert "artist-1" in owned_artists, "the rest of the apply went ahead"
+    assert applied.foreign_artists == ["artist-2"]
+    assert applied.skipped_artists == [], "not a metadata failure, so not a class-B skip"
+    assert ("refresh_artist", "artist-2") not in lidarr.calls
+    assert all(theirs.id not in ids for name, ids in lidarr.calls if name == "set_artists_monitored")
+    assert "someone else added it" in caplog.text
+
+    assert "artist-2" not in second.diff.set_new_items_none, "their own setting is theirs to keep"
+    assert again == EXIT_OK
+    assert all(theirs.id not in ids for name, ids in lidarr.calls[before:] if name == "set_artists_new_items_none")
+    assert lidarr.artists["artist-2"].monitor_new_items == "all"
+
+
+def test_an_artist_carrying_likearrs_tag_is_likearrs_own_add_resumed(tmp_path: Path, sink: CapturingSink) -> None:
+    """The same "already exists" on an artist that carries likearr's tag is likearr's own add from
+    a run that stopped before recording it: recorded, refreshed and re-monitored, as before #4."""
+    source, lookup, lidarr = two_artist_world()
+    lidarr.added_elsewhere = {"artist-2": True}
+    with make_context(tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink) as ctx:
+        exit_code, applied, _fresh, _diff = apply(ctx, None, now=NOW, scheduled=True)
+        owned_artists = ctx.state.owned_artists()
+
+    assert exit_code == EXIT_OK
+    assert owned_artists["artist-2"].added_by_us is True
+    assert owned_artists["artist-2"].lidarr_artist_id == lidarr.artists["artist-2"].id
+    assert applied.foreign_artists == []
+    assert applied.added == 2
+    assert ("refresh_artist", "artist-2") in lidarr.calls
+    monitored = [ids for name, ids in lidarr.calls if name == "set_artists_monitored"]
+    assert any(lidarr.artists["artist-2"].id in ids for ids in monitored)
+
+
+def test_a_reviewed_plan_goes_stale_when_an_artist_it_adds_appears(tmp_path: Path, sink: CapturingSink) -> None:
+    """Issue #4: the artist appeared in Lidarr between the review and the apply."""
+    source, lookup, lidarr = two_artist_world()
+    out = tmp_path / "diff.json"
+    with make_context(tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink) as ctx:
+        run_command(ctx, now=NOW, out=out, do_apply=False)
+        lidarr.seed(lidarr_artist("artist-2", id=77, monitor_new_items="all"))
+        before = len(lidarr.calls)
+        code = run_command(ctx, now=NOW, out=out, apply_path=out, do_apply=True)
+
+    assert code == EXIT_STALE
+    assert "add_artist" not in [name for name, _ in lidarr.calls[before:]]
+
+
 # ------------------------------------------------- a followed artist's new album (issue #8)
 
 

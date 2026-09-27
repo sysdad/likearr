@@ -37,7 +37,7 @@ from likearr.models import (
     ReleaseGroup,
     SecondaryType,
 )
-from likearr.ports import LidarrArtistUnknown, LidarrError, LidarrMetadataError
+from likearr.ports import LidarrArtistExists, LidarrArtistUnknown, LidarrError, LidarrMetadataError
 
 __all__ = [
     "BATCH_SIZE",
@@ -419,6 +419,8 @@ class LidarrClient:
 
         Raises:
             LidarrArtistUnknown: Lidarr's metadata server does not know this MBID yet (a 400).
+            LidarrArtistExists: the artist is already in Lidarr (a 400), carrying that artist.
+                Whether it is likearr's own is the caller's call, by its tag (issue #4).
             LidarrMetadataError: Lidarr's metadata server failed the add (a 5xx or no answer).
             LidarrError: anything else, including a 400 about something likearr sent.
         """
@@ -442,7 +444,9 @@ class LidarrClient:
         except LidarrError as exc:
             existing = self._find_existing_artist(exc, artist_mbid)
             if existing is not None:
-                return existing
+                raise LidarrArtistExists(
+                    f"lidarr already has this artist ({name}, {artist_mbid}): {exc}", existing
+                ) from exc
             if _is_artist_unknown(exc):
                 raise LidarrArtistUnknown(
                     f"Lidarr's metadata does not know this artist yet ({name}, {artist_mbid}); "
@@ -463,7 +467,7 @@ class LidarrClient:
         return artist
 
     def _find_existing_artist(self, exc: LidarrError, artist_mbid: str) -> LidarrArtist | None:
-        """Turn Lidarr's 400 'already exists' into an idempotent success."""
+        """The artist Lidarr holds under `artist_mbid` when `exc` is its 400 'already exists'."""
         cause = exc.__cause__
         if not isinstance(cause, HttpError) or cause.status_code != 400:
             return None
