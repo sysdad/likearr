@@ -49,6 +49,7 @@ __all__ = [
     "LoginLimiter",
     "SecureCookieMiddleware",
     "SecurityHeadersMiddleware",
+    "content_security_policy",
     "cross_origin_allowed",
     "password_matches",
     "refused_host_message",
@@ -382,18 +383,29 @@ class AllowedHostMiddleware:
         await _plain(send, 400, message)
 
 
+def content_security_policy(*, form_action: Sequence[str] = ()) -> str:
+    """The policy every response carries, with `form_action`'s sources added after ``'self'``.
+
+    Only one-click Connect Spotify (#11) passes any: see `web.spotify_connect.one_click_form_action`
+    for which pages, and which two origins.
+    """
+    sources = " ".join(("'self'", *form_action))
+    return f"default-src 'self'; frame-ancestors 'none'; form-action {sources}; base-uri 'none'"
+
+
 class SecurityHeadersMiddleware:
     """A strict content security policy and the usual framing and sniffing headers on every response.
 
     Everything the pages load is served from this origin - htmx is vendored, there is no CDN -
     so ``'self'`` is the whole policy, and nothing inline is ever allowed to run.
+
+    A response that already carries a ``Content-Security-Policy`` keeps it: the pages with one-click
+    Connect Spotify (#11) set `content_security_policy` with a wider `form-action`, and nothing else.
+    The other headers are added regardless.
     """
 
+    _CSP = (b"content-security-policy", content_security_policy().encode("ascii"))
     _HEADERS = [
-        (
-            b"content-security-policy",
-            b"default-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'none'",
-        ),
         (b"x-frame-options", b"DENY"),
         (b"x-content-type-options", b"nosniff"),
         (b"referrer-policy", b"same-origin"),
@@ -409,7 +421,10 @@ class SecurityHeadersMiddleware:
 
         async def send_wrapper(message: MutableMapping[str, Any]) -> None:
             if message["type"] == "http.response.start":
-                message["headers"] = list(message.get("headers", [])) + self._HEADERS
+                headers = list(message.get("headers", []))
+                if not any(name.lower() == self._CSP[0] for name, _ in headers):
+                    headers.append(self._CSP)
+                message["headers"] = headers + self._HEADERS
             await send(message)
 
         await self.app(scope, receive, send_wrapper)

@@ -175,9 +175,12 @@ Spotify's site, it redirects to a page that fails to load (expected - it's the l
 only your Spotify app knows about), and you paste that address bar's contents back into the field
 Settings shows. The exchange happens on the server; the token file is written the same way `auth
 --manual` writes it, atomically at `0600`, under the same lock. If `[ui] public_url` is set to an
-https address (below), Settings instead shows a "Continue to Spotify" link that goes to Spotify
-and straight back - no copy/paste - using `<public_url>/spotify/callback`, which must also be
-registered as a redirect URI in the Spotify developer app. Either way, Settings then shows the
+https address (below), there is no copy/paste: Spotify sends you straight back to
+`<public_url>/spotify/callback`, which must also be registered as a redirect URI in the Spotify
+developer app. Opened at the `public_url` address itself, "Connect Spotify" goes straight to
+Spotify in one click. Opened at any other address (a LAN address, or likearr's own port), Settings
+shows a "Continue to Spotify" link to click instead: from there, some browsers would block the
+redirect back to `public_url`. Either way, Settings then shows the
 granted scopes and the new authorization date, and Status's re-authorize warning clears.
 
 Signing in is read-only by default: likearr asks Spotify to read your follows, library and

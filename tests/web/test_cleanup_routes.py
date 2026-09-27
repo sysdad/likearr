@@ -1000,6 +1000,48 @@ def test_in_callback_mode_a_token_without_the_write_scopes_also_gets_a_button(
     assert "write access" in form
 
 
+@pytest.mark.parametrize(
+    ("base_url", "form_action"),
+    [
+        ("https://likearr.example.org", "form-action 'self' https://accounts.spotify.com https://likearr.example.org;"),
+        ("http://testserver", "form-action 'self';"),
+    ],
+    ids=["at-public-url", "elsewhere"],
+)
+def test_the_clean_up_page_allows_one_click_write_access_only_at_the_public_url(
+    data_dir: Path,
+    fake_cli: list[str],
+    prune_report: Path,
+    promote_plan: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    base_url: str,
+    form_action: str,
+) -> None:
+    """#11: the page holding "Authorize write access on Spotify" is the document whose form-action
+    the browser checks on each hop of that POST's redirect, so it widens exactly as Settings does:
+    at the `public_url` origin only."""
+    monkeypatch.setenv("LIKEARR_LIDARR_API_KEY", API_KEY_SENTINEL)
+    (data_dir / "config.toml").write_text(CONFIG.replace(*_PUBLIC_URL))
+    app = create_app(
+        WebSettings(
+            config_path=data_dir / "config.toml",
+            password=PASSWORD,
+            cli=fake_cli,
+            now=lambda: NOW,
+            limiter=LoginLimiter(),
+            shutdown_timeout_s=5,
+            auto_preview_prune=True,
+        )
+    )
+    with TestClient(app, base_url=base_url) as client:
+        job_id = _export_for_preview(client)
+        _finished_previews(client, job_id)
+        page = client.get(f"/prune/{job_id}")
+
+    assert page.status_code == 200
+    assert f"; {form_action} " in page.headers["content-security-policy"]
+
+
 def test_a_preview_is_shown_only_beside_the_export_it_previewed(
     preview_client: TestClient, data_dir: Path, prune_report: Path, promote_plan: Path
 ) -> None:

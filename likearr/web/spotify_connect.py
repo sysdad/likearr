@@ -48,13 +48,15 @@ carries the session cookie either way, and does not need to - `state` is enough 
 from __future__ import annotations
 
 import hmac
+import re
 import threading
 import time
+import urllib.parse
 from collections.abc import Callable
 from dataclasses import dataclass
 
 from likearr.adapters.http import build_client
-from likearr.adapters.spotify import SpotifyAuth, TokenSet
+from likearr.adapters.spotify import ACCOUNTS_AUTHORIZE_URL, SpotifyAuth, TokenSet
 from likearr.config import SpotifyConfig
 
 __all__ = [
@@ -63,7 +65,15 @@ __all__ = [
     "PendingSpotifyAuthStore",
     "build_authorize",
     "exchange",
+    "one_click_form_action",
 ]
+
+SPOTIFY_ACCOUNTS_ORIGIN = "https://" + urllib.parse.urlsplit(ACCOUNTS_AUTHORIZE_URL).netloc
+"""Where the direct-callback flow's form POST is redirected to (#11)."""
+
+_HOST_NAME = re.compile(r"[a-z0-9]([a-z0-9.-]*[a-z0-9])?")
+"""A plain DNS host name, lower-cased. A `public_url` host of any other shape never goes into a CSP
+header: it keeps the two-click link instead."""
 
 PENDING_AUTH_TTL_S = 600.0
 """Ten minutes (issue #79's Requirements): a state token older than this is refused as expired."""
@@ -153,3 +163,45 @@ def exchange(config: SpotifyConfig, code: str, verifier: str, redirect_uri: str)
     this from a worker thread (`anyio.to_thread`), never the event loop itself."""
     with build_client() as client:
         return SpotifyAuth(config, client).exchange_code(code, verifier, redirect_uri=redirect_uri)
+
+
+def _host_and_port(host: str, port: int | None) -> tuple[str, int | None]:
+    return host.lower(), None if port == 443 else port
+
+
+def one_click_form_action(host_header: str, public_url: str) -> tuple[str, ...]:
+    """The extra `form-action` sources a page or a Connect POST needs for one-click Connect
+    Spotify (#11), or ``()`` when it keeps the two-click "Continue to Spotify" link.
+
+    One click needs direct-callback mode and a request that reached likearr at `public_url`'s own
+    origin. Chromium and WebKit check `form-action` on every hop of a form submission's redirect
+    chain, against the page that submitted it: this POST, then Spotify's authorize page (and its
+    login page), then - for a user already signed in who approved the app before - straight back
+    to ``<public_url>/spotify/callback``. From any other address that last hop is another origin,
+    so there the link stays.
+
+    "The request's origin" is the ``Host`` header, as the browser sent it and as
+    `auth.AllowedHostMiddleware` already admitted it (by name; the port here is compared too). The
+    scheme is not compared: behind the TLS-terminating reverse proxy that `public_url` implies,
+    likearr sees plain http, and `server.serve` trusts no forwarded header, so the scheme it sees
+    says nothing about the browser's. A missing port stands for 443, `public_url`'s own default;
+    another port - likearr's own, reached across the LAN - is another origin. A wrong answer here
+    either way costs only which of the two flows is shown: the Host header is the browser's own,
+    so spoofing it changes only the spoofer's response.
+    """
+    if not public_url:
+        return ()
+    try:
+        parts = urllib.parse.urlsplit(public_url)
+        want_port = parts.port
+        asked = urllib.parse.urlsplit(f"//{host_header}")
+        asked_port = asked.port
+    except ValueError:
+        return ()
+    name = (parts.hostname or "").lower()
+    if not _HOST_NAME.fullmatch(name) or parts.netloc.lower() not in {name, f"{name}:{want_port}"}:
+        return ()
+    if not asked.hostname or _host_and_port(asked.hostname, asked_port) != _host_and_port(name, want_port):
+        return ()
+    origin = f"https://{name}" if _host_and_port(name, want_port)[1] is None else f"https://{name}:{want_port}"
+    return (SPOTIFY_ACCOUNTS_ORIGIN, origin)
