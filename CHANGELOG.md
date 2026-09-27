@@ -20,6 +20,11 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
 
 ### Fixed
 
+- The live Lidarr integration tests (`tests/integration/test_lidarr_live.py`) no longer delete an
+  artist they did not add, or default to an instance's existing root folder. The session now
+  fails immediately, with a clear message, unless the instance has no artists when it starts;
+  `LIKEARR_TEST_LIDARR_ROOT` is required and never inferred from the instance's own root folders;
+  and teardown deletes only the artist ids the tests themselves added.
 - The ambiguous-artist explanation ("Nothing of theirs is monitored.") no longer claims nothing is
   monitored when releases for that artist can in fact still be monitored - by an earlier likearr
   version that resolved the follow before this check existed, or by hand, a like, a saved album or
