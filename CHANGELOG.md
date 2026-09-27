@@ -20,6 +20,18 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
 
 ### Fixed
 
+- The live Lidarr integration tests (`tests/integration/test_lidarr_live.py`) no longer delete an
+  artist they did not add, or default to an instance's existing root folder. The session now
+  fails immediately, with a clear message, unless the instance has no artists when it starts;
+  `LIKEARR_TEST_LIDARR_ROOT` is required and never inferred from the instance's own root folders;
+  and teardown deletes only the artist ids the tests themselves added.
+- The ambiguous-artist explanation ("Nothing of theirs is monitored.") no longer claims nothing is
+  monitored when releases for that artist can in fact still be monitored - by an earlier likearr
+  version that resolved the follow before this check existed, or by hand, a like, a saved album or
+  a playlist. The wording now holds either way.
+- The Status page and the Not added page rebuilt a set of monitored releases for every wanted
+  release, so `coverage()` slowed down quadratically with the library's size (a few seconds at
+  several thousand wanted releases). The set is now built once.
 - A Lidarr API key ending in a carriage return or line feed, as a Windows-line-ending env file or a
   Kubernetes Secret created from a file leaves it, made every Lidarr request fail and printed the
   whole key in the error, which then reached `doctor`, the run's error, the webhook and the MQTT
