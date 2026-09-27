@@ -23,6 +23,14 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
 - The Status page and the Not added page rebuilt a set of monitored releases for every wanted
   release, so `coverage()` slowed down quadratically with the library's size (a few seconds at
   several thousand wanted releases). The set is now built once.
+- A Lidarr API key ending in a carriage return or line feed, as a Windows-line-ending env file or a
+  Kubernetes Secret created from a file leaves it, made every Lidarr request fail and printed the
+  whole key in the error, which then reached `doctor`, the run's error, the webhook and the MQTT
+  message. `LIKEARR_LIDARR_API_KEY`, `LIKEARR_SPOTIFY_CLIENT_ID` and
+  `LIKEARR_SPOTIFY_CLIENT_SECRET` are now stripped of surrounding whitespace when read, and a value
+  that is empty after stripping counts as unset. `LIKEARR_UI_PASSWORD` is still taken exactly as
+  given. Secret redaction now also catches a value's escaped form (`\n` written as two characters),
+  so such a key is never printed even when it reaches a request some other way.
 - The identity guard's commit check (the pre-push hook and CI) now also reads every line each
   pushed or pull-request commit added. A denylisted string added in one commit and removed in the
   next is caught, where before only the final tree was scanned and the string still reached the

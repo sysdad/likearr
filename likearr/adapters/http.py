@@ -118,10 +118,16 @@ def redact_literals(text: str, literals: Iterable[str]) -> str:
 
     For text that is data rather than a diagnostic - an answer shown to a person - where the
     pattern layer's false positives ("Basic Channel") would corrupt what they came to read.
+
+    Each literal's repr-escaped form is replaced too (issue #7): an error that quotes a value's
+    repr, as h11's "Illegal header value" does, spells a CR or LF as a backslash and a letter.
     """
     out = text
     for literal in literals:
         if literal and len(literal) >= _MIN_LITERAL_LEN:
+            escaped = repr(literal)[1:-1]
+            if escaped != literal:
+                out = out.replace(escaped, REDACTED)
             out = out.replace(literal, REDACTED)
     return out
 
