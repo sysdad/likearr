@@ -36,6 +36,9 @@ COPY README.md ./
 # The example config `likearr start` writes to /data/config.toml on a first start with none (#3),
 # inside the package where `config.example_config_text` looks for it.
 COPY deploy/config.example.toml ./likearr/config.example.toml
+# pyproject's wheel force-include reads it from deploy/, and hatch checks that path on every build,
+# the editable one `uv sync` makes here included.
+COPY deploy/config.example.toml ./deploy/config.example.toml
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
