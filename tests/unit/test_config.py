@@ -342,6 +342,50 @@ def test_spotify_client_secret_optional(monkeypatch: pytest.MonkeyPatch, tmp_pat
         ("spotify", "client_secret", "LIKEARR_SPOTIFY_CLIENT_SECRET"),
     ],
 )
+@pytest.mark.parametrize("raw", ["secret-value\n", "secret-value\r\n", "  secret-value\r", "\tsecret-value "])
+def test_a_secret_is_stripped_of_surrounding_whitespace_when_read(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, section: str, key: str, env: str, raw: str
+) -> None:
+    """Issue #7: a Windows-line-ending env file or a file-based Kubernetes Secret leaves a CR or LF
+    on the value, which h11 then refuses to send - quoting the whole value in its error."""
+    config = parse_config(MINIMAL_RAW, base_dir=tmp_path)
+    monkeypatch.setenv(env, raw)
+
+    assert getattr(getattr(config, section), key) == "secret-value"
+
+
+@pytest.mark.parametrize(
+    ("section", "key", "env"),
+    [
+        ("lidarr", "api_key", "LIKEARR_LIDARR_API_KEY"),
+        ("spotify", "client_id", "LIKEARR_SPOTIFY_CLIENT_ID"),
+    ],
+)
+def test_a_required_secret_that_is_only_whitespace_is_not_set(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, section: str, key: str, env: str
+) -> None:
+    config = parse_config(MINIMAL_RAW, base_dir=tmp_path)
+    monkeypatch.setenv(env, " \r\n")
+
+    with pytest.raises(ConfigError, match=f"{env} is not set"):
+        _ = getattr(getattr(config, section), key)
+
+
+def test_a_client_secret_that_is_only_whitespace_is_none(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    config = parse_config(MINIMAL_RAW, base_dir=tmp_path)
+    monkeypatch.setenv("LIKEARR_SPOTIFY_CLIENT_SECRET", "\r\n")
+
+    assert config.spotify.client_secret is None
+
+
+@pytest.mark.parametrize(
+    ("section", "key", "env"),
+    [
+        ("lidarr", "api_key", "LIKEARR_LIDARR_API_KEY"),
+        ("spotify", "client_id", "LIKEARR_SPOTIFY_CLIENT_ID"),
+        ("spotify", "client_secret", "LIKEARR_SPOTIFY_CLIENT_SECRET"),
+    ],
+)
 def test_a_secret_in_the_toml_is_refused_pointing_at_its_env_var_without_echoing_it(
     tmp_path: Path, section: str, key: str, env: str
 ) -> None:
