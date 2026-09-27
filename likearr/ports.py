@@ -83,6 +83,18 @@ class LidarrArtistUnknown(LidarrMetadataError):
     it can last weeks for an artist new to MusicBrainz, so it does not degrade the run."""
 
 
+class LidarrArtistExists(LidarrError):
+    """Lidarr refused an add because the artist is already there (issue #4).
+
+    Carries the artist Lidarr holds, so the caller can decide whose it is: one carrying likearr's
+    tag is likearr's own add from a run that stopped before recording it; any other was added by
+    someone else, and must not become likearr's."""
+
+    def __init__(self, message: str, artist: LidarrArtist) -> None:
+        super().__init__(message)
+        self.artist = artist
+
+
 class SourcePort(Protocol):
     """Reads intents from a source (Spotify in v1). Must be all-or-nothing."""
 
@@ -333,8 +345,9 @@ class LidarrPort(Protocol):
     ) -> LidarrArtist:
         """Add with monitored=true, monitorNewItems=none, addOptions.monitor=none, no search.
 
-        Raise LidarrMetadataError when Lidarr's metadata server fails the add, and its subclass
-        LidarrArtistUnknown when that server does not know the artist yet."""
+        Raise LidarrMetadataError when Lidarr's metadata server fails the add, its subclass
+        LidarrArtistUnknown when that server does not know the artist yet, and LidarrArtistExists,
+        carrying the artist Lidarr holds, when the artist is already there (issue #4)."""
         ...
 
     def refresh_artist(self, artist: LidarrArtist, *, timeout_s: float = 300) -> None:

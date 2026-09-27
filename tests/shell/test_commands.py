@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -14,8 +15,8 @@ import pytest
 from likearr.adapters.lock import LockHeld, run_lock
 from likearr.adapters.spotify import SpotifyAuth, TokenSet
 from likearr.adapters.spotify_library import OwnedPlaylist, PlaylistEntry
-from likearr.models import EXIT_ERROR, EXIT_OK, EXIT_STALE, ReasonKind, ReleaseKey
-from likearr.ports import SourceError
+from likearr.models import EXIT_ERROR, EXIT_OK, EXIT_STALE, ReasonKind, ReleaseGroup, ReleaseKey
+from likearr.ports import CatalogueTooLarge, MetadataError, SourceError
 from likearr.shell import commands
 from likearr.shell.context import Context
 from likearr.shell.diff_io import DiffFileError
@@ -331,6 +332,136 @@ def test_read_keep_file_ignores_comments_and_blank_lines(tmp_path: Path) -> None
     path.write_text("# header\n\n  rg-1  \nartist:artist-2  # trailing\n")
     assert commands.read_keep_file(path) == {"rg-1", "artist:artist-2"}
     assert commands.read_keep_file(None) == set()
+
+
+class _UnreadCatalogue(FakeLookup):
+    """A lookup whose catalogue browse for one artist raises `error` (issue #6)."""
+
+    def __init__(self, artist_mbid: str, error: Exception) -> None:
+        super().__init__()
+        self._unread_artist = artist_mbid
+        self._unread_error = error
+
+    def artist_release_groups(self, artist_mbid: str) -> Sequence[ReleaseGroup]:
+        if artist_mbid == self._unread_artist:
+            self._count("artist_release_groups")
+            raise self._unread_error
+        return super().artist_release_groups(artist_mbid)
+
+
+HAND_MONITORED = [rg(f"rg-h{i}", f"By Hand {i}", artist_mbid="artist-2", artist_name="Prolific") for i in (1, 2, 3)]
+
+
+def _unread_world(tmp_path: Path, *, sink: CapturingSink, error: Exception) -> tuple[Any, FakeLidarr]:
+    """Two followed artists: "Test Artist" (artist-1), whose catalogue reads, and "Prolific"
+    (artist-2), whose catalogue browse raises `error`, with three albums monitored by hand."""
+    lookup = _UnreadCatalogue("artist-2", error).add(ALBUM, EP, *HAND_MONITORED)
+    lookup.catalogues["artist-1"] = ["rg-1", "rg-2"]
+    source = FakeSource(
+        snapshot(
+            artists=[
+                artist_intent("Test Artist", spotify_id="sp-a1"),
+                artist_intent("Prolific", spotify_id="sp-a2"),
+            ]
+        )
+    )
+    lidarr = FakeLidarr(catalogue={"artist-1": [ALBUM, EP]})
+    lidarr.seed(lidarr_artist("artist-1", id=1, name="Test Artist"), lidarr_album(ALBUM, id=101, monitored=True))
+    lidarr.seed(
+        lidarr_artist("artist-2", id=2, name="Prolific"),
+        *(lidarr_album(g, id=201 + i, artist_id=2, monitored=True) for i, g in enumerate(HAND_MONITORED)),
+    )
+    return make_context(tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink), lidarr
+
+
+@pytest.mark.parametrize(
+    ("error", "reason"),
+    [
+        (CatalogueTooLarge("more than 3000 release groups"), "too large to browse"),
+        (MetadataError("musicbrainz answered 503"), "could not be read"),
+    ],
+)
+def test_adopt_holds_back_the_albums_of_an_artist_whose_catalogue_was_not_read(
+    tmp_path: Path, sink: CapturingSink, capsys: pytest.CaptureFixture[str], error: Exception, reason: str
+) -> None:
+    """Issue #6: none of the artist's releases reached the desired set, so every hand-monitored
+    album of theirs looked unwanted and was planned for unmonitor. They are held instead, in the
+    printed plan and in the plan file, and `--apply` leaves them monitored."""
+    ctx, lidarr = _unread_world(tmp_path, sink=sink, error=error)
+    plan_path = tmp_path / "adopt.json"
+    with ctx:
+        code = commands.adopt_command(ctx, out=plan_path, now=NOW)
+        out = capsys.readouterr().out
+        payload = json.loads(plan_path.read_text())
+        applied = commands.adopt_command(ctx, apply_path=plan_path, now=NOW)
+        owned = ctx.state.owned_releases()
+
+    assert code == EXIT_OK
+    assert payload["unmonitor"] == []
+    assert payload["summary"] == {"claim": 1, "keep": 0, "unmonitor": 0}, "the summary keeps its shape"
+    assert [(h["key"]["rg_mbid"], h["title"]) for h in payload["held"]] == [
+        ("rg-h1", "By Hand 1"),
+        ("rg-h2", "By Hand 2"),
+        ("rg-h3", "By Hand 3"),
+    ]
+    assert all(reason in h["reason"] for h in payload["held"])
+    assert "3 held back" in out
+    held_line = next(line for line in out.splitlines() if line.strip().startswith("Prolific (3 albums):"))
+    assert reason in held_line
+    assert sum(line.startswith("held ") for line in out.splitlines()) == 3, "each held album is a plan row"
+
+    assert applied == EXIT_OK
+    assert all(lidarr.album("artist-2", g.mbid).monitored for g in HAND_MONITORED)  # type: ignore[union-attr]
+    assert not any(k.artist_mbid == "artist-2" for k in owned), "held means not claimed either"
+    assert ReleaseKey("artist-1", "rg-1") in owned, "the control artist, whose catalogue reads, is claimed"
+
+
+def test_adopt_warns_loudly_at_the_top_when_musicbrainz_failed(
+    tmp_path: Path, sink: CapturingSink, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A degraded resolve (`mb_ok` false) can leave out more than a catalogue; the warning leads."""
+    ctx, _lidarr = _unread_world(tmp_path, sink=sink, error=MetadataError("musicbrainz answered 503"))
+    with ctx:
+        commands.adopt_command(ctx, out=tmp_path / "adopt.json", now=NOW)
+
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0].startswith("WARNING"), lines[:3]
+    assert "MusicBrainz" in lines[0]
+    assert any("re-run `likearr adopt` later" in line for line in lines[:4])
+
+
+def test_adopt_does_not_warn_when_the_resolve_was_healthy(
+    tmp_path: Path, sink: CapturingSink, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A catalogue too large to browse is permanent, not an outage: its albums are held, quietly."""
+    ctx, _lidarr = _unread_world(tmp_path, sink=sink, error=CatalogueTooLarge("more than 3000 release groups"))
+    with ctx:
+        commands.adopt_command(ctx, out=tmp_path / "adopt.json", now=NOW)
+
+    assert "WARNING" not in capsys.readouterr().out
+
+
+def test_an_adopt_plan_file_without_held_releases_still_reads(tmp_path: Path) -> None:
+    """A plan written before #6 has no `held` field; it reads as holding nothing."""
+    from likearr.shell.adopt_io import read_adopt_plan
+
+    path = tmp_path / "adopt.json"
+    path.write_text(
+        json.dumps(
+            {
+                "kind": "adopt-plan",
+                "created_at": NOW.isoformat(),
+                "source_digest": "s",
+                "lidarr_digest": "l",
+                "resolver_version": 1,
+                "summary": {"claim": 0, "keep": 0, "unmonitor": 0},
+                "claim": [],
+                "keep_as_manual": [],
+                "unmonitor": [],
+            }
+        )
+    )
+    assert read_adopt_plan(path).adoption.held == []
 
 
 # --------------------------------------------------------------------------- explain
