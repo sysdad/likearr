@@ -1,7 +1,7 @@
 name: identity-guard
 # Fails when a tracked file or a commit carries an entry from the private IDENTITY_DENYLIST secret.
-# See docs/dev/identity-guard.md. The guard prints where a hit is and which entry number matched,
-# never the entry or the matched text, so these logs stay safe to read.
+# See docs/dev/identity-guard.md. Here the guard runs with --counts-only: these logs are public, so
+# a red run says how many hits there are, never where or which entry. Run it locally for the detail.
 on:
   push:
     branches: [main]
@@ -26,7 +26,7 @@ jobs:
       - name: Scan every tracked file
         env:
           IDENTITY_DENYLIST: ${{ secrets.IDENTITY_DENYLIST }}
-        run: python3 scripts/identity_guard.py
+        run: python3 scripts/identity_guard.py --counts-only
   commits:
     # Only on the public repository, where every commit's author, committer and message is public,
     # and so is every line a commit added, even one a later commit took out again.
@@ -67,4 +67,4 @@ jobs:
             esac
           fi
           echo "checking commits in ${revs}"
-          python3 scripts/identity_guard.py --commits "${revs}"
+          python3 scripts/identity_guard.py --counts-only --commits "${revs}"

@@ -2,9 +2,10 @@
 
 `scripts/identity_guard.py` fails when a tracked file, or a commit's author, committer, message or
 added lines, carries an entry from a private denylist. It runs in CI
-(`.github/workflows/identity-guard.yml`) and as a local pre-push hook (`scripts/pre-push`). It
-prints where a hit is and which entry number matched, never the entry or the text that matched, so
-CI logs are safe to read.
+(`.github/workflows/identity-guard.yml`) and as a local pre-push hook (`scripts/pre-push`). Run by
+hand or from the hook, it prints where a hit is and which entry number matched, never the entry or
+the text that matched. CI runs it with `--counts-only`, which prints only how many hits there are,
+because anyone can read a public repository's CI logs.
 
 ## Install the pre-push hook
 
@@ -67,9 +68,28 @@ A real third-party name or string that happens to match: put `identity:allow` on
 python3 scripts/identity_guard.py --denylist-file LIST                  # tracked files, working tree
 python3 scripts/identity_guard.py --denylist-file LIST --rev HEAD       # the tree of a commit
 python3 scripts/identity_guard.py --denylist-file LIST --commits origin/main..HEAD
+python3 scripts/identity_guard.py --denylist-file LIST --counts-only    # how many hits, not where (as CI)
 ```
 
 Exit status: 0 clean, 1 a hit, 2 the check couldn't run (no list, a git error).
+
+## When CI's check is red
+
+CI says only how many hits there are. To see where:
+
+1. Check out the failing branch or commit and run the same check with the list: `--rev HEAD` for
+   the `tree` job, or `--commits BASE..HEAD` for the `commits` job, using the range the job's log
+   prints on its `checking commits in` line.
+2. Remove the hit, or reword the commit message, and push again. For a hit in a commit that no
+   later commit needs, drop or amend that commit rather than adding a fix on top, so the commit
+   check passes too.
+3. A hit in a commit already on `main`, or already pushed to a pull request, is published. A fix
+   takes it out of the tree but not out of the history, and GitHub keeps pull request refs, so a
+   force-push doesn't remove it either. Decide whether it matters. If it does, rewrite the history
+   and ask GitHub Support to purge cached views and pull request refs.
+
+The repository keeps Actions logs for 3 days (Settings, Actions, General, "Artifact and log
+retention"), so an old run's log doesn't stay readable for long.
 
 ## What it doesn't cover
 

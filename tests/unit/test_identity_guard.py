@@ -288,6 +288,27 @@ def test_every_matching_entry_is_reported(repo: Repo, denylist_file: Path) -> No
     assert f"file.txt:1: matches {SUBSTRING_ENTRY}, {WORD_ENTRY}" in result.stderr
 
 
+def test_counts_only_leaves_out_where_and_which(repo: Repo, denylist_file: Path) -> None:
+    repo.write("file.txt", f"{SUBSTRING} and {WORD}\n")
+    repo.write("other.txt", f"{EMAIL_BIT}\n")
+    repo.commit()
+    result = _guard(repo, "--counts-only", denylist=denylist_file)
+    assert result.returncode == 1
+    assert "FAILED, 2 hit(s) in 2 tracked file(s) against 3 entries" in result.stderr
+    assert "Run the guard locally" in result.stderr
+    for detail in ("file.txt", "other.txt", "entry", "denylist line"):
+        assert detail not in result.stderr
+    _assert_no_echo(result)
+
+
+def test_counts_only_still_passes_a_clean_tree(repo: Repo, denylist_file: Path) -> None:
+    repo.write("README.md", "Nothing to see here.\n")
+    repo.commit()
+    result = _guard(repo, "--counts-only", denylist=denylist_file)
+    assert result.returncode == 0, result.stderr
+    assert "ok, 1 tracked file(s) clean against 3 entries" in result.stdout
+
+
 # -- what is scanned ---------------------------------------------------------------------------
 
 
@@ -504,6 +525,18 @@ def test_a_line_added_then_removed_is_caught_in_the_commit_that_added_it(repo: R
     assert f"commit {leak[:12]}: notes.txt:2: added line matches {SUBSTRING_ENTRY}" in result.stderr
     assert head[:12] not in result.stderr
     assert "FAILED, 1 hit(s) in 2 commit(s)" in result.stderr
+    _assert_no_echo(result)
+
+
+def test_counts_only_leaves_out_the_commit_path_and_field(repo: Repo, denylist_file: Path) -> None:
+    base, leak, _head = _add_then_remove(repo, f"written by {SUBSTRING}")
+    repo.write("README.md", "clean\n")
+    named = repo.commit("change", GIT_AUTHOR_NAME=f"{WORD} Person")
+    result = _guard(repo, "--counts-only", "--commits", f"{base}..{named}", denylist=denylist_file)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "FAILED, 2 hit(s) in 3 commit(s)" in result.stderr
+    for detail in (leak[:12], named[:12], "notes.txt", "author name", "entry", "denylist line"):
+        assert detail not in result.stderr
     _assert_no_echo(result)
 
 
@@ -916,6 +949,8 @@ def test_the_workflow_pins_actions_and_reads_only() -> None:
     assert "if: github.repository_owner == 'sysdad'" in text
     # The tree job runs everywhere: only the commits job is gated.
     assert text.count("if: github.repository_owner") == 1
+    # CI logs are public: both jobs print only how many hits there are.
+    assert text.count("scripts/identity_guard.py --counts-only") == 2
     assert text.index("  tree:") < text.index("  commits:") < text.index("if: github.repository_owner")
 
 
@@ -958,7 +993,8 @@ def test_the_workflow_commit_range(
     )
     if expect_hit:
         assert result.returncode == 1, result.stdout + result.stderr
-        assert f"commit {base[:12]}: message line 1 matches {WORD_ENTRY}" in result.stderr
+        assert "FAILED, 1 hit(s) in 2 commit(s)" in result.stderr
+        assert base[:12] not in result.stderr and "entry" not in result.stderr
     else:
         assert result.returncode == 0, result.stdout + result.stderr
         assert "1 commit(s) clean" in result.stdout
@@ -987,5 +1023,6 @@ def test_the_workflow_catches_a_leak_a_later_commit_in_the_pr_removed(
         timeout=60,
     )
     assert result.returncode == 1, result.stdout + result.stderr
-    assert f"commit {leak[:12]}: notes.txt:2: added line matches {WORD_ENTRY}" in result.stderr
+    assert "FAILED, 1 hit(s) in 2 commit(s)" in result.stderr
+    assert leak[:12] not in result.stderr and "notes.txt" not in result.stderr
     _assert_no_echo(result)

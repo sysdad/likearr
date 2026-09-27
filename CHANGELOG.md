@@ -73,6 +73,9 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
   compose example for the second instance.
 - The quick start now pastes a Docker Compose block and fetches the example config directly,
   instead of cloning the repository first just to copy three files out of it.
+- The identity guard has a `--counts-only` option, and CI uses it: a failing check in CI now says
+  how many hits there are, not which file, line, commit or denylist entry, since the CI logs of a
+  public repository can be read by anyone. Run the guard locally with the list to see where.
 
 ## [0.5.0]
 
