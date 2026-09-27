@@ -9,10 +9,13 @@ uv run ruff check . && uv run ruff format --check . && uv run pyright
 ```
 
 The resolver ships with a golden corpus of public MusicBrainz releases in `tests/fixtures/mb/`.
-Integration tests run against a disposable Lidarr container when `LIKEARR_TEST_LIDARR_URL` and
-`LIKEARR_TEST_LIDARR_API_KEY` are set. In CI, `.github/workflows/integration.yml` provides that
-container and runs them nightly, on manual dispatch, and on PRs that touch the Lidarr adapter,
-the apply loop or the integration tests themselves; it is advisory and never blocks a merge.
+Integration tests run against an empty, disposable Lidarr container when `LIKEARR_TEST_LIDARR_URL`,
+`LIKEARR_TEST_LIDARR_API_KEY` and `LIKEARR_TEST_LIDARR_ROOT` are all set. The instance must have
+no artists when the session starts - the tests add artists and delete them again, and fail the
+session immediately with a clear message if the instance already has a library. In CI,
+`.github/workflows/integration.yml` provides that container and runs them nightly, on manual
+dispatch, and on PRs that touch the Lidarr adapter, the apply loop or the integration tests
+themselves; it is advisory and never blocks a merge.
 
 ## Tests never contact Spotify
 

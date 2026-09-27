@@ -75,6 +75,9 @@ class ApplyResult:
     (`LidarrArtistUnknown`). Skipped this run and tried again next run, like `skipped_artists`,
     but neither a metadata outage nor a class-B skip: it can last weeks for an artist new to
     MusicBrainz, and a run that degraded for all that time would be the permanent amber again."""
+    foreign_artists: list[str] = field(default_factory=list)
+    """Artist MBIDs the plan would add that were already in Lidarr without likearr's tag: someone
+    else added them first (issue #4). Left alone this run, and not likearr's afterwards either."""
     unmapped_in_lidarr: list[str] = field(default_factory=list)
     """``artist_mbid/rg_mbid`` pairs Lidarr still has no album for; retried next run."""
     already_monitored: list[str] = field(default_factory=list)

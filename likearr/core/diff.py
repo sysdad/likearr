@@ -653,7 +653,14 @@ def build_diff(
         created_at=now,
         source_digest=source_digest,
         lidarr_digest=lidarr_digest(
-            view, monitor, unmonitor, ratchets, set_new_items_none, monitor_artists, refresh_artists
+            view,
+            monitor,
+            unmonitor,
+            ratchets,
+            set_new_items_none,
+            monitor_artists,
+            refresh_artists,
+            [a.artist_mbid for a in add_artists],
         ),
         add_artists=add_artists,
         monitor=monitor,
@@ -680,13 +687,18 @@ def lidarr_digest(
     set_new_items_none: list[str],
     monitor_artists: Sequence[str] = (),
     refresh_artists: Sequence[str] = (),
+    add_artists: Sequence[str] = (),
 ) -> str:
     """Hash the Lidarr state the diff depends on, so a stale diff can be refused.
 
     Covers every album the diff would touch (id and monitored flag) and every artist it would
-    touch (id, metadata profile, monitorNewItems, the monitored flag of those it re-monitors, and
-    the id of those it refreshes). Anything the diff does not touch is excluded, so unrelated
-    Lidarr activity between planning and applying does not invalidate the plan.
+    touch (id, metadata profile, monitorNewItems, the monitored flag of those it re-monitors, the
+    id of those it refreshes, and whether those it adds are in Lidarr yet). Anything the diff does
+    not touch is excluded, so unrelated Lidarr activity between planning and applying does not
+    invalidate the plan.
+
+    An artist to add is absent when the plan is made, so it adds nothing to the hash then: a plan
+    hashes as it did before its adds were covered, and goes stale only once one appears (issue #4).
     """
     h = hashlib.sha256()
     album_parts: list[str] = []
@@ -712,6 +724,10 @@ def lidarr_digest(
     refresh_parts = [str(a.id) for mbid in refresh_artists if (a := view.artists.get(mbid))]
     for part in sorted(refresh_parts):
         h.update(b"f" + part.encode())
+
+    added_parts = [f"{mbid}:{a.id}" for mbid in add_artists if (a := view.artists.get(mbid))]
+    for part in sorted(added_parts):
+        h.update(b"n" + part.encode())
     return h.hexdigest()
 
 

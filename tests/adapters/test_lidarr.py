@@ -14,7 +14,7 @@ from likearr.adapters.http import build_client
 from likearr.adapters.lidarr import LidarrClient
 from likearr.config import LidarrConfig
 from likearr.models import LidarrArtist, PrimaryType, Profile, SecondaryType
-from likearr.ports import LidarrArtistUnknown, LidarrError, LidarrMetadataError, LidarrPort
+from likearr.ports import LidarrArtistExists, LidarrArtistUnknown, LidarrError, LidarrMetadataError, LidarrPort
 
 from .conftest import FAKE_API_KEY, LIDARR_URL, FakeClock
 
@@ -386,10 +386,12 @@ def test_add_artist_handles_already_exists(lidarr: LidarrClient) -> None:
         )
     )
     listing = respx.get(f"{V1}/artist").mock(return_value=httpx.Response(200, json=[ARTIST_JSON]))
-    artist = lidarr.add_artist(
-        ARTIST_MBID, "Fake Band", root_folder="/music", quality_profile_id=2, metadata_profile_id=1, tag_ids=[]
-    )
-    assert artist.id == 7
+    with pytest.raises(LidarrArtistExists) as caught:
+        lidarr.add_artist(
+            ARTIST_MBID, "Fake Band", root_folder="/music", quality_profile_id=2, metadata_profile_id=1, tag_ids=[]
+        )
+    assert caught.value.artist.id == 7, "carries the artist Lidarr holds, for apply to judge by its tag (#4)"
+    assert not isinstance(caught.value, LidarrMetadataError), "not an outage"
     assert listing.call_count == 1
 
 

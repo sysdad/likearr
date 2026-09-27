@@ -1,26 +1,34 @@
-"""The apply loop against a real, disposable Lidarr.
+"""The apply loop against a real, empty, disposable Lidarr.
 
-Skipped unless ``LIKEARR_TEST_LIDARR_URL`` and ``LIKEARR_TEST_LIDARR_API_KEY`` are set::
+Skipped unless ``LIKEARR_TEST_LIDARR_URL``, ``LIKEARR_TEST_LIDARR_API_KEY`` and
+``LIKEARR_TEST_LIDARR_ROOT`` are all set::
 
     LIKEARR_TEST_LIDARR_URL=http://127.0.0.1:18687 \\
     LIKEARR_TEST_LIDARR_API_KEY="$(tr -d '\\n' < ~/.likearr-test-lidarr-key)" \\
+    LIKEARR_TEST_LIDARR_ROOT=/config \\
       uv run pytest tests/integration -m integration -q
+
+The instance must be empty (no artists) when the session starts, and must be disposable: these
+tests add artists and delete them again, and the root folder is never one the instance already
+has a real library in - it comes only from ``LIKEARR_TEST_LIDARR_ROOT``. A populated instance
+fails the session immediately with a clear message instead of running.
 
 What is real here: `LidarrClient`, `SqliteState`, and the whole of `shell.apply.apply`. What is
 faked: Spotify (a `FakeSource` with a canned snapshot) and MusicBrainz (a `FakeLookup` built
 from the recorded corpus). The MBIDs are real ones, so Lidarr's own metadata server can find the
 artist - that is the part a fake cannot stand in for, and the part that has historically broken.
 
-The test adds exactly one artist, monitors exactly one album, and deletes the artist again on
-the way out **without ever deleting files**. It prints nothing secret: the API key is read from
-the environment and never logged, echoed or put in an assertion message.
+Teardown deletes only the artist ids these tests themselves added (tracked as each add happens),
+never by re-deriving them from the fixture's MBID, and never any artist already on the instance.
+Deletion never removes files (``delete_files=False``). It prints nothing secret: the API key is
+read from the environment and never logged, echoed or put in an assertion message.
 """
 
 from __future__ import annotations
 
 import os
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -38,8 +46,8 @@ from likearr.config import (
     RulesConfig,
     SpotifyConfig,
 )
-from likearr.models import EXIT_OK, PrimaryType, Profile, ReleaseKey, SecondaryType
-from likearr.ports import LidarrError
+from likearr.models import EXIT_OK, LidarrArtist, PrimaryType, Profile, ReleaseKey, SecondaryType
+from likearr.ports import LidarrArtistExists, LidarrError
 from likearr.shell.context import Context
 from likearr.shell.run import ApplyStopped, apply, plan
 from tests.shell.conftest import CapturingSink, FakeSource
@@ -53,6 +61,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.timeout(360)]
 
 URL = os.environ.get("LIKEARR_TEST_LIDARR_URL", "")
 API_KEY = os.environ.get("LIKEARR_TEST_LIDARR_API_KEY", "")
+ROOT_FOLDER = os.environ.get("LIKEARR_TEST_LIDARR_ROOT", "")
 
 pytest.importorskip("httpx")
 
@@ -62,14 +71,12 @@ if not URL or not API_KEY:  # pragma: no cover - the skip is the point
         allow_module_level=True,
     )
 
-DEFAULT_ROOT_FOLDER = "/config"
-"""A path that exists and is writable inside a stock Lidarr container.
-
-``/music`` is the obvious choice and the wrong one: on an image that drops privileges (hotio,
-linuxserver) an unmounted or root-owned ``/music`` fails Lidarr's own FolderWritableValidator
-with a 400, and the test would be asserting the container's mount layout rather than likearr.
-Override with ``LIKEARR_TEST_LIDARR_ROOT`` when the instance has a real library.
-"""
+if not ROOT_FOLDER:  # pragma: no cover - the skip is the point
+    pytest.skip(
+        "set LIKEARR_TEST_LIDARR_ROOT to a writable path in the disposable Lidarr container to "
+        "run the live Lidarr tests; it is never inferred from the instance's own root folders",
+        allow_module_level=True,
+    )
 
 TEST_ARTIST_NAME = "Radiohead"
 NOW = datetime(2026, 9, 18, 12, 0, tzinfo=UTC)
@@ -95,18 +102,55 @@ def ok_computer(corpus):
 
 @pytest.fixture(scope="module")
 def root_folder() -> str:
-    """The root folder these tests use: the override, whatever Lidarr already has, or /config."""
-    override = os.environ.get("LIKEARR_TEST_LIDARR_ROOT", "")
-    if override:
-        return override
+    """The root folder these tests use: always ``LIKEARR_TEST_LIDARR_ROOT``, never inferred from
+    whatever root folder the instance already has - that would be a real library on a non-empty
+    instance, and these tests only ever run against a disposable one."""
+    return ROOT_FOLDER
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _lidarr_must_start_empty() -> None:
+    """Fail the session before any test runs if the instance already has artists.
+
+    These tests add and delete artists; running them against an instance that already has a
+    library would delete something the tests never added. A disposable Lidarr - the only kind
+    these tests are meant for - starts with none.
+    """
     with build_client() as http:
         probe = LidarrClient(
-            LidarrConfig(url=URL.rstrip("/"), root_folder=DEFAULT_ROOT_FOLDER, quality_profile="Any"),
+            LidarrConfig(url=URL.rstrip("/"), root_folder=ROOT_FOLDER, quality_profile="Any"),
             http,
             api_key=API_KEY,
         )
-        existing = [str(f.get("path") or "") for f in probe.root_folders()]
-    return existing[0] if existing else DEFAULT_ROOT_FOLDER
+        artists = probe.load_view(None).artists
+    if artists:
+        pytest.fail(
+            f"LIKEARR_TEST_LIDARR_URL ({URL}) already has {len(artists)} artist(s); the live "
+            "Lidarr tests only run against an empty, disposable Lidarr instance and refuse to "
+            "start against one that already has a library.",
+            pytrace=False,
+        )
+
+
+@pytest.fixture(scope="module")
+def _added_artist_ids() -> list[int]:
+    """Ids of artists these tests added to Lidarr, recorded by `_track_added_artists` as each
+    `add_artist` call returns. Teardown deletes exactly these ids and nothing else."""
+    return []
+
+
+@pytest.fixture(autouse=True)
+def _track_added_artists(monkeypatch: pytest.MonkeyPatch, _added_artist_ids: list[int]) -> None:
+    """Record the id of every artist `LidarrClient.add_artist` adds, on every `LidarrClient`
+    instance a test builds - including `apply()`'s own, which never returns the id directly."""
+    real_add_artist = LidarrClient.add_artist
+
+    def recording_add_artist(self: LidarrClient, *args: object, **kwargs: object) -> LidarrArtist:
+        artist = real_add_artist(self, *args, **kwargs)  # type: ignore[arg-type]
+        _added_artist_ids.append(artist.id)
+        return artist
+
+    monkeypatch.setattr(LidarrClient, "add_artist", recording_add_artist)
 
 
 @pytest.fixture
@@ -167,17 +211,19 @@ def ctx(config: Config, client: LidarrClient, lookup: FakeLookup, followed: Fake
 
 
 @pytest.fixture(autouse=True)
-def clean_lidarr(client: LidarrClient, artist_mbid: str) -> Iterator[None]:
-    """Leave the instance exactly as it was found: no test artist, files untouched."""
-    _remove_artist(client, artist_mbid)
+def _delete_added_artists(client: LidarrClient, _added_artist_ids: list[int]) -> Iterator[None]:
+    """Delete exactly the artist ids this test added (`_track_added_artists`), and nothing that
+    was already on the instance. Files are never removed (``delete_files=False``)."""
     try:
         yield
     finally:
-        _remove_artist(client, artist_mbid)
+        ids = list(dict.fromkeys(_added_artist_ids))  # de-duplicated, order kept
+        _added_artist_ids.clear()
+        _remove_artists(client, ids)
 
 
-def _remove_artist(client: LidarrClient, artist_mbid: str, timeout_s: float = 90.0) -> None:
-    """Delete the test artist, and never while Lidarr is refreshing it.
+def _remove_artists(client: LidarrClient, artist_ids: Sequence[int], timeout_s: float = 90.0) -> None:
+    """Delete each given artist id, and never while Lidarr is refreshing it.
 
     Deleting an artist that has a ``RefreshArtist`` command in flight puts Lidarr 3.1.0 into a
     loop: the refresh re-creates the artist, creating an artist queues a refresh, and the pair
@@ -190,14 +236,16 @@ def _remove_artist(client: LidarrClient, artist_mbid: str, timeout_s: float = 90
     have to be careful.
     """
     deadline = time.monotonic() + timeout_s
-    while time.monotonic() < deadline:
-        _wait_for_refresh_queue(client, deadline)
-        artist = client.load_view(None).artists.get(artist_mbid)
-        if artist is None:
-            return
-        client.delete_artist(artist.id, delete_files=False)
-        time.sleep(1.0)
-    raise AssertionError(f"lidarr still has {artist_mbid} after {timeout_s:.0f}s")
+    for artist_id in artist_ids:
+        while time.monotonic() < deadline:
+            _wait_for_refresh_queue(client, deadline)
+            existing = {a.id for a in client.load_view(None).artists.values()}
+            if artist_id not in existing:
+                break
+            client.delete_artist(artist_id, delete_files=False)
+            time.sleep(1.0)
+        else:
+            raise AssertionError(f"lidarr still has artist {artist_id} after {timeout_s:.0f}s")
 
 
 def _wait_for_refresh_queue(client: LidarrClient, deadline: float) -> None:
@@ -304,8 +352,11 @@ def test_losing_the_reason_unmonitors_and_drops_ownership(
     assert ReleaseKey(artist_mbid=artist_mbid, rg_mbid=ok_computer.mbid) not in ctx.state.owned_releases()
 
 
-def test_adding_the_same_artist_twice_is_idempotent(client: LidarrClient, artist_mbid: str, root_folder: str) -> None:
-    """Lidarr answers the second POST with a 400; the adapter turns that into the existing artist."""
+def test_adding_the_same_artist_twice_reports_the_existing_one(
+    client: LidarrClient, artist_mbid: str, root_folder: str
+) -> None:
+    """Lidarr answers the second POST with a 400; the adapter raises `LidarrArtistExists` carrying
+    the artist Lidarr holds, tag included, so apply can tell its own add from someone else's (#4)."""
     _prepare(client, root_folder)
     lean = client.ensure_metadata_profile(Profile.LEAN, "Lean")
     tag = client.ensure_tag("likearr")
@@ -319,18 +370,20 @@ def test_adding_the_same_artist_twice_is_idempotent(client: LidarrClient, artist
         metadata_profile_id=lean,
         tag_ids=[tag],
     )
-    second = client.add_artist(
-        artist_mbid,
-        TEST_ARTIST_NAME,
-        root_folder=root_folder,
-        quality_profile_id=quality,
-        metadata_profile_id=lean,
-        tag_ids=[tag],
-    )
-    assert first.id == second.id
+    with pytest.raises(LidarrArtistExists) as raised:
+        client.add_artist(
+            artist_mbid,
+            TEST_ARTIST_NAME,
+            root_folder=root_folder,
+            quality_profile_id=quality,
+            metadata_profile_id=lean,
+            tag_ids=[tag],
+        )
+    assert raised.value.artist.id == first.id
+    assert tag in raised.value.artist.tags
     # Adding an artist makes Lidarr queue its own RefreshArtist. Let it finish, exactly as the
     # apply path does, so the teardown is not deleting an artist that is being refreshed.
-    client.refresh_artist(second, timeout_s=300)
+    client.refresh_artist(first, timeout_s=300)
 
 
 def test_a_crashed_apply_is_finished_by_the_next_run(

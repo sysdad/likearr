@@ -677,7 +677,8 @@ def coverage(last: LastRun) -> Coverage:
     albums = {key: last.view.album(key) for key in wanted}
     monitored = [k for k, a in albums.items() if a is not None and a.monitored]
     downloaded = sum(1 for k in monitored if albums[k].has_files)  # type: ignore[union-attr]
-    unmonitored = [k for k in wanted if k not in set(monitored)]
+    monitored_set = set(monitored)
+    unmonitored = [k for k in wanted if k not in monitored_set]
     dry = not last.applied
     would = sum(1 for k in unmonitored if k in (last.monitor or ())) if dry else 0
     return Coverage(
