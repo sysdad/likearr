@@ -20,6 +20,14 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
 
 ### Fixed
 
+- `adopt` no longer plans to unmonitor every hand-monitored album of a followed artist whose
+  MusicBrainz catalogue could not be read, because it is too large to browse or because
+  MusicBrainz failed for that artist during the plan. Their albums on the keep list, or wanted
+  by a source, are still kept or claimed as usual; the rest are now held back, left monitored and
+  unowned, and the plan lists them as held with the reason, both in its printed output and in a
+  new `held` field of the plan file. The plan's existing fields are unchanged.
+  When MusicBrainz failed during the plan, a warning at the top of the output says the plan is
+  incomplete and suggests re-running `adopt` later. (#6)
 - An artist that a plan adds, but that someone else added to Lidarr first (by hand or through an
   import list, between the plan and the apply), is no longer recorded as added by likearr. Before,
   every later run forced that artist's "Monitor New Albums" to None. The apply now leaves such an
