@@ -1,8 +1,8 @@
 # Changelog
 
 Notable changes to likearr are recorded here, in the style of
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/): newest first, grouped as `Added`,
-`Changed`, `Fixed` and `Upgrade notes`.
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/): newest first, grouped as `Breaking`,
+`Added`, `Changed`, `Fixed` and `Upgrade notes`.
 
 0.5.0 is likearr's first public release. Its entry below is a short summary of what it's for, not
 a list of every change that went into it; the detailed history is in the individual pull request
@@ -10,6 +10,62 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
 `Upgrade notes` style above.
 
 ## [Unreleased]
+
+## [0.5.1]
+
+### Breaking
+
+Read this before upgrading from 0.5.0. A `config.toml` that isn't changed as below does not load,
+and the service does not start.
+
+- **Three settings moved from `config.toml` to the environment.** Where likearr runs and how it is
+  reached now come only from environment variables, and a `config.toml` that still has any of the
+  three old keys fails to load, naming the variable to set instead:
+
+  | Old key in `config.toml` | New environment variable                                        |
+  | ------------------------ | --------------------------------------------------------------- |
+  | `[lidarr] url`           | `LIKEARR_LIDARR_URL` (required)                                 |
+  | `[ui] allowed_hosts`     | `LIKEARR_ALLOWED_HOSTS` (optional, comma-separated)             |
+  | `[musicbrainz] contact`  | `LIKEARR_MUSICBRAINZ_CONTACT` (optional; project URL if unset)  |
+
+  Before, in `config.toml`:
+
+  ```toml
+  [lidarr]
+  url = "http://lidarr:8686"
+
+  [ui]
+  allowed_hosts = ["likearr.example.org", "192.168.1.20"]
+
+  [musicbrainz]
+  contact = "you@example.org"
+  ```
+
+  After, in `compose.yaml` (or `.env`), on **every** likearr service, including `likearr-cli`:
+
+  ```yaml
+  services:
+    likearr:
+      image: ghcr.io/sysdad/likearr:0.5.1
+      environment:
+        LIKEARR_LIDARR_URL: "http://lidarr:8686"
+        LIKEARR_ALLOWED_HOSTS: "likearr.example.org,192.168.1.20"
+        LIKEARR_MUSICBRAINZ_CONTACT: "you@example.org"
+  ```
+
+  Then delete those three lines (and any section left empty) from `config.toml`. Back it up first.
+
+- **New default for allowed hosts.** With `LIKEARR_ALLOWED_HOSTS` unset, the web UI answers to
+  loopback (`localhost`, `127.0.0.1`) and to any IPv4 address, such as
+  `http://192.168.1.20:8770`, and refuses every host name. You must set `LIKEARR_ALLOWED_HOSTS` if
+  you reach likearr by a host name: behind a reverse proxy, at a `[ui] public_url`, or by a LAN
+  DNS name. Once set, only the listed names and addresses (plus loopback) are accepted, so also
+  list any IP address you still browse to.
+
+- **The first run re-resolves everything.** `RESOLVER_VERSION` is now 12, so every cached
+  MusicBrainz answer is recomputed on the first run after upgrading. Expect that run, or the first
+  Check for changes, to take noticeably longer and to make many more MusicBrainz requests. Only
+  answers reached through the Lidarr album-search fallback can change (see Fixed).
 
 ### Added
 
@@ -25,6 +81,66 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
   two pages, and only those, allow forms to lead to `https://accounts.spotify.com` and the
   `public_url` address. Opened at any other address, the "Continue to Spotify" link stays.
   Paste-back mode is unchanged.
+
+- The docs, example files, comments and tests now use generic or invented examples in place of
+  details from one install, and the Settings pause-reason box suggests "e.g. away this week".
+- `doctor` no longer creates the run lock file on a fresh install. The file now appears only
+  when a command that takes the run lock, such as `run`, first runs.
+- A followed artist that MusicBrainz has not linked to their Spotify page, and whose name several
+  MusicBrainz artists share, is no longer matched to the top search result. likearr leaves the
+  artist unmatched and lists every candidate in the run summary, instead of adding a stranger and
+  monitoring their albums. To settle it, link the right artist to their Spotify page on
+  MusicBrainz (the next run picks it up), or add the right artist in Lidarr by hand. A namesake an
+  earlier version added stays in Lidarr with what it monitored, and is not removed automatically.
+- Two different artists with the same name that are both new in one run are no longer both added
+  to Lidarr. Both are skipped and reported as a name collision, the same as when Lidarr already
+  holds one of them.
+- A release kept by hand at adoption stays kept once a followed artist, a saved album or a like
+  also wants it. Before, the source's reason replaced the kept-by-hand one, and unfollowing or
+  unliking later unmonitored the release. A release on the adopt keep list that a source already
+  wanted is now kept by hand as well, not only claimed, and the adopt plan lists it as
+  `claim+keep`.
+- Refusing one release of a followed artist ("Not this one"), or tagging them albums-only, no
+  longer reads as that artist's catalogue shrinking. Before, the artist-shrink guard then held
+  every scheduled run until a shrink was accepted by hand; the refused release is now let go on
+  the next run.
+- Deploy docs no longer tell an existing library's owner to run `adopt` first "so likearr doesn't
+  try to unmonitor things it never touched" - that's backwards. A plain run already leaves
+  hand-monitored releases alone; `adopt` is only for a library that grew from Lidarr's own import
+  lists.
+- Contributing, security and packaging docs now agree that likearr has a tagged release:
+  releases are `vX.Y.Z`, only the latest is supported, and the project is Beta.
+- New-source feature requests go to an issue now, not a GitHub Discussion (which is disabled).
+  Contributing docs also now say a fork PR's identity-guard check always fails and isn't something
+  the contributor can fix - the PR is checked by hand against the real list before merging.
+- Deploy docs and the example templates no longer describe one-time upgrade steps or private
+  tracking numbers left over from before the first public release.
+- The quick start now covers what an unwritable `/data` directory looks like (an unhealthy
+  container, a failed Connect or Settings save) and the `chown` fix, instead of leaving that only
+  in the deploy guide.
+- The README, `docs/spotify.md` and the deploy guide now lead with "a household with several
+  Spotify accounts is supported" (one instance per person, sharing one Spotify app and Lidarr)
+  instead of reading like a single account is all that works, with a new README section and a
+  compose example for the second instance.
+- The quick start now pastes a Docker Compose block instead of cloning the repository first just
+  to copy three files out of it.
+- The identity guard has a `--counts-only` option, and CI uses it: a failing check in CI now says
+  how many hits there are, not which file, line, commit or denylist entry, since the CI logs of a
+  public repository can be read by anyone. Run the guard locally with the list to see where.
+- `docker compose up -d` with only environment variables and an empty `/data` is now a complete
+  install (breaking; see Breaking above). Where likearr runs and how it is reached come only from the environment:
+  `LIKEARR_LIDARR_URL` (required), `LIKEARR_ALLOWED_HOSTS` (optional, comma-separated) and
+  `LIKEARR_MUSICBRAINZ_CONTACT` (optional; likearr's project URL by default). `[lidarr] url`,
+  `[ui] allowed_hosts` and `[musicbrainz] contact` are no longer read from `config.toml`, and a
+  file that still has any of them fails to load, naming the variable to set instead. On a first
+  start with no `config.toml`, `likearr start` writes one from `deploy/config.example.toml`,
+  comments intact, and never overwrites an existing file. `[spotify] token_file` and `[state] db`
+  default to `spotify-token.json` and `state.sqlite` beside `config.toml`. `[lidarr] root_folder`
+  and `quality_profile` may now be left unset: Settings, under Lidarr setup, picks them from
+  Lidarr's own lists (one root folder is taken by itself), and until both are set, Status and
+  Doctor say so and every run refuses. With `LIKEARR_ALLOWED_HOSTS` unset, the web UI answers to
+  loopback and any IPv4 address, and refuses every host name; set, it answers only to the listed
+  names and addresses, as before. The README quick start no longer fetches or edits a config file.
 
 ### Fixed
 
@@ -78,77 +194,6 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
   button, did nothing in Chrome, Edge, Safari and other Chromium or WebKit browsers: the browser
   silently blocked the jump to Spotify. They now show a "Continue to Spotify" link that works in
   every browser.
-
-### Changed
-
-- The docs, example files, comments and tests now use generic or invented examples in place of
-  details from one install, and the Settings pause-reason box suggests "e.g. away this week".
-- `doctor` no longer creates the run lock file on a fresh install. The file now appears only
-  when a command that takes the run lock, such as `run`, first runs.
-- A followed artist that MusicBrainz has not linked to their Spotify page, and whose name several
-  MusicBrainz artists share, is no longer matched to the top search result. likearr leaves the
-  artist unmatched and lists every candidate in the run summary, instead of adding a stranger and
-  monitoring their albums. To settle it, link the right artist to their Spotify page on
-  MusicBrainz (the next run picks it up), or add the right artist in Lidarr by hand. A namesake an
-  earlier version added stays in Lidarr with what it monitored, and is not removed automatically.
-- Two different artists with the same name that are both new in one run are no longer both added
-  to Lidarr. Both are skipped and reported as a name collision, the same as when Lidarr already
-  holds one of them.
-- A release kept by hand at adoption stays kept once a followed artist, a saved album or a like
-  also wants it. Before, the source's reason replaced the kept-by-hand one, and unfollowing or
-  unliking later unmonitored the release. A release on the adopt keep list that a source already
-  wanted is now kept by hand as well, not only claimed, and the adopt plan lists it as
-  `claim+keep`.
-- Refusing one release of a followed artist ("Not this one"), or tagging them albums-only, no
-  longer reads as that artist's catalogue shrinking. Before, the artist-shrink guard then held
-  every scheduled run until a shrink was accepted by hand; the refused release is now let go on
-  the next run.
-- Deploy docs no longer tell an existing library's owner to run `adopt` first "so likearr doesn't
-  try to unmonitor things it never touched" - that's backwards. A plain run already leaves
-  hand-monitored releases alone; `adopt` is only for a library that grew from Lidarr's own import
-  lists.
-- Contributing, security and packaging docs now agree that likearr has a tagged release:
-  releases are `vX.Y.Z`, only the latest is supported, and the project is Beta.
-- New-source feature requests go to an issue now, not a GitHub Discussion (which is disabled).
-  Contributing docs also now say a fork PR's identity-guard check always fails and isn't something
-  the contributor can fix - the PR is checked by hand against the real list before merging.
-- Deploy docs and the example templates no longer describe one-time upgrade steps or private
-  tracking numbers left over from before the first public release.
-- The quick start now covers what an unwritable `/data` directory looks like (an unhealthy
-  container, a failed Connect or Settings save) and the `chown` fix, instead of leaving that only
-  in the deploy guide.
-- The README, `docs/spotify.md` and the deploy guide now lead with "a household with several
-  Spotify accounts is supported" (one instance per person, sharing one Spotify app and Lidarr)
-  instead of reading like a single account is all that works, with a new README section and a
-  compose example for the second instance.
-- The quick start now pastes a Docker Compose block instead of cloning the repository first just
-  to copy three files out of it.
-- The identity guard has a `--counts-only` option, and CI uses it: a failing check in CI now says
-  how many hits there are, not which file, line, commit or denylist entry, since the CI logs of a
-  public repository can be read by anyone. Run the guard locally with the list to see where.
-- **Breaking:** `docker compose up -d` with only environment variables and an empty `/data` is now
-  a complete install. Where likearr runs and how it is reached come only from the environment:
-  `LIKEARR_LIDARR_URL` (required), `LIKEARR_ALLOWED_HOSTS` (optional, comma-separated) and
-  `LIKEARR_MUSICBRAINZ_CONTACT` (optional; likearr's project URL by default). `[lidarr] url`,
-  `[ui] allowed_hosts` and `[musicbrainz] contact` are no longer read from `config.toml`, and a
-  file that still has any of them fails to load, naming the variable to set instead. On a first
-  start with no `config.toml`, `likearr start` writes one from `deploy/config.example.toml`,
-  comments intact, and never overwrites an existing file. `[spotify] token_file` and `[state] db`
-  default to `spotify-token.json` and `state.sqlite` beside `config.toml`. `[lidarr] root_folder`
-  and `quality_profile` may now be left unset: Settings, under Lidarr setup, picks them from
-  Lidarr's own lists (one root folder is taken by itself), and until both are set, Status and
-  Doctor say so and every run refuses. With `LIKEARR_ALLOWED_HOSTS` unset, the web UI answers to
-  loopback and any IPv4 address, and refuses every host name; set, it answers only to the listed
-  names and addresses, as before. The README quick start no longer fetches or edits a config file.
-
-### Upgrade notes
-
-- Before upgrading, move three settings out of `config.toml` into the environment (the Compose
-  `environment:` block or `.env`), then delete them from `config.toml`: `[lidarr] url` becomes
-  `LIKEARR_LIDARR_URL`, `[ui] allowed_hosts` becomes `LIKEARR_ALLOWED_HOSTS` (the list joined with
-  commas, for example `likearr.example.org,192.168.1.20`), and `[musicbrainz] contact` becomes
-  `LIKEARR_MUSICBRAINZ_CONTACT`. A `config.toml` that still has any of the three does not load, and
-  the service does not start, until they are removed.
 
 ## [0.5.0]
 
