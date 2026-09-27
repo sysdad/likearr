@@ -20,6 +20,10 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
 
 ### Fixed
 
+- The ambiguous-artist explanation ("Nothing of theirs is monitored.") no longer claims nothing is
+  monitored when releases for that artist can in fact still be monitored - by an earlier likearr
+  version that resolved the follow before this check existed, or by hand, a like, a saved album or
+  a playlist. The wording now holds either way.
 - A Lidarr API key ending in a carriage return or line feed, as a Windows-line-ending env file or a
   Kubernetes Secret created from a file leaves it, made every Lidarr request fail and printed the
   whole key in the error, which then reached `doctor`, the run's error, the webhook and the MQTT
