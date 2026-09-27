@@ -3313,7 +3313,7 @@ def test_the_run_takes_try_through_the_contexts_relationship_lookup(tmp_path: Pa
     ]
     assert cached is not None and cached.release_group is not None
     assert cached.release_group.mbid == "rg-try"
-    assert cached.resolver_version == RESOLVER_VERSION == 11
+    assert cached.resolver_version == RESOLVER_VERSION == 12
 
 
 def test_a_context_without_the_relationship_lookup_runs_without_the_rule(tmp_path: Path, sink: CapturingSink) -> None:

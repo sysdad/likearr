@@ -18,8 +18,23 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
   project. The phrase list is `scripts/narrative_lint_phrases.txt`; `narrative:allow` on a line
   keeps a real third-party hit.
 
+### Changed
+
+- With `[ui] public_url` set and likearr opened at that address, Connect Spotify in Settings, and
+  Clean up's "Authorize write access" button, now go straight to Spotify in one click. Those
+  two pages, and only those, allow forms to lead to `https://accounts.spotify.com` and the
+  `public_url` address. Opened at any other address, the "Continue to Spotify" link stays.
+  Paste-back mode is unchanged.
+
 ### Fixed
 
+- When MusicBrainz missed an album and likearr fell back to Lidarr's album search, an artist or
+  title written wholly in a non-Latin script (Japanese, Korean, Cyrillic, Greek and others) was
+  compared as an empty string. A same-titled album by a different non-Latin artist then matched,
+  and a run could add that artist and monitor the album. The fallback now compares names the same
+  way the MusicBrainz search does, in any script. `RESOLVER_VERSION` is now 12, so every cached
+  answer is recomputed on the first run after upgrading; only answers reached through the Lidarr
+  album-search fallback can change, and a wrong one becomes unmapped.
 - `adopt` no longer plans to unmonitor every hand-monitored album of a followed artist whose
   MusicBrainz catalogue could not be read, because it is too large to browse or because
   MusicBrainz failed for that artist during the plan. Their albums on the keep list, or wanted

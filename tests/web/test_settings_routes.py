@@ -1278,21 +1278,23 @@ def test_the_https_callback_mode_is_only_offered_when_a_public_url_is_configured
 
 
 @pytest.mark.parametrize("data", [{}, {"promote_save": "1"}], ids=["connect", "clean-up-write-access"])
-def test_callback_mode_connect_never_redirects_a_form_post_off_this_origin(
+def test_callback_mode_connect_at_another_address_links_to_spotify_instead(
     data_dir: Path, fake_cli: list[str], monkeypatch: pytest.MonkeyPatch, data: dict[str, str]
 ) -> None:
-    """Every page carries `form-action 'self'`, and Chromium and WebKit browsers check form-action
-    on each redirect of a form submission. So a Connect POST answered by a 303 to
-    accounts.spotify.com is silently dropped there, and nothing happens. The answer has to be a
-    page on this origin with a plain same-tab link to Spotify (a link click is not a form
-    submission), both for Settings' Connect and for Clean up's "Authorize write access" button."""
+    """#11: the UI opened at an address other than `public_url` (here the test client's own
+    host, standing in for a LAN address) keeps the two-click flow. Chromium and WebKit browsers
+    check form-action on each redirect of a form submission, and Spotify's last hop back to
+    `<public_url>/spotify/callback` is another origin from there. So the answer is a page on this
+    origin with a plain same-tab link to Spotify (a link click is not a form submission), both
+    for Settings' Connect and for Clean up's "Authorize write access" button, and its CSP is the
+    default one."""
     app = _callback_app(data_dir, fake_cli, monkeypatch)
     with TestClient(app) as client:
         _login(client)
         response = client.post("/settings/spotify/connect", data=data, follow_redirects=False)
 
     assert not response.is_redirect
-    assert "form-action 'self'" in response.headers["content-security-policy"]
+    assert response.headers["content-security-policy"] == DEFAULT_CSP
     link = re.search(r'<a [^>]*id="spotify-continue"[^>]*>', response.text)
     assert link is not None
     assert 'target="_blank"' not in link[0]  # same tab: Spotify sends this tab back to /spotify/callback
@@ -1300,6 +1302,117 @@ def test_callback_mode_connect_never_redirects_a_form_post_off_this_origin(
     # write access Clean up's button asked for.
     assert 'action="/settings/spotify/connect"' not in response.text
     assert _callback_authorize_url(response).startswith("https://accounts.spotify.com/authorize?")
+
+
+DEFAULT_CSP = "default-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'none'"
+ONE_CLICK_CSP = (
+    "default-src 'self'; frame-ancestors 'none'; "
+    "form-action 'self' https://accounts.spotify.com https://likearr.example.org; base-uri 'none'"
+)
+_AT_PUBLIC_URL = "https://likearr.example.org"
+
+
+@pytest.mark.parametrize("data", [{}, {"promote_save": "1"}], ids=["connect", "clean-up-write-access"])
+def test_callback_mode_connect_at_the_public_url_redirects_straight_to_spotify(
+    data_dir: Path, fake_cli: list[str], monkeypatch: pytest.MonkeyPatch, data: dict[str, str]
+) -> None:
+    """#11: opened at the `public_url` origin, one click reaches Spotify. The POST keeps its CSRF
+    check and answers 303 to the authorize URL; the page that holds the form (Settings here) is
+    the one whose `form-action` the browser checks each hop against, and it allows Spotify and the
+    `public_url` origin its callback comes back to."""
+    app = _callback_app(data_dir, fake_cli, monkeypatch)
+    with TestClient(app, base_url=_AT_PUBLIC_URL) as client:
+        _login(client)
+        page = client.get("/settings")
+        response = client.post("/settings/spotify/connect", data=data, follow_redirects=False)
+
+    assert page.headers["content-security-policy"] == ONE_CLICK_CSP
+    assert 'action="/settings/spotify/connect"' in page.text
+    assert response.status_code == 303
+    location = response.headers["location"]
+    assert location.startswith("https://accounts.spotify.com/authorize?")
+    assert "redirect_uri=https%3A%2F%2Flikearr.example.org%2Fspotify%2Fcallback" in location
+    assert response.headers["content-security-policy"] == ONE_CLICK_CSP
+    expected = [*READ, *WRITE] if data else READ
+    assert _asked_scopes(location) == expected
+
+
+def test_one_click_connect_finishes_through_the_callback(
+    data_dir: Path, fake_cli: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The state the 303 carries is a pending attempt like any other: the callback finishes it."""
+    app = _callback_app(data_dir, fake_cli, monkeypatch)
+    with TestClient(app, base_url=_AT_PUBLIC_URL) as client:
+        _login(client)
+        location = client.post("/settings/spotify/connect", follow_redirects=False).headers["location"]
+    state = re.search(r"state=([^&]+)", location)
+    assert state is not None
+
+    assert "Spotify connected" in _callback_with(app, state[1], " ".join(READ))
+
+
+def test_callback_mode_at_another_port_of_the_public_host_keeps_the_link(
+    data_dir: Path, fake_cli: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The public name reached straight at likearr's own port is another origin: link, default CSP."""
+    app = _callback_app(data_dir, fake_cli, monkeypatch)
+    with TestClient(app, base_url="http://likearr.example.org:8080") as client:
+        _login(client)
+        page = client.get("/settings")
+        response = client.post("/settings/spotify/connect", follow_redirects=False)
+
+    assert page.headers["content-security-policy"] == DEFAULT_CSP
+    assert response.headers["content-security-policy"] == DEFAULT_CSP
+    assert _callback_authorize_url(response).startswith("https://accounts.spotify.com/authorize?")
+
+
+def test_only_the_pages_with_the_connect_form_widen_form_action(
+    data_dir: Path, fake_cli: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every other page keeps `form-action 'self'` exactly, even at the `public_url` origin."""
+    app = _callback_app(data_dir, fake_cli, monkeypatch)
+    with TestClient(app, base_url=_AT_PUBLIC_URL) as client:
+        login = client.get("/login")
+        _login(client)
+        for path in ("/", "/plan", "/jobs"):
+            response = client.get(path)
+            assert response.status_code == 200, path
+            assert response.headers["content-security-policy"] == DEFAULT_CSP, path
+    assert login.headers["content-security-policy"] == DEFAULT_CSP
+
+
+def test_paste_back_mode_is_unchanged_at_any_address(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """No `public_url`: never a redirect, the paste-back link and form, and the default CSP."""
+    monkeypatch.setenv("LIKEARR_SPOTIFY_CLIENT_ID", SPOTIFY_CLIENT_ID)
+    client.base_url = _AT_PUBLIC_URL  # type: ignore[assignment]
+    _login(client)
+    page = client.get("/settings")
+    response = client.post("/settings/spotify/connect", follow_redirects=False)
+
+    assert page.headers["content-security-policy"] == DEFAULT_CSP
+    assert response.status_code == 200
+    assert "location" not in response.headers
+    assert response.headers["content-security-policy"] == DEFAULT_CSP
+    assert _paste_back_url(response.text).startswith("https://accounts.spotify.com/authorize?")
+    assert "spotify-redirect-url" in response.text
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [{"origin": "https://evil.example"}, {"sec-fetch-site": "cross-site"}],
+    ids=["origin", "sec-fetch-site"],
+)
+def test_one_click_connect_still_refuses_a_cross_site_post(
+    data_dir: Path, fake_cli: list[str], monkeypatch: pytest.MonkeyPatch, headers: dict[str, str]
+) -> None:
+    app = _callback_app(data_dir, fake_cli, monkeypatch)
+    with TestClient(app, base_url=_AT_PUBLIC_URL) as client:
+        _login(client)
+        response = client.post("/settings/spotify/connect", headers=headers, follow_redirects=False)
+
+    assert response.status_code == 403
+    assert "location" not in response.headers
+    assert "accounts.spotify.com" not in response.text
 
 
 def test_the_callback_route_is_a_404_without_a_public_url(client: TestClient) -> None:

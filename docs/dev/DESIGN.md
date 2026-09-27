@@ -1383,6 +1383,8 @@ cross-origin check after Go 1.25's `CrossOriginProtection` - `Sec-Fetch-Site` of
 only over https, so on the LAN's plain http the `Origin` check is the one that runs. No GET
 changes anything. Every response carries a `default-src 'self'` content security policy - 500s
 included, because that middleware wraps the whole Starlette app rather than sitting inside it.
+Its `form-action 'self'` is widened on the Spotify Connect pages only, for one-click Connect in
+direct-callback mode (#11, "Direct callback" below).
 The open paths (`/login`, `/healthz`, `/static/`) are matched exactly, and websockets are refused.
 
 **`[ui]` never stops a run.** Every command loads the same `config.toml`, so a problem in the
@@ -1570,11 +1572,19 @@ callback below, which the login gate exemption avoids instead (see "Access", abo
 - **Direct callback**, only offered when `[ui] public_url` is a configured `https://` address:
   `build_authorize_url`'s `redirect_uri` becomes `<public_url>/spotify/callback` (also validated,
   by `_check_https_redirect`, since it is not the loopback address `_check_loopback_redirect`
-  checks), and `GET /spotify/callback` finishes the exchange when Spotify redirects there. The
-  Connect POST answers with a Settings page carrying a plain same-tab "Continue to Spotify" link,
-  never a 303 to Spotify: every page's CSP has `form-action 'self'`, which Chromium and WebKit
-  browsers check on each redirect of a form submission, so a redirected POST is silently dropped
-  there (only Firefox follows it). A link click is not a form submission. The callback itself is
+  checks), and `GET /spotify/callback` finishes the exchange when Spotify redirects there.
+  Chromium and WebKit browsers check `form-action` on each redirect of a form submission, against
+  the page that submitted the form, and silently drop a hop it does not allow (only Firefox
+  follows it). So the Connect POST answers with a 303 to Spotify (#11) only when the request
+  reached likearr at `public_url`'s own origin (its `Host` header, as `AllowedHostMiddleware`
+  admitted it, compared with `public_url`'s host and port; the scheme is not compared, since
+  behind the TLS-terminating proxy likearr sees http and trusts no forwarded header). Then the
+  pages that hold a Connect form - Settings, and Clean up's page with its "Authorize write access"
+  button - carry `form-action 'self' https://accounts.spotify.com <public_url origin>`: the 303,
+  Spotify's own pages, and Spotify's redirect straight back to the callback for a user who already
+  approved the app. Everywhere else, the POST answers with a Settings page carrying a plain
+  same-tab "Continue to Spotify" link, since from another address that last hop is another origin.
+  A link click is not a form submission. The callback itself is
   a cross-site top-level GET redirect from `accounts.spotify.com`, which a `SameSite=Strict` cookie
   is never sent on - so this one route, and only this route, is exempted from the login gate
   (`auth._OPEN_PATHS`) rather than loosening the cookie that gates every other page. The handler

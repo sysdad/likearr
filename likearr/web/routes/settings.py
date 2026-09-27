@@ -40,6 +40,7 @@ from likearr.ports import SourceError
 from likearr.web import doctor as doctor_view
 from likearr.web import lidarr_setup, spotify_connect
 from likearr.web import settings as cfg
+from likearr.web.auth import content_security_policy
 from likearr.web.context import POLL_STOP, AfterCallback, _Web, _web
 from likearr.web.helpers import _first_applied, _form_pairs, _parse_playlists, _playlist_jobs, _read_config, _readable
 from likearr.web.jobs import JobMeta, JobRefused, JobState
@@ -600,11 +601,20 @@ async def spotify_connect_start(request: Request) -> Response:
         "callback" if callback_mode else "paste-back",
         "read and write scopes" if include_write else "read scopes only",
     )
+    # Chromium and WebKit browsers check `form-action` on each redirect of a form submission,
+    # against the page that submitted it, and drop a hop it does not allow without a word. So a 303
+    # from here to Spotify works only when that page allowed Spotify and the `public_url` origin
+    # Spotify may send the same navigation straight back to (#11): direct-callback mode, reached at
+    # `public_url` itself. `web.render` widens those pages' `form-action` in exactly that case
+    # (`CONNECT_FORM_PAGES`), and this answer carries the same policy. Anywhere else - paste-back
+    # mode, or the UI opened at another address - the answer is a same-origin page with a plain
+    # link to Spotify: a link click is not a form submission, so it works in every browser.
+    one_click = spotify_connect.one_click_form_action(request.headers.get("host", ""), config.ui.public_url)
+    if callback_mode and one_click:
+        response = RedirectResponse(url, status_code=303)
+        response.headers["content-security-policy"] = content_security_policy(form_action=one_click)
+        return response
     context = _settings_context(web, text, config)
-    # Never a redirect, in either mode: every page's CSP has `form-action 'self'`, and Chromium and
-    # WebKit browsers check form-action on each redirect of a form submission, so a 303 from this
-    # POST to accounts.spotify.com is silently dropped there. A link click is not a form
-    # submission, so a same-origin page with a plain link to Spotify works in every browser.
     context["spotify_continue_url" if callback_mode else "spotify_authorize_url"] = url
     return web.render(request, "settings.html", context)
 

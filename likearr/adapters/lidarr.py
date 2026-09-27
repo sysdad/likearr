@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import re
 import time
-import unicodedata
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import replace
 from datetime import date, datetime
@@ -28,6 +27,7 @@ import httpx
 
 from likearr.adapters.http import HttpError, RedirectRefused, redact, request_with_retries, safe_url
 from likearr.config import LIDARR_URL_ENV, ConfigError, LidarrConfig
+from likearr.core.normalize import credits_match, normalize_name, normalize_title, strip_bare_featuring
 from likearr.models import (
     LidarrAlbum,
     LidarrArtist,
@@ -68,15 +68,6 @@ _FULL_SECONDARY = frozenset({"Studio", "Compilation", "Soundtrack", "Live"})
 _ALLOWED_RELEASE_STATUSES = frozenset({"Official"})
 
 _VERSION_RE = re.compile(r"^(\d+)\.")
-_NON_ALNUM_RE = re.compile(r"[^0-9a-z]+")
-_PAREN_RE = re.compile(r"[\(\[\{][^\)\]\}]*[\)\]\}]")
-
-
-def _normalize(value: str) -> str:
-    """Small private normaliser for the conservative equality checks in this adapter."""
-    folded = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii").lower()
-    folded = _PAREN_RE.sub(" ", folded).replace("&", " and ")
-    return _NON_ALNUM_RE.sub(" ", folded).strip()
 
 
 def _as_date(value: object) -> date | None:
@@ -383,13 +374,22 @@ class LidarrClient:
         search always gave, and only a *second artist* - Jungle the London band and Jungle the US
         one, say - changes anything: the resolver then decides between them on the track's ISRC,
         or refuses to, as it does for MusicBrainz's candidates.
+
+        Names are compared with the core normaliser - `normalize_title` for the title, `credits_match`
+        for the artist - which keeps letters in every script (issue #5). This adapter used to fold
+        to ASCII, so a name written wholly in Japanese, Cyrillic or Greek folded to "" and any two
+        such artists compared equal. A side that still folds to "" matches nothing.
         """
         if not artist.strip() or not title.strip():
             return ()
         results = self._metadata_request("GET", "album/lookup", params={"term": f"{artist} {title}"})
         if not isinstance(results, list):
             return ()
-        want_title, want_artist = _normalize(title), _normalize(artist)
+        want_title = normalize_title(title)
+        if not want_title or not normalize_name(strip_bare_featuring(artist)):
+            # Nothing left to compare once folded ("(Live)", or combining marks alone). An empty
+            # string equals every other empty string, so it can never be evidence of a match.
+            return ()
         found: dict[str, ReleaseGroup] = {}
         for raw in results:
             if not isinstance(raw, Mapping):
@@ -397,7 +397,7 @@ class LidarrClient:
             group = _release_group_from(raw)
             if group is None:
                 continue
-            if _normalize(group.title) == want_title and _normalize(group.artist_name) == want_artist:
+            if normalize_title(group.title) == want_title and credits_match(group.artist_name, artist):
                 found.setdefault(group.artist_mbid, group)
         return tuple(found.values())
 

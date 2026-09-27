@@ -350,6 +350,113 @@ def test_search_candidates_for_one_artist_are_exactly_the_old_answer(lidarr: Lid
     assert lidarr.search_release_group_candidates("", "Fake Album") == ()
 
 
+# ---------------------------------------------------------------- issue #5: non-Latin names
+
+# Invented names. Each pair shares a title in one script under two different artists.
+NON_LATIN_STRANGERS = [
+    pytest.param("夜明けの歌", "青い鳥", "赤い月", id="japanese"),
+    pytest.param("Белая ночь", "Снежный дуб", "Тёмный лес", id="cyrillic"),
+    pytest.param("Θάλασσα", "Αστέρι", "Φεγγάρι", id="greek"),
+    pytest.param("밤의 노래", "푸른 새", "붉은 달", id="korean"),
+]
+
+
+@respx.mock
+@pytest.mark.parametrize(("title", "wanted", "stranger"), NON_LATIN_STRANGERS)
+def test_search_candidates_refuse_a_same_titled_album_by_another_non_latin_artist(
+    lidarr: LidarrClient, title: str, wanted: str, stranger: str
+) -> None:
+    """Issue #5: an ASCII-only fold turned every non-Latin name into "", so any two such artists
+    compared equal and the fallback handed back a stranger's same-titled album."""
+    respx.get(f"{V1}/album/lookup").mock(
+        return_value=httpx.Response(200, json=[_lookup_hit("rg-stranger", title, "artist-stranger", stranger)])
+    )
+
+    assert lidarr.search_release_group_candidates(wanted, title) == ()
+
+
+@respx.mock
+@pytest.mark.parametrize(("title", "wanted", "stranger"), NON_LATIN_STRANGERS)
+def test_search_candidates_refuse_another_non_latin_title_by_the_same_artist(
+    lidarr: LidarrClient, title: str, wanted: str, stranger: str
+) -> None:
+    """The title side of the same fold: two different non-Latin titles are not one title."""
+    respx.get(f"{V1}/album/lookup").mock(
+        return_value=httpx.Response(200, json=[_lookup_hit("rg-other", stranger, "artist-wanted", wanted)])
+    )
+
+    assert lidarr.search_release_group_candidates(wanted, title) == ()
+
+
+@respx.mock
+@pytest.mark.parametrize(
+    ("spotify_artist", "lidarr_artist", "spotify_title", "lidarr_title"),
+    [
+        pytest.param(
+            "ｱｵｲﾄﾘ",
+            "アオイトリ",
+            "ﾔﾅｶﾞﾜ",
+            "ヤナガワ",
+            id="half-width-and-full-width-katakana",
+        ),
+        pytest.param(
+            "\N{CYRILLIC CAPITAL LETTER SHORT I}орданка",
+            "\N{CYRILLIC CAPITAL LETTER I}\N{COMBINING BREVE}орданка",
+            "Зимний сад",
+            "Зимни\N{CYRILLIC SMALL LETTER I}\N{COMBINING BREVE} сад",
+            id="precomposed-and-combining-cyrillic",
+        ),
+        pytest.param(
+            "\N{GREEK CAPITAL LETTER ALPHA WITH TONOS}ντρο",
+            "\N{GREEK CAPITAL LETTER ALPHA}\N{COMBINING ACUTE ACCENT}ντρο",
+            "\N{GREEK CAPITAL LETTER NU}\N{GREEK SMALL LETTER UPSILON WITH TONOS}χτα",
+            "\N{GREEK CAPITAL LETTER NU}\N{GREEK SMALL LETTER UPSILON}\N{COMBINING ACUTE ACCENT}χτα",
+            id="precomposed-and-combining-greek",
+        ),
+        pytest.param(
+            "\N{FULLWIDTH LATIN CAPITAL LETTER A}\N{FULLWIDTH LATIN SMALL LETTER R}\N{FULLWIDTH LATIN SMALL LETTER I}"
+            "\N{FULLWIDTH LATIN SMALL LETTER E}\N{FULLWIDTH LATIN SMALL LETTER L}",
+            "Ariel",
+            "海の色",
+            "海の色",
+            id="full-width-and-half-width-latin",
+        ),
+    ],
+)
+def test_search_candidates_match_one_artist_and_title_written_two_ways(
+    lidarr: LidarrClient, spotify_artist: str, lidarr_artist: str, spotify_title: str, lidarr_title: str
+) -> None:
+    """The core fold (NFKD, combining marks dropped) makes these one string, so they still match."""
+    respx.get(f"{V1}/album/lookup").mock(
+        return_value=httpx.Response(200, json=[_lookup_hit(RG_MBID, lidarr_title, ARTIST_MBID, lidarr_artist)])
+    )
+
+    found = lidarr.search_release_group_candidates(spotify_artist, spotify_title)
+
+    assert [g.mbid for g in found] == [RG_MBID]
+
+
+@respx.mock
+def test_search_candidates_never_match_on_two_titles_that_normalise_to_nothing(lidarr: LidarrClient) -> None:
+    """A title that is only a qualifier normalises to "" under `normalize_title`; two such titles
+    must not be "equal" because both came out empty."""
+    respx.get(f"{V1}/album/lookup").mock(
+        return_value=httpx.Response(200, json=[_lookup_hit("rg-demo", "(Demo)", ARTIST_MBID, "Fake Band")])
+    )
+
+    assert lidarr.search_release_group_candidates("Fake Band", "(Live)") == ()
+
+
+@respx.mock
+def test_search_candidates_never_match_on_two_credits_that_normalise_to_nothing(lidarr: LidarrClient) -> None:
+    """Combining marks alone fold to "" on both sides: an empty credit is no credit at all."""
+    respx.get(f"{V1}/album/lookup").mock(
+        return_value=httpx.Response(200, json=[_lookup_hit("rg-marks", "Fake Album", "artist-marks", "́")])
+    )
+
+    assert lidarr.search_release_group_candidates("̀", "Fake Album") == ()
+
+
 # ---------------------------------------------------------------------------- add artist
 
 
