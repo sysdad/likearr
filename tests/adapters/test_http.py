@@ -14,6 +14,7 @@ from likearr.adapters.http import (
     build_client,
     default_retry_on,
     redact,
+    redact_literals,
     request_with_retries,
     safe_url,
     sent_secrets,
@@ -70,6 +71,25 @@ def test_redact_replaces_literals_it_was_given() -> None:
 
 def test_redact_ignores_short_literals() -> None:
     assert redact("status ok", literals=["ok"]) == "status ok"
+
+
+@pytest.mark.parametrize("ending", ["\n", "\r", "\r\n"])
+def test_redact_literals_also_catches_the_repr_escaped_form(ending: str) -> None:
+    """Issue #7: h11 refuses a header value ending in CR or LF, and its message quotes the value's
+    repr, where the line ending is two characters (a backslash and a letter), not a real one."""
+    literal = SECRET + ending
+    escaped = repr(literal.encode())[2:-1]
+    assert escaped != literal
+
+    out = redact_literals(f"LocalProtocolError: Illegal header value b'{escaped}'", [literal])
+
+    assert SECRET not in out
+    assert out == "LocalProtocolError: Illegal header value b'REDACTED'"
+
+
+def test_redact_literals_still_replaces_the_raw_form_of_an_escaped_literal() -> None:
+    literal = SECRET + "\n"
+    assert redact_literals(f"raw {literal} end", [literal]) == "raw REDACTED end"
 
 
 def test_sent_secrets_collects_header_and_field_values() -> None:
