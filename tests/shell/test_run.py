@@ -11,10 +11,18 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import MagicMock, patch
 
+import h11
+import httpx
 import pytest
+import respx
 
-from likearr.config import ScheduleConfig
+from likearr.adapters.health import MqttSink, WebhookSink
+from likearr.adapters.http import build_client
+from likearr.adapters.lidarr import LidarrClient
+from likearr.config import MqttSinkConfig, ScheduleConfig, WebhookSinkConfig
+from likearr.logging_setup import setup_logging
 from likearr.models import (
     EXIT_BUSY,
     EXIT_ERROR,
@@ -258,6 +266,71 @@ def test_source_error_stops_before_any_lidarr_call(tmp_path: Path, sink: Capturi
     assert sink.last.spotify_ok is False
     assert sink.last.status is RunStatus.ERROR
     assert "QUOTA_EXCEEDED" in sink.last.message
+
+
+RAW_NEWLINE_KEY_BODY = "fake-lidarr-key-0123456789"
+LEAK_HOOK = "https://hook.test/likearr"
+
+
+def _h11_refuses_the_headers(request: httpx.Request) -> httpx.Response:
+    """What the real transport does with a header value ending in CR or LF: h11 refuses it before
+    anything is sent, and httpx re-raises its message - which quotes the value - unchanged."""
+    try:
+        h11.Request(method=request.method, target=request.url.raw_path, headers=list(request.headers.raw))
+    except h11.LocalProtocolError as exc:
+        raise httpx.LocalProtocolError(str(exc), request=request) from exc
+    raise AssertionError("h11 accepted the header, so this test would prove nothing")
+
+
+@respx.mock
+def test_a_lidarr_key_with_a_raw_newline_reaches_no_error_log_webhook_or_mqtt_payload(
+    tmp_path: Path, sink: CapturingSink, capsys: pytest.CaptureFixture[str], preserve_root_logging: None
+) -> None:
+    """Issue #7. Config strips the key when it reads it; this builds the client with the raw key to
+    prove the redaction behind that stripping holds on its own, all the way to every sink.
+
+    Logging is set up as `likearr run -v` sets it up, after `capsys`, so every log line lands on
+    the captured stderr through likearr's own handler.
+    """
+    setup_logging(verbose=True)
+    logging.getLogger("likearr.test").debug("capture check")
+    source, lookup, _lidarr = followed_world()
+    respx.route(host="lidarr.test").mock(side_effect=_h11_refuses_the_headers)
+    webhook = respx.post(LEAK_HOOK).mock(return_value=httpx.Response(200))
+    mqtt_client = MagicMock()
+    http = build_client()
+    lidarr = LidarrClient(
+        make_config(tmp_path).lidarr, http, api_key=RAW_NEWLINE_KEY_BODY + "\n", sleep=lambda _s: None
+    )
+    sinks = [
+        sink,
+        WebhookSink(WebhookSinkConfig(url=LEAK_HOOK)),
+        MqttSink(MqttSinkConfig(host="mqtt.test", topic="likearr/health")),
+    ]
+
+    with (
+        patch("likearr.adapters.health.mqtt.Client", return_value=mqtt_client),
+        make_context(tmp_path, source=source, lookup=lookup, lidarr=lidarr, sinks=sinks) as ctx,  # type: ignore[arg-type]
+    ):
+        code = run_command(ctx, now=NOW, out=tmp_path / "diff.json", do_apply=True, scheduled=True)
+    http.close()
+
+    assert code == EXIT_ERROR
+    assert "LocalProtocolError" in sink.last.message, "the transport-error path was not the one taken"
+    assert webhook.called
+    mqtt_client.publish.assert_called_once()
+    _topic, mqtt_payload = mqtt_client.publish.call_args[0]
+    captured = capsys.readouterr()
+    assert "capture check" in captured.err, "stderr was not captured, so this test would prove nothing"
+    assert "LocalProtocolError" in captured.err, "the error was never logged"
+    seen = {
+        "error": sink.last.message,
+        "log (stderr)": captured.err,
+        "stdout": captured.out,
+        "webhook": webhook.calls.last.request.content.decode(),
+        "mqtt": str(mqtt_payload),
+    }
+    assert not {where for where, text in seen.items() if RAW_NEWLINE_KEY_BODY in text}
 
 
 def test_a_dry_run_records_what_it_saw_for_explain(tmp_path: Path, sink: CapturingSink) -> None:

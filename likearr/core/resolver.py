@@ -113,8 +113,9 @@ def _from_links(
             detail=(
                 f"MusicBrainz links the Spotify artist {intent.name!r} to {len(linked)} artists and "
                 f"none of them is in Lidarr, so which one you mean cannot be decided: "
-                f"{'; '.join(c.describe() for c in linked)}. Nothing of theirs is monitored. Add the "
-                "right one in Lidarr, or fix the incorrect link in MusicBrainz, and re-run."
+                f"{'; '.join(c.describe() for c in linked)}. likearr adds nothing new for this follow "
+                "until it's settled; anything already monitored stays as it is. Add the right one in "
+                "Lidarr, or fix the incorrect link in MusicBrainz, and re-run."
             ),
         )
     return ArtistResolution(
@@ -207,8 +208,9 @@ def resolve_artist(
             detail=(
                 f"MusicBrainz has {len(exact)} artists named {intent.name!r} and no link from the Spotify "
                 f"artist to settle it, so which one you mean cannot be decided: "
-                f"{'; '.join(f'{n} ({m})' for m, n in exact)}. Nothing of theirs is monitored. Link the right "
-                "one to the Spotify artist on MusicBrainz and re-run, or add them in Lidarr by hand."
+                f"{'; '.join(f'{n} ({m})' for m, n in exact)}. likearr adds nothing new for this follow "
+                "until it's settled; anything already monitored stays as it is. Link the right one to "
+                "the Spotify artist on MusicBrainz and re-run, or add them in Lidarr by hand."
             ),
         )
     mbid, name = exact[0]

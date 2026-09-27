@@ -79,6 +79,9 @@ jobs:
           {
             echo "LIKEARR_TEST_LIDARR_API_KEY=${key}"
             echo "LIKEARR_TEST_LIDARR_URL=http://127.0.0.1:8686"
+            # /config exists and is writable in every Servarr image regardless of mount layout -
+            # the container is freshly started and empty, so this is never a real library.
+            echo "LIKEARR_TEST_LIDARR_ROOT=/config"
           } >> "$GITHUB_ENV"
 
       - run: uv sync --extra dev --locked
