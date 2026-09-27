@@ -89,7 +89,9 @@ class LidarrConfig:
 
     @property
     def api_key(self) -> str:
-        key = os.environ.get("LIKEARR_LIDARR_API_KEY", "")
+        # Stripped (issue #7): a CR or LF left by a Windows-line-ending env file or a file-based
+        # Kubernetes Secret makes h11 refuse the header, quoting the whole key in its error.
+        key = os.environ.get("LIKEARR_LIDARR_API_KEY", "").strip()
         if not key:
             raise ConfigError("LIKEARR_LIDARR_API_KEY is not set")
         return key
@@ -108,14 +110,14 @@ class SpotifyConfig:
 
     @property
     def client_id(self) -> str:
-        cid = os.environ.get("LIKEARR_SPOTIFY_CLIENT_ID", "")
+        cid = os.environ.get("LIKEARR_SPOTIFY_CLIENT_ID", "").strip()  # stripped, as `api_key` (#7)
         if not cid:
             raise ConfigError("LIKEARR_SPOTIFY_CLIENT_ID is not set")
         return cid
 
     @property
     def client_secret(self) -> str | None:
-        return os.environ.get("LIKEARR_SPOTIFY_CLIENT_SECRET") or None
+        return os.environ.get("LIKEARR_SPOTIFY_CLIENT_SECRET", "").strip() or None
 
 
 @dataclass(frozen=True, slots=True)
