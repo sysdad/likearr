@@ -20,6 +20,13 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
 
 ### Fixed
 
+- `adopt` no longer plans to unmonitor every hand-monitored album of a followed artist whose
+  MusicBrainz catalogue could not be read, because it is too large to browse or because
+  MusicBrainz failed for that artist during the plan. Those albums are now held back, neither
+  claimed nor unmonitored, and the plan lists them as held with the reason, both in its printed
+  output and in a new `held` field of the plan file. The plan's existing fields are unchanged.
+  When MusicBrainz failed during the plan, a warning at the top of the output says the plan is
+  incomplete and suggests re-running `adopt` later. (#6)
 - The identity guard's commit check (the pre-push hook and CI) now also reads every line each
   pushed or pull-request commit added. A denylisted string added in one commit and removed in the
   next is caught, where before only the final tree was scanned and the string still reached the

@@ -18,7 +18,7 @@ from likearr.adapters.http import build_client
 from likearr.adapters.lock import run_lock
 from likearr.adapters.spotify import asks_for_write_scopes, authorized_request, can_read_collaborative, reauth_due
 from likearr.adapters.spotify_library import PlaylistEntry
-from likearr.core.adopt import adopt_digest, plan_adoption
+from likearr.core.adopt import HeldRelease, adopt_digest, plan_adoption
 from likearr.core.explain import explain_report, render_report
 from likearr.fsio import write_atomic
 from likearr.models import EXIT_ERROR, EXIT_OK, EXIT_STALE, RESOLVER_VERSION, LidarrView
@@ -400,12 +400,21 @@ def _adopt_plan(ctx: Context, *, keep_file: Path | None, out: Path, now: datetim
     view = _view_of_everything(ctx)
     adoption = plan_adoption(result.desired, view, owned, keep, now=now)
 
+    if not result.mb_ok:
+        # First, before the table: a degraded resolve can leave out more than the catalogues held
+        # below (a saved album whose lookup failed looks unwanted too), and the reader must know
+        # before reading a single row (#6).
+        emit("WARNING: MusicBrainz failed during this plan, so what the sources want is incomplete.")
+        emit("WARNING: releases it could not look up may be planned for unmonitor although a source wants them.")
+        emit("WARNING: re-run `likearr adopt` later, once MusicBrainz answers, and review that plan instead.")
+        emit("")
     emit(f"{'action':<10} {'artist':<28} {'title':<38} {'type':<12} files")
     # A claim on the keep list is kept by hand too; the label says so, so the reviewed plan shows it.
     rows = [
         *(("claim+keep" if r.is_manual else "claim", r.key) for r in adoption.claim),
         *(("keep", r.key) for r in adoption.keep_as_manual),
         *(("unmonitor", u.key) for u in adoption.unmonitor),
+        *(("held", h.key) for h in adoption.held),
     ]
     for label, key in rows:
         album = view.album(key)
@@ -432,6 +441,17 @@ def _adopt_plan(ctx: Context, *, keep_file: Path | None, out: Path, now: datetim
         f"{len(adoption.claim)} to claim, {len(adoption.keep_as_manual)} to keep, "
         f"{len(adoption.unmonitor)} to unmonitor"
     )
+    if adoption.held:
+        emit(
+            f"{len(adoption.held)} held back, neither claimed nor unmonitored, because their artist's "
+            "catalogue was not read; a later adopt sorts them:"
+        )
+        by_artist: dict[str, list[HeldRelease]] = {}
+        for item in adoption.held:
+            by_artist.setdefault(item.key.artist_mbid, []).append(item)
+        for mbid, items in sorted(by_artist.items(), key=lambda kv: _artist_label(view, kv[0]).casefold()):
+            count = f"{len(items)} album{'' if len(items) == 1 else 's'}"
+            emit(f"  {_artist_label(view, mbid)} ({count}): {items[0].reason}")
     # Adopt only records ownership. The next `likearr run` then sets "Monitor New Albums" to None on
     # every artist holding a claimed or kept release (#172), so the write is stated here, where the
     # decision is made.
@@ -488,6 +508,11 @@ def _adopt_apply(ctx: Context, plan_path: Path, *, now: datetime) -> int:
         ctx.lidarr.set_albums_monitored(album_ids[start : start + BATCH_SIZE], False)
     emit(f"ok    claimed {len(adoption.claim)}, kept {len(adoption.keep_as_manual)}, unmonitored {len(album_ids)}")
     return EXIT_OK
+
+
+def _artist_label(view: LidarrView, artist_mbid: str) -> str:
+    artist = view.artists.get(artist_mbid)
+    return (artist.name if artist else "") or artist_mbid
 
 
 def _clip(text: str, width: int) -> str:

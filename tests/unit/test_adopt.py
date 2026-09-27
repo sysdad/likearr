@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import pytest
+
 from likearr.core.adopt import plan_adoption
-from likearr.models import ReasonKind, ReleaseKey
+from likearr.core.desire import CATALOGUE_ERROR_STEP, CATALOGUE_TOO_LARGE_STEP
+from likearr.models import ArtistResolution, ReasonKind, ReleaseKey, ResolutionStatus
 from tests.unit.fakes import (
     NOW,
     lidarr_album,
@@ -147,3 +150,69 @@ def test_losing_the_state_database_means_owning_nothing_and_unmonitoring_nothing
         full_profile_id=20,
     )
     assert not result.unmonitor
+
+
+# ------------------------------------------- an artist whose catalogue could not be read (issue #6)
+
+
+def _unread(artist_mbid: str, step: str) -> ArtistResolution:
+    return ArtistResolution(
+        intent_key=f"artist:{artist_mbid}",
+        status=ResolutionStatus.UNMAPPED,
+        artist_mbid=artist_mbid,
+        artist_name="Test Artist",
+        step=step,
+    )
+
+
+@pytest.mark.parametrize("step", [CATALOGUE_TOO_LARGE_STEP, CATALOGUE_ERROR_STEP])
+def test_an_unread_catalogue_holds_back_every_album_of_that_artist(step: str) -> None:
+    """None of the artist's releases reached the desired set, so "no source wants it" is not known:
+    neither unmonitored nor claimed, but listed as held with the reason."""
+    wanted = rg("rg-1", "Saved Anyway")
+    unwanted = rg("rg-2", "Two")
+    kept = rg("rg-3", "Three")
+    view = _view(
+        lidarr_album(wanted, id=101, monitored=True),
+        lidarr_album(unwanted, id=102, monitored=True),
+        lidarr_album(kept, id=103, monitored=True),
+    )
+    desired = desired_state((wanted, [SAVED]), unmapped=[_unread(ARTIST, step)])
+
+    plan = plan_adoption(desired, view, {}, {"rg-3"}, now=NOW)
+
+    assert plan.unmonitor == []
+    assert plan.claim == []
+    assert plan.keep_as_manual == []
+    assert [(h.key.rg_mbid, h.title, h.step) for h in plan.held] == [
+        ("rg-1", "Saved Anyway", step),
+        ("rg-2", "Two", step),
+        ("rg-3", "Three", step),
+    ]
+    assert all(h.reason for h in plan.held)
+
+
+def test_an_artist_whose_catalogue_reads_is_not_held() -> None:
+    """The control: another artist's unread catalogue holds back only that artist's albums."""
+    ours = rg("rg-1", "Record")
+    theirs = rg("rg-9", "Other Record", artist_mbid="artist-9", artist_name="Other")
+    view = lidarr_view(
+        artists=[lidarr_artist(ARTIST), lidarr_artist("artist-9", id=9)],
+        albums=[lidarr_album(ours, id=101, monitored=True), lidarr_album(theirs, id=901, monitored=True)],
+    )
+    desired = desired_state(unmapped=[_unread("artist-9", CATALOGUE_ERROR_STEP)])
+
+    plan = plan_adoption(desired, view, {}, set(), now=NOW)
+
+    assert [u.key.rg_mbid for u in plan.unmonitor] == ["rg-1"]
+    assert [h.key.rg_mbid for h in plan.held] == ["rg-9"]
+
+
+def test_an_artist_unmapped_for_another_reason_is_not_held() -> None:
+    """Only a catalogue step says the releases are unknown. An artist that did not match is simply
+    not followed, and their hand-monitored albums are planned as before."""
+    album = rg("rg-1", "Record")
+    desired = desired_state(unmapped=[_unread(ARTIST, "search:no-match")])
+    plan = plan_adoption(desired, _view(lidarr_album(album, monitored=True)), {}, set(), now=NOW)
+    assert [u.key.rg_mbid for u in plan.unmonitor] == ["rg-1"]
+    assert plan.held == []
