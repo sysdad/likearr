@@ -50,7 +50,14 @@ from likearr.models import (
     SpotifyAlbumRef,
     SpotifyArtistRef,
 )
-from likearr.ports import LidarrArtistUnknown, LidarrError, LidarrMetadataError, SearchBudgetExceeded, SourceError
+from likearr.ports import (
+    LidarrArtistExists,
+    LidarrArtistUnknown,
+    LidarrError,
+    LidarrMetadataError,
+    SearchBudgetExceeded,
+    SourceError,
+)
 from likearr.shell.context import Context
 from tests.unit.fakes import FakeLookup, snapshot
 
@@ -256,6 +263,10 @@ class FakeLidarr:
     reject_add: set[str] = field(default_factory=set)
     """Artist MBIDs whose add Lidarr refuses for any other reason, such as a bad root folder: a
     plain `LidarrError`, which stops the apply."""
+    added_elsewhere: dict[str, bool] = field(default_factory=dict)
+    """Artist MBIDs someone adds to Lidarr just before likearr's own add (issue #4), each with
+    whether it carries the tags likearr's add sends (True: likearr's own add, from a run that
+    stopped before recording it). The add then meets Lidarr's 400 "already exists"."""
     unmonitor_added_artists: bool = False
     """Lidarr's real behaviour: POST /artist answers monitored=true, then `addOptions.monitor: none`
     leaves the stored artist unmonitored."""
@@ -372,6 +383,25 @@ class FakeLidarr:
             raise LidarrArtistUnknown(f"fake: Lidarr's metadata does not know this artist yet ({name}, {artist_mbid})")
         if artist_mbid in self.reject_add:
             raise LidarrError(f"fake: lidarr POST /artist: HTTP 400 - Root folder does not exist ({artist_mbid})")
+        if artist_mbid in self.added_elsewhere and artist_mbid not in self.artists:
+            self._next_artist_id += 1
+            self.seed(
+                LidarrArtist(
+                    id=self._next_artist_id,
+                    mbid=artist_mbid,
+                    name=name,
+                    monitored=True,
+                    monitor_new_items="all",
+                    metadata_profile_id=metadata_profile_id,
+                    quality_profile_id=quality_profile_id,
+                    tags=frozenset(tag_ids) if self.added_elsewhere[artist_mbid] else frozenset(),
+                )
+            )
+        if artist_mbid in self.artists:
+            raise LidarrArtistExists(
+                f"fake: lidarr POST /artist: HTTP 400 - This artist has already been added ({artist_mbid})",
+                self.artists[artist_mbid],
+            )
         self._next_artist_id += 1
         artist = LidarrArtist(
             id=self._next_artist_id,

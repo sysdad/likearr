@@ -92,7 +92,9 @@ def test_after_an_apply_the_view_carries_what_it_changed(tmp_path: Path) -> None
         ],
         unmonitor=[UnmonitorRelease(ReleaseKey("artist-1", "rg-dropped"), "Dropped", frozenset())],
     )
-    applied = SimpleNamespace(skipped_artists=[], unknown_artists=[], unmapped_in_lidarr=["artist-1/rg-refused"])
+    applied = SimpleNamespace(
+        skipped_artists=[], unknown_artists=[], foreign_artists=[], unmapped_in_lidarr=["artist-1/rg-refused"]
+    )
 
     last = _round_trip(
         tmp_path,

@@ -171,6 +171,7 @@ class _Applied(Protocol):
 
     skipped_artists: list[str]
     unknown_artists: list[str]
+    foreign_artists: list[str]
     unmapped_in_lidarr: list[str]
 
 
@@ -223,7 +224,8 @@ def last_run_facts(
 
 def _after_apply(view: LidarrView, executed: Diff, applied: _Applied) -> LidarrView:
     # An artist Lidarr refused to add is skipped the same way: it is not in Lidarr at all (#173).
-    skipped = set(applied.skipped_artists) | set(applied.unknown_artists)
+    # One someone else added first (#4) is in Lidarr, but none of the plan's changes to it were made.
+    skipped = set(applied.skipped_artists) | set(applied.unknown_artists) | set(applied.foreign_artists)
     refused = set(applied.unmapped_in_lidarr)
     artists = dict(view.artists)
     albums = {mbid: dict(by_rg) for mbid, by_rg in view.albums.items()}
