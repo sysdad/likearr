@@ -18,6 +18,14 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
   project. The phrase list is `scripts/narrative_lint_phrases.txt`; `narrative:allow` on a line
   keeps a real third-party hit.
 
+### Changed
+
+- With `[ui] public_url` set and likearr opened at that address, Connect Spotify in Settings, and
+  Clean up's "Authorize write access" button, now go straight to Spotify in one click. Those
+  two pages, and only those, allow forms to lead to `https://accounts.spotify.com` and the
+  `public_url` address. Opened at any other address, the "Continue to Spotify" link stays.
+  Paste-back mode is unchanged.
+
 ### Fixed
 
 - The identity guard's commit check (the pre-push hook and CI) now also reads every line each

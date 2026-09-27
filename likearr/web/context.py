@@ -32,7 +32,7 @@ from likearr.config import Config, ConfigError, load_config
 from likearr.playlist_names import NamesCache, names_path, read_names, write_names
 from likearr.shell.last_run import LastRun, read_last_run
 from likearr.web import prune, spotify_connect
-from likearr.web.auth import LoginLimiter
+from likearr.web.auth import LoginLimiter, content_security_policy
 from likearr.web.helpers import _names_of, _needs_reauth_ids_of, _not_owned_ids_of, _parse_playlists, _playlist_jobs
 from likearr.web.jobs import JOB_PHASE_APPLY, JobMeta, JobRefused, JobRunner, JobState
 from likearr.web.plans import EXPIRE_AFTER, plan_token_of_file
@@ -341,6 +341,10 @@ class _Web:
         for it directly (Jinja includes inherit the caller's context). ``cleanup_enabled`` (#148)
         goes in the same way and gates the nav's Clean up link. Both are `False` when config.toml
         does not load - the page's own `config_error` handling already says why.
+
+        The pages that can hold a form posting to ``/settings/spotify/connect`` (`CONNECT_FORM_PAGES`)
+        widen `form-action` when one-click Connect applies (#11,
+        `spotify_connect.one_click_form_action`); every other response keeps the default policy.
         """
         try:
             config: Config | None = self.config()
@@ -354,15 +358,31 @@ class _Web:
             base["job"] = self.runner.current()
             base["flash"] = request.session.pop("flash", None)
         if not (name.startswith("_") and request.headers.get("HX-Request") == "true"):
-            return self.templates.TemplateResponse(request, name, {**base, **context}, status_code=status_code)
-        # An htmx fragment: render it and its out-of-band nav copy together, the same way
-        # `TemplateResponse` itself renders (`request` defaulted into the context), into one
-        # response - never patch a rendered response's body and re-derive Content-Length by hand.
-        merged: dict[str, Any] = {**base, **context}
-        merged.setdefault("request", request)
-        html = self.templates.get_template(name).render(merged)
-        html += self._nav_running_template.render(job=self.runner.current(), oob=True)
-        return HTMLResponse(html, status_code=status_code)
+            response: Response = self.templates.TemplateResponse(
+                request, name, {**base, **context}, status_code=status_code
+            )
+        else:
+            # An htmx fragment: render it and its out-of-band nav copy together, the same way
+            # `TemplateResponse` itself renders (`request` defaulted into the context), into one
+            # response - never patch a rendered response's body and re-derive Content-Length by hand.
+            merged: dict[str, Any] = {**base, **context}
+            merged.setdefault("request", request)
+            html = self.templates.get_template(name).render(merged)
+            html += self._nav_running_template.render(job=self.runner.current(), oob=True)
+            response = HTMLResponse(html, status_code=status_code)
+        if name in CONNECT_FORM_PAGES and config is not None:
+            one_click = spotify_connect.one_click_form_action(request.headers.get("host", ""), config.ui.public_url)
+            if one_click:
+                response.headers["content-security-policy"] = content_security_policy(form_action=one_click)
+        return response
+
+
+CONNECT_FORM_PAGES = frozenset({"settings.html", "prune_review.html", "_prune_finish.html"})
+"""The templates that can hold a form posting to ``/settings/spotify/connect`` (#11): Settings'
+Connect Spotify, and Clean up's "Authorize write access on Spotify" in `_prune_finish.html`,
+included by `prune_review.html`. It is the page holding the form whose `form-action` the browser
+checks. The fragment is listed for a direct load, where it is the page; under htmx its header is
+never applied to the page it is swapped into, which carries its own."""
 
 
 def _web(request: Request) -> _Web:

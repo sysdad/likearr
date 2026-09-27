@@ -9,7 +9,7 @@ import pytest
 
 from likearr.adapters.spotify import ALL_SCOPES, READ_SCOPES
 from likearr.config import SpotifyConfig
-from likearr.web.spotify_connect import PendingSpotifyAuthStore, build_authorize
+from likearr.web.spotify_connect import PendingSpotifyAuthStore, build_authorize, one_click_form_action
 
 
 class FakeClock:
@@ -116,3 +116,45 @@ def test_build_authorize_asks_for_the_write_scopes_only_when_told(
 
     assert scope(plain) == READ_SCOPES
     assert scope(with_write) == ALL_SCOPES
+
+
+# ---------------------------------------------------------------- one-click Connect (#11)
+
+_PUBLIC = "https://likearr.example.org"
+_ALLOWED = ("https://accounts.spotify.com", "https://likearr.example.org")
+
+
+@pytest.mark.parametrize(
+    "host", ["likearr.example.org", "LIKEARR.Example.org", "likearr.example.org:443"], ids=["exact", "case", "443"]
+)
+def test_one_click_applies_when_the_host_is_the_public_url(host: str) -> None:
+    assert one_click_form_action(host, _PUBLIC) == _ALLOWED
+
+
+@pytest.mark.parametrize(
+    "host",
+    ["192.168.1.20:8080", "likearr.example.org:8080", "likearr:8080", "other.example.org", ""],
+    ids=["lan-ip", "other-port", "container-name", "other-host", "no-host"],
+)
+def test_one_click_does_not_apply_at_any_other_address(host: str) -> None:
+    assert one_click_form_action(host, _PUBLIC) == ()
+
+
+def test_one_click_does_not_apply_without_a_public_url() -> None:
+    assert one_click_form_action("likearr.example.org", "") == ()
+
+
+def test_a_public_url_port_is_part_of_its_origin() -> None:
+    public = "https://likearr.example.org:8443"
+    assert one_click_form_action("likearr.example.org:8443", public) == (
+        "https://accounts.spotify.com",
+        "https://likearr.example.org:8443",
+    )
+    assert one_click_form_action("likearr.example.org", public) == ()
+
+
+@pytest.mark.parametrize("public", ["https://a;b.example.org", "https://a b.example.org", "https://a,b.example.org"])
+def test_a_public_url_that_would_not_make_a_clean_csp_source_never_applies(public: str) -> None:
+    """The origin goes into a response header: anything beyond a plain host name keeps the link."""
+    host = urllib.parse.urlsplit(public).netloc
+    assert one_click_form_action(host, public) == ()
