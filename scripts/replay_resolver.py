@@ -39,6 +39,26 @@ What it does, and what it cannot do:
 
 The `--compare` mode prints one line per intent whose release group differs from the baseline in
 the first result file, and says for each whether the other result files (other code) differ too.
+
+**The Lidarr fallback check** (issue #5). The resolver replay above has no Lidarr: an answer that
+Lidarr's album search supplied after a MusicBrainz miss replays as a miss. And Lidarr's search
+responses are never stored - `lidarr_negative_cache` keeps only the terms that failed - so no replay
+can reproduce what Lidarr returned. What the snapshot does hold, for every answer the name search
+matched, is Spotify's artist and album title (quoted in the detail) and the release group that
+matched. Lidarr must have returned that release group, so the check hands exactly it to the code
+under test's `LidarrClient.search_release_group_candidates`, through a stand-in transport, and
+records whether that code still accepts it for Spotify's names. A refusal is a move to UNMAPPED.
+It cannot see a *new* acceptance: what Lidarr returned beside the stored answer is not stored, and
+an unmapped intent is not stored either.
+
+Each row carries where the answer most likely came from, read off `mb_cache`: ``musicbrainz`` when
+a cached name search lists the release group (Lidarr was never asked, so a refusal there changes
+nothing), ``lidarr-fallback`` when the search is cached but does not list it, and ``unknown`` when
+the search is not cached at all. It also carries ``ascii_fold_empty``: whether the ASCII-only fold
+the Lidarr adapter used before #5 turns any of the four compared names into "" - the case #5 fixes.
+
+Only counts go to standard output. The per-row detail stays in the result file (``--out``), and
+`--compare` writes the rows that moved to ``--lidarr-detail`` when given. Keep both files local.
 """
 
 from __future__ import annotations
@@ -52,6 +72,7 @@ import shutil
 import sqlite3
 import sys
 import tempfile
+import unicodedata
 from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -67,6 +88,13 @@ _BARCODE = re.compile(r"^barcode (\S+) is release group")
 _TRACK_NAME = re.compile(rf"(?:^Spotify filed |^){_REPR}")
 _HOLDING = re.compile(rf"holding {_REPR} was")
 _RULES_TOKEN = re.compile(r"^c([01])r([01])(k0)?$")
+_NAME_MATCH = re.compile(
+    rf"(?:^|; ){_REPR} - {_REPR} matched release group {_REPR} \((\S+)\) by name( after stripping)?"
+)
+_SAME_NAME = re.compile(rf"\d+ different artists named {_REPR} each have a release titled {_REPR}: ")
+_OLD_PAREN = re.compile(r"[\(\[\{][^\)\]\}]*[\)\]\}]")
+_OLD_NON_ALNUM = re.compile(r"[^0-9a-z]+")
+_LIDARR_STAND_IN = "http://lidarr-stand-in.invalid"
 
 
 def _rules_from_token(token: str, rules_type: type) -> Any:
@@ -135,6 +163,131 @@ def _isrc_index(
     return by_rg, by_title
 
 
+def _old_ascii_fold(value: str) -> str:
+    """The Lidarr adapter's own normaliser before #5, frozen here only to label rows: it folded to
+    ASCII, so a name written wholly in a non-Latin script came out as ""."""
+    folded = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii").lower()
+    folded = _OLD_PAREN.sub(" ", folded).replace("&", " and ")
+    return _OLD_NON_ALNUM.sub(" ", folded).strip()
+
+
+def _lidarr_album(rg: dict[str, Any]) -> dict[str, Any]:
+    """A stored release group as Lidarr's ``album/lookup`` would return it."""
+    return {
+        "foreignAlbumId": rg.get("mbid"),
+        "title": rg.get("title") or "",
+        "albumType": rg.get("primary_type"),
+        "secondaryTypes": list(rg.get("secondary_types") or []),
+        "releaseDate": rg.get("first_release_date"),
+        "artist": {"foreignArtistId": rg.get("artist_mbid") or "", "artistName": rg.get("artist_name") or ""},
+    }
+
+
+def _search_source(con: sqlite3.Connection, mb_key: str, rg_mbid: str) -> str:
+    """Where a name-search answer most likely came from; see the module docstring."""
+    held = False
+    for key in (f"rg-search:{mb_key}", f"rg-search-free:{mb_key}"):
+        row = con.execute("SELECT body, negative FROM mb_cache WHERE key = ?", (key,)).fetchone()
+        if row is None:
+            continue
+        held = True
+        if row[1]:
+            continue
+        for raw in json.loads(row[0]).get("release-groups") or []:
+            if isinstance(raw, dict) and str(raw.get("id") or "") == rg_mbid:
+                return "musicbrainz"
+    return "lidarr-fallback" if held else "unknown"
+
+
+def _searched(d: dict[str, Any], strip: Any) -> tuple[str, str, str] | None:
+    """Spotify's artist, the title the name search asked for, and the release group it matched,
+    read off a stored answer's detail; None when the detail records no name search."""
+    detail = str(d.get("detail") or "")
+    m = _NAME_MATCH.search(detail)
+    if m is not None:
+        return _unrepr(m[1]), strip(_unrepr(m[2])) if m[5] else _unrepr(m[2]), m[4]
+    same = _SAME_NAME.search(detail)
+    chosen = d.get("source_release_group") or d.get("release_group")
+    if same is not None and chosen:
+        # Several same-named artists, and the track's ISRC chose one (#32, #42). The quoted title is
+        # the one searched, already stripped when the retry found them.
+        return _unrepr(same[1]), _unrepr(same[2]), str(chosen.get("mbid") or "")
+    return None
+
+
+def lidarr_check(con: sqlite3.Connection, stored: list[tuple[str, dict[str, Any]]]) -> dict[str, Any]:
+    """Whether the code under test's Lidarr name search still accepts each stored name-search answer.
+
+    Offline: the stand-in transport answers ``album/lookup`` with the one stored release group and
+    refuses anything else, counting it. The API key is a placeholder, never the environment's.
+    """
+    from likearr.adapters.lidarr import LidarrClient
+    from likearr.adapters.musicbrainz import _normalize as mb_normalize  # the mb_cache key's own fold
+    from likearr.config import LidarrConfig
+    from likearr.core.normalize import strip_release_qualifiers
+
+    serving: list[dict[str, Any]] = []
+    other_requests = 0
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        nonlocal other_requests
+        if request.method == "GET" and request.url.path.endswith("/api/v1/album/lookup"):
+            return httpx.Response(200, json=serving)
+        other_requests += 1
+        return httpx.Response(599, text="the stand-in answers album/lookup only")
+
+    config = LidarrConfig(url=_LIDARR_STAND_IN, root_folder="/stand-in", quality_profile="stand-in")
+    rows: dict[str, dict[str, Any]] = {}
+    unparsed = 0
+    with httpx.Client(transport=httpx.MockTransport(handle)) as client:
+        lidarr = LidarrClient(config, client, api_key="stand-in-no-key", sleep=lambda _s: None)
+        for key, d in stored:
+            searched = _searched(d, strip_release_qualifiers)
+            if searched is None:
+                if str(d.get("step") or "").endswith(":search") and d.get("release_group"):
+                    unparsed += 1
+                continue
+            artist, title, mbid = searched
+            rg = next(
+                (g for g in (d.get("source_release_group"), d.get("release_group")) if g and g.get("mbid") == mbid),
+                None,
+            )
+            if rg is None:
+                unparsed += 1
+                continue
+            serving[:] = [_lidarr_album(rg)]
+            found = lidarr.search_release_group_candidates(artist, title)
+            names = (artist, title, str(rg.get("artist_name") or ""), str(rg.get("title") or ""))
+            rows[key] = {
+                "source": _search_source(con, f"{mb_normalize(artist)}|{mb_normalize(title)}", mbid),
+                "step": d.get("step"),
+                "ascii_fold_empty": any(not _old_ascii_fold(n) for n in names),
+                "accepted": any(g.mbid == mbid for g in found),
+                "spotify_artist": artist,
+                "spotify_title": title,
+                "stored_artist": rg.get("artist_name"),
+                "stored_title": rg.get("title"),
+                "stored_mbid": mbid,
+            }
+    return {"rows": rows, "unparsed": unparsed, "other_requests": other_requests}
+
+
+def _lidarr_counts(check: dict[str, Any]) -> str:
+    by_source: dict[str, int] = defaultdict(int)
+    refused: dict[str, int] = defaultdict(int)
+    for r in check["rows"].values():
+        by_source[r["source"]] += 1
+        if not r["accepted"]:
+            refused[r["source"]] += 1
+    order = ("lidarr-fallback", "unknown", "musicbrainz")
+    return (
+        f"lidarr fallback check: {len(check['rows'])} name-search answer(s) "
+        f"({', '.join(f'{s} {by_source[s]}' for s in order)}); refused by this code: "
+        f"{', '.join(f'{s} {refused[s]}' for s in order)}; {check['unparsed']} not parseable; "
+        f"{check['other_requests']} other Lidarr request(s) refused"
+    )
+
+
 def run(snapshot: Path, out: Path) -> None:
     import likearr
     from likearr.adapters.musicbrainz import MusicBrainzLookup
@@ -161,6 +314,7 @@ def run(snapshot: Path, out: Path) -> None:
     titles_normalized: dict[str, list[tuple[str, str]]] = defaultdict(list)
     for title, entries in isrcs_by_title.items():
         titles_normalized[normalize_title(title)].extend(entries)
+    lidarr = lidarr_check(ro, stored)
     ro.close()
 
     followed = frozenset(
@@ -268,12 +422,59 @@ def run(snapshot: Path, out: Path) -> None:
         "skipped": skipped,
         "network_attempts": transport.attempts,
         "results": results,
+        "lidarr_check": lidarr,
     }
     out.write_text(json.dumps(doc, indent=1, sort_keys=True))
     print(
         f"resolver {RESOLVER_VERSION}: {len(results)} of {len(stored)} replayed, {len(skipped)} skipped, "
         f"{transport.attempts} network attempt(s) refused"
     )
+    print(_lidarr_counts(lidarr))
+
+
+def compare_lidarr(first: Path, others: list[Path], detail: Path | None) -> None:
+    """Where the Lidarr fallback check moved between result files: counts to standard output, rows
+    to `detail` only. A move is expected when the other file accepts and this one refuses, the source
+    is ``lidarr-fallback`` or ``unknown``, and a name folds to "" under the old ASCII fold (#5)."""
+    main = json.loads(first.read_text()).get("lidarr_check")
+    if main is None:
+        print(f"\n{first.name} has no lidarr fallback check")
+        return
+    moved: dict[str, list[dict[str, Any]]] = {}
+    for p in others:
+        doc = json.loads(p.read_text()).get("lidarr_check")
+        if doc is None:
+            print(f"\n{p.name} has no lidarr fallback check")
+            continue
+        counts: dict[str, int] = defaultdict(int)
+        rows: list[dict[str, Any]] = []
+        for key in sorted(set(main["rows"]) | set(doc["rows"])):
+            a, b = main["rows"].get(key), doc["rows"].get(key)
+            if a is None or b is None:
+                counts["checked in one file only"] += 1
+                continue
+            if a["accepted"] == b["accepted"]:
+                continue
+            expected = (
+                b["accepted"]
+                and not a["accepted"]
+                and a["source"] in {"lidarr-fallback", "unknown"}
+                and a["ascii_fold_empty"]
+            )
+            label = "expected (#5)" if expected else "needs an explanation"
+            counts[f"{label}: {a['source']}, {p.stem} {_verdict(b)} -> {first.stem} {_verdict(a)}"] += 1
+            rows.append({"key": key, "expected": expected, first.stem: a, p.stem: b})
+        moved[p.stem] = rows
+        print(f"\nlidarr fallback check, {p.stem} -> {first.stem}: {len(rows)} answer(s) moved")
+        for label, n in sorted(counts.items()):
+            print(f"  {n:5d}  {label}")
+    if detail is not None:
+        detail.write_text(json.dumps(moved, indent=1, sort_keys=True))
+        print(f"rows written to {detail}")
+
+
+def _verdict(row: dict[str, Any]) -> str:
+    return "accepts" if row["accepted"] else "refuses"
 
 
 def compare(first: Path, others: list[Path]) -> None:
@@ -321,9 +522,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("snapshot", nargs="?", type=Path)
     parser.add_argument("--out", type=Path)
     parser.add_argument("--compare", nargs="+", type=Path, metavar="RESULT")
+    parser.add_argument(
+        "--lidarr-detail", type=Path, metavar="FILE", help="with --compare: write the Lidarr check's moved rows here"
+    )
     args = parser.parse_args(argv)
     if args.compare:
         compare(args.compare[0], args.compare[1:])
+        compare_lidarr(args.compare[0], args.compare[1:], args.lidarr_detail)
         return 0
     if args.snapshot is None or args.out is None:
         parser.error("give a snapshot and --out, or --compare")
