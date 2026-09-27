@@ -5,11 +5,16 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime, timedelta
 
+import httpx
 import pytest
+import respx
 
 from likearr.adapters.lookup import CompositeLookup
+from likearr.config import LidarrConfig
 from likearr.models import ArtistRelation, BarcodeMatch, IsrcRecording, PrimaryType, ReleaseGroup, SecondaryType
 from likearr.ports import CatalogueTooLarge, LidarrMetadataError, MetadataError, MetadataLookup
+
+from .conftest import FAKE_API_KEY, LIDARR_URL
 
 MB_GROUP = ReleaseGroup(
     mbid="00000000-0000-4000-8000-000000000001",
@@ -868,3 +873,45 @@ def test_a_failed_relationship_lookup_leaves_the_intent_unmapped_not_errored() -
     assert resolution.step == "track:album:search"
     assert result.metadata_errors == 0
     assert result.provisional == {intent.reason.key}
+
+
+# ---------------------------------------------------------------- issue #5: non-Latin names behind the fallback
+
+
+@respx.mock
+def test_behind_a_fallback_a_non_latin_stranger_with_the_same_title_stays_unmapped(
+    lidarr_config: LidarrConfig, client: httpx.Client
+) -> None:
+    """Issue #5, end to end through the real Lidarr adapter. MusicBrainz finds nothing, and Lidarr's
+    search returns a same-titled album by a different artist whose name is also non-Latin. The old
+    ASCII fold read both names as "" and resolved the saved album to that stranger."""
+    from likearr.adapters.lidarr import LidarrClient
+    from likearr.core.resolver import resolve_album
+    from likearr.models import ResolutionStatus
+    from tests.unit.fakes import album_intent, spotify_album
+
+    title, wanted, stranger = "夜明けの歌", "青い鳥", "赤い月"
+    lookup_route = respx.get(f"{LIDARR_URL}/api/v1/album/lookup").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {
+                    "foreignAlbumId": "00000000-0000-4000-8000-0000000000f5",
+                    "title": title,
+                    "albumType": "Album",
+                    "artist": {"foreignArtistId": "00000000-0000-4000-8000-0000000000e5", "artistName": stranger},
+                }
+            ],
+        )
+    )
+    lidarr = LidarrClient(lidarr_config, client, api_key=FAKE_API_KEY)
+    composite = CompositeLookup(FakeMusicBrainz(result=None), lidarr)
+
+    result = resolve_album(album_intent(spotify_album(title, artists=(wanted,))), composite)
+
+    assert lookup_route.called, "the fallback was taken"
+    assert result.status is ResolutionStatus.UNMAPPED
+    assert result.release_group is None
+    assert composite.provisional_release_groups == frozenset()
+    writes = [c.request for c in respx.calls if c.request.method != "GET"]
+    assert writes == [], "nothing was written to Lidarr"

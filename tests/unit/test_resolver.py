@@ -3266,7 +3266,7 @@ def test_resolve_all_passes_the_relationship_lookup_on() -> None:
     )
     resolution = result.resolutions[intent.reason.key]
     assert resolution.release_group == try_live
-    assert resolution.resolver_version == RESOLVER_VERSION == 11
+    assert resolution.resolver_version == RESOLVER_VERSION == 12
     assert not result.provisional
 
 

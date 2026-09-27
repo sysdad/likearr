@@ -20,6 +20,13 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
 
 ### Fixed
 
+- When MusicBrainz missed an album and likearr fell back to Lidarr's album search, an artist or
+  title written wholly in a non-Latin script (Japanese, Korean, Cyrillic, Greek and others) was
+  compared as an empty string. A same-titled album by a different non-Latin artist then matched,
+  and a run could add that artist and monitor the album. The fallback now compares names the same
+  way the MusicBrainz search does, in any script. `RESOLVER_VERSION` is now 12, so every cached
+  answer is recomputed on the first run after upgrading; only answers reached through the Lidarr
+  album-search fallback can change, and a wrong one becomes unmapped.
 - The identity guard's commit check (the pre-push hook and CI) now also reads every line each
   pushed or pull-request commit added. A denylisted string added in one commit and removed in the
   next is caught, where before only the final tree was scanned and the string still reached the
