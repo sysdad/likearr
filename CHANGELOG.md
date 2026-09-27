@@ -20,6 +20,11 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
 
 ### Fixed
 
+- The live Lidarr integration tests (`tests/integration/test_lidarr_live.py`) no longer delete an
+  artist they did not add, or default to an instance's existing root folder. The session now
+  fails immediately, with a clear message, unless the instance has no artists when it starts;
+  `LIKEARR_TEST_LIDARR_ROOT` is required and never inferred from the instance's own root folders;
+  and teardown deletes only the artist ids the tests themselves added.
 - The identity guard's commit check (the pre-push hook and CI) now also reads every line each
   pushed or pull-request commit added. A denylisted string added in one commit and removed in the
   next is caught, where before only the final tree was scanned and the string still reached the
