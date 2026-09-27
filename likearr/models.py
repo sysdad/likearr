@@ -22,7 +22,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import date, datetime
 
-RESOLVER_VERSION = 11
+RESOLVER_VERSION = 12
 """Bump when resolution rules change; cached resolutions with an older version are re-resolved.
 
 3: a followed artist resolves through MusicBrainz's Spotify URL relationship rather than a name
@@ -93,6 +93,14 @@ release credited to Art Blakey, while its release group is credited only to Art 
 Messengers, so 10 keyed the album to a new Art Blakey artist. A release group that cannot be
 fetched is now dropped from the barcode's answer instead. A dry run had already cached that wrong
 RESOLVED answer, and only a bump reaches a cached one.
+
+12: Lidarr's album-search fallback compares artist and title with the core normaliser instead of an
+ASCII-only fold of its own (issue #5). That fold turned a name written wholly in a non-Latin script
+into "", so for a saved album or a track's album that MusicBrainz missed, Lidarr's search could
+return a same-titled album by a different non-Latin artist and the credit check passed on "" == "".
+What re-resolves differently: answers reached through that fallback, which now need the title
+(`normalize_title`) and the credit (`credits_match`) to match, never on an empty string. MusicBrainz
+answers are untouched; every cached answer is recomputed once, as for any bump.
 
 Not bumped for #23, and that was the mistake 6 corrects: it changed which release the name search
 picks, and the old answers only survived because nothing re-resolved them.
