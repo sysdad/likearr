@@ -20,6 +20,13 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
 
 ### Fixed
 
+- An artist that a plan adds, but that someone else added to Lidarr first (by hand or through an
+  import list, between the plan and the apply), is no longer recorded as added by likearr. Before,
+  every later run forced that artist's "Monitor New Albums" to None. The apply now leaves such an
+  artist alone and logs why; one that carries likearr's tag is still recorded as likearr's own, as
+  after a run that stopped between adding it and recording it. A reviewed plan is now also refused
+  as stale when an artist it adds has appeared in Lidarr since it was made. A plan made by an
+  earlier version stays valid as long as none of its artists to add has appeared. (#4)
 - The identity guard's commit check (the pre-push hook and CI) now also reads every line each
   pushed or pull-request commit added. A denylisted string added in one commit and removed in the
   next is caught, where before only the final tree was scanned and the string still reached the

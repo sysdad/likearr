@@ -741,6 +741,53 @@ def test_remonitoring_an_artist_is_part_of_the_lidarr_digest() -> None:
     assert is_stale(result, "src", now) is True
 
 
+def _digest_now(result, view) -> str:
+    """`result`'s Lidarr digest recomputed against `view`, the way a reviewed apply does."""
+    return lidarr_digest(
+        view,
+        result.monitor,
+        result.unmonitor,
+        result.ratchets,
+        result.set_new_items_none,
+        result.monitor_artists,
+        result.refresh_artists,
+        [a.artist_mbid for a in result.add_artists],
+    )
+
+
+def test_an_artist_to_add_appearing_in_lidarr_makes_the_diff_stale() -> None:
+    """Issue #4: someone added the artist by hand after the plan. Applying it would record their
+    artist as likearr's, so the reviewed plan must be refused and re-planned instead."""
+    album = rg("rg-1", "Record")
+    result = diff(desired_state((album, [SAVED])), lidarr_view())
+    assert [a.artist_mbid for a in result.add_artists] == [ARTIST]
+
+    appeared = lidarr_view(artists=[lidarr_artist(ARTIST)])
+    assert is_stale(result, "src", _digest_now(result, lidarr_view())) is False
+    assert is_stale(result, "src", _digest_now(result, appeared)) is True
+
+
+def test_covering_the_adds_leaves_every_digest_as_it_was_at_plan_time() -> None:
+    """An artist to add is absent when planned, so it hashes nothing: a plan with adds digests
+    exactly as it did before adds were covered, and so does one without, so a reviewed plan made
+    by an earlier likearr is not refused as stale merely for the upgrade."""
+    album = rg("rg-1", "Record")
+    kept = rg("rg-2", "Kept", artist_mbid="artist-2", artist_name="Other")
+    view = lidarr_view(artists=[lidarr_artist("artist-2")], albums=[lidarr_album(kept, monitored=False)])
+    for desired in (desired_state((album, [SAVED]), (kept, [SAVED])), desired_state((kept, [SAVED]))):
+        result = diff(desired, view)
+        before = lidarr_digest(
+            view,
+            result.monitor,
+            result.unmonitor,
+            result.ratchets,
+            result.set_new_items_none,
+            result.monitor_artists,
+            result.refresh_artists,
+        )
+        assert result.lidarr_digest == before
+
+
 # --------------------------------------------------------------------------- guards
 
 
