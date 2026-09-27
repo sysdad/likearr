@@ -167,7 +167,7 @@ def test_start_logs_the_allowed_host_list(
     with caplog.at_level(logging.INFO, logger="likearr.web.app"):
         assert cli.main(["start", "-c", str(config_path)]) == EXIT_OK
 
-    (record,) = [r for r in caplog.records if "allowed_hosts" in r.message]
+    (record,) = [r for r in caplog.records if "LIKEARR_ALLOWED_HOSTS" in r.message]
     assert "testserver" in record.message
     assert "likearr.example.org" in record.message
 
@@ -219,9 +219,50 @@ def test_start_with_a_broken_config_is_one_line(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], no_context: None
 ) -> None:
     monkeypatch.setenv("LIKEARR_UI_PASSWORD", PASSWORD)
+    path = tmp_path / "config.toml"
+    path.write_text("this is not [ valid toml")
 
-    assert cli.main(["start", "-c", str(tmp_path / "missing.toml")]) == EXIT_ERROR
+    assert cli.main(["start", "-c", str(path)]) == EXIT_ERROR
     assert "config error" in capsys.readouterr().out
+
+
+def test_start_on_an_empty_data_dir_writes_the_config_and_serves_any_ipv4_address(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    no_context: None,
+    uvicorn_calls: list[dict[str, Any]],
+) -> None:
+    """Issue #3: the README's Compose block - environment variables and an empty `/data` - and
+    nothing else. The first start writes config.toml from the example and serves; the next start
+    reads that file unchanged."""
+    from starlette.testclient import TestClient
+
+    import likearr.web.server as server_module
+
+    monkeypatch.setattr(server_module, "setup_logging", lambda _verbose: None)
+    monkeypatch.setenv("LIKEARR_UI_PASSWORD", PASSWORD)
+    monkeypatch.setenv("LIKEARR_LIDARR_API_KEY", "compose-start-key")
+    monkeypatch.delenv("LIKEARR_ALLOWED_HOSTS")
+    data = tmp_path / "data"
+    data.mkdir()
+    path = data / "config.toml"
+
+    assert cli.main(["start", "-c", str(path)]) == EXIT_OK
+
+    assert "wrote a new config file" in capsys.readouterr().out
+    written = path.read_bytes()
+    assert written == (Path(__file__).resolve().parents[2] / "deploy" / "config.example.toml").read_bytes()
+    # No `with`: the lifespan (scheduler, start-time jobs) stays off; only the routing is exercised.
+    app = TestClient(uvicorn_calls[0]["app"])
+    assert app.get("/healthz", headers={"Host": "192.168.1.20:8770"}).status_code == 200
+    assert app.get("/healthz", headers={"Host": "likearr.example.org"}).status_code == 400
+
+    monkeypatch.setenv("LIKEARR_UI_PASSWORD", PASSWORD)  # `start` takes it out of the environment
+    assert cli.main(["start", "-c", str(path)]) == EXIT_OK
+    assert "wrote a new config file" not in capsys.readouterr().out
+    assert path.read_bytes() == written
+    assert len(uvicorn_calls) == 2
 
 
 def test_start_refuses_a_ui_block_with_a_problem(
@@ -229,10 +270,47 @@ def test_start_refuses_a_ui_block_with_a_problem(
 ) -> None:
     monkeypatch.setenv("LIKEARR_UI_PASSWORD", PASSWORD)
     path = tmp_path / "config.toml"
-    path.write_text(CONFIG.replace('allowed_hosts = ["testserver", "likearr.example.org"]', "allowed_hosts = []"))
+    path.write_text(CONFIG.replace("[ui]\n", '[ui]\ncli_command = ""\n'))
 
     assert cli.main(["start", "-c", str(path)]) == EXIT_ERROR
-    assert "[ui] allowed_hosts" in capsys.readouterr().out
+    assert "[ui] cli_command" in capsys.readouterr().out
+
+
+def test_start_refuses_bad_allowed_hosts_naming_the_variable(
+    config_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], no_context: None
+) -> None:
+    monkeypatch.setenv("LIKEARR_UI_PASSWORD", PASSWORD)
+    monkeypatch.setenv("LIKEARR_ALLOWED_HOSTS", "likearr.lan:8770")
+
+    assert cli.main(["start", "-c", str(config_path)]) == EXIT_ERROR
+    assert "LIKEARR_ALLOWED_HOSTS entries ['likearr.lan:8770']" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("line", "env"),
+    [
+        ('[lidarr]\nurl = "http://lidarr:8686"\n', "LIKEARR_LIDARR_URL"),
+        ('[musicbrainz]\ncontact = "you@example.invalid"\n', "LIKEARR_MUSICBRAINZ_CONTACT"),
+        ('[ui]\nallowed_hosts = ["likearr.lan"]\n', "LIKEARR_ALLOWED_HOSTS"),
+    ],
+)
+def test_start_refuses_a_removed_key_naming_its_variable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    no_context: None,
+    uvicorn_calls: list[dict[str, Any]],
+    line: str,
+    env: str,
+) -> None:
+    """An upgraded install that has not moved its settings yet does not start (#3)."""
+    monkeypatch.setenv("LIKEARR_UI_PASSWORD", PASSWORD)
+    path = tmp_path / "config.toml"
+    path.write_text(line)
+
+    assert cli.main(["start", "-c", str(path)]) == EXIT_ERROR
+    assert f"set {env} instead" in capsys.readouterr().out
+    assert uvicorn_calls == []
 
 
 def test_start_takes_the_password_out_of_the_environment(

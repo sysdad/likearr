@@ -45,7 +45,7 @@ from likearr.adapters.spotify import (
     reauth_due,
 )
 from likearr.adapters.state_sqlite import RunRow, SqliteState
-from likearr.config import Config, ConfigError, is_mbid, load_config
+from likearr.config import ALLOWED_HOSTS_ENV, Config, ConfigError, is_mbid, load_config
 from likearr.core.cron import next_fire
 from likearr.core.explain import STATUSES, deniable, deny_note, more_note
 from likearr.models import PHASE_MARKER_APPLY, PROGRESS_MARKER_POST_RESOLVE, Diff, HealthRecord, RunStatus
@@ -102,7 +102,7 @@ log = logging.getLogger(__name__)
 
 
 LOOPBACK_HOSTS = ("localhost", "127.0.0.1")
-"""Always allowed on top of `[ui] allowed_hosts`, so the container healthcheck on 127.0.0.1 keeps
+"""Always allowed on top of `LIKEARR_ALLOWED_HOSTS`, so the container healthcheck on 127.0.0.1 keeps
 working whatever the list says. Safe to allow: a rebinding page sends its own name as the host,
 never a loopback literal. No ``::1``: `AllowedHostMiddleware` compares only what precedes the first
 ":" of the Host header, so an IPv6 literal can never match."""
@@ -440,6 +440,7 @@ def status(request: Request) -> Response:
             "last_fire_reason": last_fire_reason,
             "recent_jobs": jobs[:5],
             "ui_errors": config.ui.errors,
+            "setup_needed": config.lidarr.setup_needed,
             "state_missing": state_missing,
             "lost_state": lost_state_sentence(view.tagged_without_state, config.lidarr.tag),
             "config_error": "",
@@ -1150,13 +1151,15 @@ def create_app(settings: WebSettings) -> ASGIApp:
     config = load_config(settings.config_path)
     if config.ui.errors:
         raise ConfigError("; ".join(config.ui.errors))
-    web = _Web(settings, config, after={**plans_routes.AFTER, **cleanup_routes.AFTER})
+    web = _Web(settings, config, after={**plans_routes.AFTER, **cleanup_routes.AFTER, **settings_routes.AFTER})
 
     @asynccontextmanager
     async def lifespan(_app: Starlette) -> AsyncIterator[None]:
         web.runner.recover()
         if settings.auto_fetch_names:
             await anyio.to_thread.run_sync(web.fetch_names_if_needed)
+        if settings.auto_preview_setup:
+            await anyio.to_thread.run_sync(settings_routes.preview_setup_if_needed, web)
         scheduler: Scheduler | None = None
         if settings.scheduler:
             assert_single_worker(settings.workers, reload=settings.reload)
@@ -1169,9 +1172,16 @@ def create_app(settings: WebSettings) -> ASGIApp:
         await anyio.to_thread.run_sync(web.runner.shutdown, settings.shutdown_timeout_s)
 
     hosts = list(dict.fromkeys([*config.ui.allowed_hosts, *LOOPBACK_HOSTS]))
-    log.info("likearr answers to host(s) %s ([ui] allowed_hosts)", ", ".join(hosts))
+    # Unset (#3): loopback plus any IPv4 address, and no host name - see AllowedHostMiddleware.
+    any_ipv4 = not config.ui.allowed_hosts
+    log.info(
+        "likearr answers to host(s) %s%s (%s)",
+        ", ".join(hosts),
+        " and any IPv4 address" if any_ipv4 else "",
+        ALLOWED_HOSTS_ENV,
+    )
     middleware = [
-        Middleware(AllowedHostMiddleware, allowed_hosts=hosts),
+        Middleware(AllowedHostMiddleware, allowed_hosts=hosts, any_ipv4=any_ipv4),
         Middleware(CrossOriginMiddleware),
         Middleware(SecureCookieMiddleware),
         Middleware(

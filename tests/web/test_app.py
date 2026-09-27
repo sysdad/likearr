@@ -203,7 +203,7 @@ def test_a_refused_host_is_named_along_with_the_setting_that_fixes_it(client: Te
     assert response.headers["content-type"].startswith("text/plain")
     assert '"192.168.1.50"' in response.text
     assert "8770" not in response.text
-    assert "[ui] allowed_hosts" in response.text
+    assert "LIKEARR_ALLOWED_HOSTS" in response.text
 
 
 def test_a_refused_host_still_carries_the_security_headers(client: TestClient) -> None:
@@ -227,7 +227,7 @@ def test_a_missing_host_gets_the_generic_message(client: TestClient) -> None:
     response = client.get("/healthz", headers={"Host": ""})
 
     assert response.status_code == 400
-    assert "[ui] allowed_hosts" in response.text
+    assert "LIKEARR_ALLOWED_HOSTS" in response.text
 
 
 def test_a_refused_host_logs_one_warning_and_stops_repeating_it(
@@ -1821,13 +1821,11 @@ def test_an_injected_limiter_is_the_one_used(data_dir: Path, fake_cli: list[str]
 
 def test_a_ui_block_problem_appearing_after_start_is_shown(client: TestClient, data_dir: Path) -> None:
     _login(client)
-    (data_dir / "config.toml").write_text(
-        CONFIG.replace('allowed_hosts = ["testserver", "likearr.example.org"]', "allowed_hosts = []")
-    )
+    (data_dir / "config.toml").write_text(CONFIG.replace("[ui]\n", '[ui]\ncli_command = ""\n'))
 
     page = client.get("/").text
 
-    assert "[ui] allowed_hosts" in page
+    assert "[ui] cli_command" in page
 
 
 @pytest.mark.parametrize("path", ["/loginx", "/login/x", "/healthz/x", "/healthzz"])
@@ -2169,11 +2167,9 @@ def test_the_waiting_for_a_download_note_links_to_lidarr_when_an_address_is_conf
 
 
 def test_the_waiting_for_a_download_note_has_no_link_without_a_lidarr_address(
-    client: TestClient, data_dir: Path
+    client: TestClient, data_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    (data_dir / "config.toml").write_text(
-        CONFIG.replace('url = "http://lidarr:8686"\n', 'url = "http://lidarr:8686?x=1"\n', 1)
-    )
+    monkeypatch.setenv("LIKEARR_LIDARR_URL", "http://lidarr:8686?x=1")
     _record_unmatched_run(data_dir)
     _login(client)
 

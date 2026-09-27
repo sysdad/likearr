@@ -38,7 +38,9 @@ comment out each service's `image:` line and uncomment the `build:` block below 
 Everything persistent (config, Spotify token, state database) lives under `/data`, a declared
 volume, and `/data` is also the container's working directory, so the default outputs (`diff.json`,
 `adopt.json`, `prune.json`, `promote-save.json`) land there without an `--out`. See
-`deploy/env.example` / `deploy/config.example.toml` for the files it expects in that volume.
+`deploy/env.example` / `deploy/config.example.toml` for the files it expects in that volume. On a
+first start with no `/data/config.toml`, `likearr start` writes one from the example itself
+(comments intact, never over an existing file), so a Compose install needs no hand-written config.
 
 **The data directory must be writable by whichever uid ends up running the container.** A NAS uid
 is rarely 1000: Synology starts at 1026, Unraid uses 99, TrueNAS apps use 568, and Docker on a
@@ -157,15 +159,28 @@ mounted and pass the command through unchanged - not through something that re-p
 
 ## Configuration
 
-Copy `deploy/config.example.toml` to `config.toml` (in your data directory) and fill in your
-Lidarr URL, root folder, quality profile, and MusicBrainz contact. Every key is commented in the
-example file.
+Settings come from two places, and each setting from exactly one of them:
 
-Copy `deploy/env.example` to `.env` (or wherever your process manager reads env vars from) and
-fill in `LIKEARR_LIDARR_API_KEY`, `LIKEARR_SPOTIFY_CLIENT_ID` and `LIKEARR_UI_PASSWORD` (the
-service refuses to start without the last one, or with one shorter than 16 characters;
-`openssl rand -base64 24` makes one). Secrets never go in the TOML
-file - only in environment variables. Don't commit the filled-in `.env`.
+- **Environment variables: where likearr runs and how it is reached, plus every secret.**
+  `LIKEARR_LIDARR_URL` (Lidarr's base URL, as this container reaches it), `LIKEARR_ALLOWED_HOSTS`
+  (optional, comma-separated host names the UI answers to - see "What it needs" below) and
+  `LIKEARR_MUSICBRAINZ_CONTACT` (optional: an email or URL MusicBrainz can reach you at; likearr's
+  project URL when unset), then the secrets `LIKEARR_LIDARR_API_KEY`, `LIKEARR_SPOTIFY_CLIENT_ID`
+  and `LIKEARR_UI_PASSWORD` (the service refuses to start without the last one, or with one shorter
+  than 16 characters; `openssl rand -base64 24` makes one). Copy `deploy/env.example` to `.env` (or
+  wherever your process manager reads env vars from), or put them in the Compose file's
+  `environment:` block. Don't commit the filled-in `.env`.
+- **`config.toml`: how likearr behaves** - everything Settings edits, and the rest of the keys in
+  `deploy/config.example.toml`, each commented there. `likearr start` writes it from the example on
+  a first start when there is none, or copy the example yourself. A `[lidarr] url`,
+  `[ui] allowed_hosts` or `[musicbrainz] contact` in it fails the load, naming the environment
+  variable to use instead.
+
+The two keys with no default, `[lidarr] root_folder` and `quality_profile`, are picked in Settings,
+under Lidarr setup, from Lidarr's own lists once a preview has asked Lidarr for them (the service
+previews by itself at start while either is unset, and a Lidarr with exactly one root folder has it
+picked with no question). Or set them in `config.toml` by hand. Until both are set, Status and
+Doctor say so, and every run - hand or scheduled, plan or apply - refuses with that message.
 
 ## First run: authenticate with Spotify
 
@@ -496,8 +511,8 @@ accounts. A household with several Spotify accounts runs one instance per accoun
 
 2. **Give each instance its own `/data` directory** (state database, token file and
    `config.toml`), as separate compose services or container instances - see
-   [`deploy/compose.example.yaml`](../deploy/compose.example.yaml). Each also needs its own `[ui]`
-   block (`allowed_hosts`, and `public_url` if used), port and `LIKEARR_UI_PASSWORD`.
+   [`deploy/compose.example.yaml`](../deploy/compose.example.yaml). Each also needs its own
+   `LIKEARR_ALLOWED_HOSTS` (if set), `[ui] public_url` (if used), port and `LIKEARR_UI_PASSWORD`.
 3. **Connect each instance from its own browser session**, signed in as that instance's account -
    see [`docs/spotify.md`, "Adding another person"](spotify.md#adding-another-person) for the trap
    (Connect authorizes whichever account the browser is signed into) and how to check which
@@ -594,14 +609,22 @@ leaves a `config.toml.bak-YYYYMMDD-HHMMSS` beside it (the newest 30 are kept).
   makes one). `likearr start` refuses to start without it or with a shorter one. Every
   host on the LAN can reach the published port over plain http, which is why the UI authenticates
   for itself; keep the password in your password manager.
-- A `[ui]` block in `config.toml` (see `deploy/config.example.toml`): `allowed_hosts` is every name
-  and IPv4 address you will browse to, without a port (`localhost` and `127.0.0.1` are always
-  allowed on top, for the healthcheck); `lidarr_url` is where a browser reaches Lidarr, for the
-  Status page's links (it defaults to `[lidarr] url`, which may be a name only the containers can
-  resolve). Optionally `public_url` - this service's own `https://` address - offers Spotify
-  Connect's direct-callback mode instead of paste-back; leave it unset to keep
-  paste-back as the only mode. A mistake in this block never stops a run - runs ignore it - but
-  `likearr start` refuses to start and names it, and the Status page shows one made later.
+- `LIKEARR_ALLOWED_HOSTS` in the environment, when you browse to likearr by a name: every host
+  name (and, if you like, IPv4 address) you will use, comma-separated, without a port. Unset, the
+  UI answers to any IPv4 address - `http://192.168.1.20:8770` works with nothing to configure -
+  but to no host name. Set, it answers only to the listed names and addresses. `localhost` and
+  `127.0.0.1` are always allowed on top, for the healthcheck. IPv6 literals are never accepted.
+  Why accepting any IPv4 address is safe: the check exists to stop DNS rebinding, where a hostile
+  web page points its own domain at likearr - and a browser then sends that domain as the `Host`
+  header, never a bare IP address, so IP literals do not open that path; the password still gates
+  every page.
+- A `[ui]` block in `config.toml` (see `deploy/config.example.toml`), all optional: `lidarr_url` is
+  where a browser reaches Lidarr, for the Status page's links (it defaults to `LIKEARR_LIDARR_URL`,
+  which may be a name only the containers can resolve). `public_url` - this service's own
+  `https://` address - offers Spotify Connect's direct-callback mode instead of paste-back; leave it
+  unset to keep paste-back as the only mode. A mistake in this block, or in
+  `LIKEARR_ALLOWED_HOSTS`, never stops a run - runs ignore both - but `likearr start` refuses to
+  start and names it, and the Status page shows one made later.
 - A `[schedule]` block: `cron` and `timezone` are when the in-service scheduler fires (default
   `"20 */6 * * *"` and `"UTC"` - most deployments set `timezone` explicitly, since a wrong guess at
   the host's local time is worse than an unfamiliar but correct one), edited from Settings, which
@@ -647,9 +670,9 @@ What the proxy must do, and why:
   browser used TLS. Check with your browser's devtools, or
   `curl -sk -D - -o /dev/null -X POST https://<proxy name>/login -d password=... | grep -i set-cookie`
   and look for `; secure`.
-- **Add the proxy's name to `[ui] allowed_hosts`.** likearr refuses any request whose `Host`
-  header isn't in the list (`likearr/config.py`, `UiConfig.allowed_hosts`); the proxy's name is
-  the `Host` a browser sends once you put it behind one.
+- **Add the proxy's name to `LIKEARR_ALLOWED_HOSTS`.** likearr refuses any request whose `Host`
+  header is a name that isn't in the list (`likearr/web/auth.py`, `AllowedHostMiddleware`); the
+  proxy's name is the `Host` a browser sends once you put it behind one.
 - **Give likearr its own host name behind the proxy.** The session cookie is scoped to the host,
   not the port (see above), so a name shared with another service on the same box would let that
   service read likearr's cookie.
@@ -783,9 +806,9 @@ These touch live infrastructure, so they are run by hand, in this order:
    name. Their absence is the access control; do not "fix" it by adding one.
 4. **Secret.** Create the password manager item, then put `LIKEARR_UI_PASSWORD` in the stack's
    `.env` from a structured read, never by printing it.
-5. **Config.** Add the `[ui]` block to the live `config.toml`: `allowed_hosts` with the UI's name
-   and the docker host's LAN address, and `lidarr_url` with the address a browser uses for Lidarr.
-   Set `[schedule] cron` and `timezone` too (or leave the defaults and adjust from Settings).
+5. **Config.** Set `LIKEARR_ALLOWED_HOSTS` in the stack's `.env` to the UI's name, and add
+   `[ui] lidarr_url` to the live `config.toml` with the address a browser uses for Lidarr. Set
+   `[schedule] cron` and `timezone` too (or leave the defaults and adjust from Settings).
 6. **Compose.** Back up `compose.yaml` (`compose.yaml.bak-YYYYMMDD-likearr`), add the service,
    pull the new image (or build it), `docker compose up -d likearr`. Check `docker ps` shows it
    healthy, then open the page from a phone on Wi-Fi and log in.

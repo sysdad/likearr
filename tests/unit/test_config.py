@@ -28,6 +28,7 @@ from likearr.config import (
     load_config,
     parse_config,
     validate_cron_and_timezone,
+    write_initial_config,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -35,15 +36,11 @@ EXAMPLE_CONFIG_PATH = REPO_ROOT / "deploy" / "config.example.toml"
 
 MINIMAL_RAW = {
     "lidarr": {
-        "url": "http://lidarr:8686",
         "root_folder": "/music",
         "quality_profile": "Standard",
     },
     "spotify": {
         "token_file": "token.json",
-    },
-    "musicbrainz": {
-        "contact": "me@example.invalid",
     },
     "state": {
         "db": "state.sqlite",
@@ -89,7 +86,7 @@ def test_parse_config_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     assert config.spotify.client_id == "spotify-client-id"
     assert config.spotify.client_secret is None
 
-    assert config.musicbrainz.contact == "me@example.invalid"
+    assert config.musicbrainz.contact == "https://github.com/sysdad/likearr"
     assert config.musicbrainz.base_url == "https://musicbrainz.org/ws/2"
     assert config.musicbrainz.min_interval_s == 1.0
     assert config.musicbrainz.negative_cache_days == 7
@@ -193,38 +190,153 @@ def test_parse_config_full_overrides(tmp_path: Path) -> None:
 # ---------------------------------------------------------------- missing required keys
 
 
+def test_an_empty_file_loads_with_a_default_or_an_unset_value_for_everything(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Issue #3: nothing in the file is required any more. Paths default beside it, the
+    deployment settings come from the environment, and the two `[lidarr]` keys a user picks in
+    Settings are empty - reported by `unset`, never a load failure."""
+    monkeypatch.delenv("LIKEARR_LIDARR_URL")
+
+    config = parse_config({}, base_dir=tmp_path)
+
+    assert config.spotify.token_file == tmp_path / "spotify-token.json"
+    assert config.state_db == tmp_path / "state.sqlite"
+    assert config.musicbrainz.contact == "https://github.com/sysdad/likearr"
+    assert config.lidarr.url == ""
+    assert (config.lidarr.root_folder, config.lidarr.quality_profile) == ("", "")
+    assert config.lidarr.unset == ("LIKEARR_LIDARR_URL", "[lidarr] root_folder", "[lidarr] quality_profile")
+    assert config.ui.allowed_hosts == ()
+    assert config.ui.errors == ()
+
+
+def test_the_deployment_settings_come_from_the_environment_stripped(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("LIKEARR_LIDARR_URL", " http://lidarr.example.test:8686/\r\n")
+    monkeypatch.setenv("LIKEARR_ALLOWED_HOSTS", " Likearr.Example.org , 192.168.1.20,likearr.example.org ")
+    monkeypatch.setenv("LIKEARR_MUSICBRAINZ_CONTACT", " someone@example.invalid\n")
+
+    config = parse_config(MINIMAL_RAW, base_dir=tmp_path)
+
+    assert config.lidarr.url == "http://lidarr.example.test:8686"
+    assert config.ui.allowed_hosts == ("likearr.example.org", "192.168.1.20")
+    assert config.musicbrainz.contact == "someone@example.invalid"
+    assert config.lidarr.unset == ()
+    assert config.lidarr.setup_needed == ""
+
+
 @pytest.mark.parametrize(
-    ("section", "key"),
+    ("value", "bad"),
     [
-        ("lidarr", "url"),
-        ("lidarr", "root_folder"),
-        ("lidarr", "quality_profile"),
-        ("spotify", "token_file"),
-        ("musicbrainz", "contact"),
+        ("*.example.org", "*.example.org"),
+        ("likearr.lan:8770", "likearr.lan:8770"),
+        ("fd00::20", "fd00::20"),
+        ("a.example.org,,b.example.org", ""),
     ],
 )
-def test_parse_config_missing_required_key_raises(section: str, key: str, tmp_path: Path) -> None:
-    raw = {k: dict(v) for k, v in MINIMAL_RAW.items()}
-    del raw[section][key]
+def test_bad_allowed_hosts_are_a_recorded_problem_naming_the_env_var(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, value: str, bad: str
+) -> None:
+    monkeypatch.setenv("LIKEARR_ALLOWED_HOSTS", value)
 
-    with pytest.raises(ConfigError, match=rf"\[{section}\] is missing required key '{key}'"):
+    config = parse_config(MINIMAL_RAW, base_dir=tmp_path)
+
+    assert config.ui.allowed_hosts == ()
+    assert len(config.ui.errors) == 1
+    assert config.ui.errors[0].startswith("LIKEARR_ALLOWED_HOSTS entries")
+    assert repr(bad) in config.ui.errors[0]
+
+
+@pytest.mark.parametrize(
+    ("section", "key", "env"),
+    [
+        ("lidarr", "url", "LIKEARR_LIDARR_URL"),
+        ("ui", "allowed_hosts", "LIKEARR_ALLOWED_HOSTS"),
+        ("musicbrainz", "contact", "LIKEARR_MUSICBRAINZ_CONTACT"),
+    ],
+)
+def test_a_removed_key_fails_the_load_naming_its_env_var_without_echoing_the_value(
+    tmp_path: Path, section: str, key: str, env: str
+) -> None:
+    """Issue #3: these moved to the environment. `[ui]` never fails a load otherwise; this does."""
+    raw = _raw(**{section: {key: "VALUE-SENTINEL"}})
+
+    with pytest.raises(ConfigError) as caught:
         parse_config(raw, base_dir=tmp_path)
 
+    assert f"[{section}] {key} is no longer read from config.toml: set {env} instead" in str(caught.value)
+    assert "VALUE-SENTINEL" not in str(caught.value)
 
-def test_parse_config_missing_state_db_raises(tmp_path: Path) -> None:
-    raw = {k: dict(v) for k, v in MINIMAL_RAW.items()}
-    raw["state"] = {}
 
-    with pytest.raises(ConfigError, match=r"\[state\] is missing required key 'db'"):
+def test_every_removed_key_is_named_at_once(tmp_path: Path) -> None:
+    raw = _raw(lidarr={"url": "x"}, ui={"allowed_hosts": ["x"]}, musicbrainz={"contact": "x"})
+
+    with pytest.raises(ConfigError) as caught:
         parse_config(raw, base_dir=tmp_path)
 
+    for env in ("LIKEARR_LIDARR_URL", "LIKEARR_ALLOWED_HOSTS", "LIKEARR_MUSICBRAINZ_CONTACT"):
+        assert env in str(caught.value)
 
-def test_parse_config_missing_section_raises(tmp_path: Path) -> None:
-    raw = {k: dict(v) for k, v in MINIMAL_RAW.items()}
-    del raw["lidarr"]
 
-    with pytest.raises(ConfigError, match=r"\[lidarr\] is missing required key 'url'"):
-        parse_config(raw, base_dir=tmp_path)
+@pytest.mark.parametrize(
+    ("unset", "expected"),
+    [
+        ({"root_folder": ""}, "[lidarr] root_folder is not set"),
+        ({"quality_profile": ""}, "[lidarr] quality_profile is not set"),
+        ({"root_folder": "", "quality_profile": ""}, "[lidarr] root_folder and [lidarr] quality_profile are not set"),
+        ({"url": ""}, "LIKEARR_LIDARR_URL is not set"),
+    ],
+)
+def test_setup_needed_names_what_is_missing_and_where_to_set_it(unset: dict[str, str], expected: str) -> None:
+    lidarr = dataclasses.replace(
+        LidarrConfig(url="http://lidarr:8686", root_folder="/music", quality_profile="Standard"), **unset
+    )
+
+    message = lidarr.setup_needed
+
+    assert expected in message
+    if "url" in unset:
+        assert "environment" in message
+    else:
+        assert "Settings" in message
+
+
+def test_a_first_start_writes_the_example_and_the_next_load_reads_it_unchanged(tmp_path: Path) -> None:
+    """Issue #3's Compose start: an empty data directory and environment variables only."""
+    data = tmp_path / "data"
+    data.mkdir()
+    path = data / "config.toml"
+
+    assert write_initial_config(path) is True
+
+    written = path.read_bytes()
+    assert written == EXAMPLE_CONFIG_PATH.read_bytes(), "the example, comments and all"
+    assert path.stat().st_mode & 0o777 == 0o660
+    first = load_config(path)
+    assert first.state_db == data / "state.sqlite"
+    assert first.lidarr.url == "http://lidarr:8686"
+
+    assert write_initial_config(path) is False, "a second start never writes again"
+    assert path.read_bytes() == written
+    assert load_config(path) == first
+    assert [p.name for p in data.iterdir()] == ["config.toml"], "no temp file left behind"
+
+
+def test_a_first_start_never_overwrites_a_file_already_there(tmp_path: Path) -> None:
+    path = tmp_path / "config.toml"
+    path.write_text("# mine\n")
+
+    assert write_initial_config(path) is False
+    assert path.read_text() == "# mine\n"
+
+
+def test_a_first_start_never_writes_through_a_dangling_symlink(tmp_path: Path) -> None:
+    path = tmp_path / "config.toml"
+    path.symlink_to(tmp_path / "elsewhere.toml")
+
+    assert write_initial_config(path) is False
+    assert not (tmp_path / "elsewhere.toml").exists()
 
 
 def test_load_config_missing_file_raises(tmp_path: Path) -> None:
@@ -269,15 +381,11 @@ def test_load_config_resolves_relative_to_file_location(tmp_path: Path) -> None:
 
     toml_text = """
 [lidarr]
-url = "http://lidarr:8686"
 root_folder = "/music"
 quality_profile = "Standard"
 
 [spotify]
 token_file = "token.json"
-
-[musicbrainz]
-contact = "me@example.invalid"
 
 [state]
 db = "state.sqlite"
@@ -728,31 +836,30 @@ def test_denying_a_release_moves_the_plan_fingerprint(tmp_path: Path) -> None:
 # ---------------------------------------------------------------- [ui] (web UI, issue #29)
 
 
-def test_the_ui_block_is_optional_and_defaults_to_loopback_only(tmp_path: Path) -> None:
+def test_the_ui_block_is_optional_and_no_allowed_hosts_is_the_unset_default(tmp_path: Path) -> None:
     config = parse_config(_raw(), base_dir=tmp_path)
 
-    assert config.ui.allowed_hosts == ("localhost", "127.0.0.1")
+    assert config.ui.allowed_hosts == ()
+    assert config.ui.errors == ()
 
 
 def test_the_ui_block_is_read(tmp_path: Path) -> None:
     config = parse_config(
-        _raw(ui={"allowed_hosts": ["likearr.example.org", "192.168.1.20"]}),
+        _raw(ui={"cli_command": "ssh host likearr", "public_url": "https://likearr.example.org"}),
         base_dir=tmp_path,
     )
 
-    assert config.ui.allowed_hosts == ("likearr.example.org", "192.168.1.20")
+    assert config.ui.cli_command == "ssh host likearr"
+    assert config.ui.public_url == "https://likearr.example.org"
 
 
 @pytest.mark.parametrize(
     ("ui", "problem"),
     [
-        ({"allowed_hosts": "likearr.example.org"}, r"\[ui\] allowed_hosts"),
-        ({"allowed_hosts": []}, r"\[ui\] allowed_hosts"),
-        ({"allowed_hosts": ["ok.example.org", ""]}, r"\[ui\] allowed_hosts"),
-        ({"allowed_hosts": ["*"]}, r"\[ui\] allowed_hosts"),
-        ({"allowed_hosts": ["*.example.org"]}, r"\[ui\] allowed_hosts"),
-        ({"allowed_hosts": ["likearr.lan:8770"]}, r"\[ui\] allowed_hosts"),
-        ({"allowed_hosts": ["fd00::20"]}, r"\[ui\] allowed_hosts"),
+        ({"cli_command": ""}, r"\[ui\] cli_command"),
+        ({"public_url": "http://likearr.example.org"}, r"\[ui\] public_url"),
+        ({"lidarr_url": "ftp://x"}, r"\[ui\] lidarr_url"),
+        ({"allowed_host": ["x"]}, r"\[ui\] unknown key 'allowed_host'"),
     ],
 )
 def test_a_bad_ui_block_is_a_recorded_problem_never_a_load_failure(
@@ -768,21 +875,22 @@ def test_a_bad_ui_block_is_a_recorded_problem_never_a_load_failure(
 
 
 def test_a_bad_ui_value_falls_back_to_its_default(tmp_path: Path) -> None:
-    config = parse_config(_raw(ui={"allowed_hosts": "x"}), base_dir=tmp_path)
+    config = parse_config(_raw(ui={"cli_command": ""}), base_dir=tmp_path)
 
-    assert config.ui.allowed_hosts == ("localhost", "127.0.0.1")
+    assert config.ui.cli_command == "docker compose run --rm likearr-cli"
     assert len(config.ui.errors) == 1
 
 
 def test_a_good_ui_block_has_no_problems(tmp_path: Path) -> None:
-    config = parse_config(_raw(ui={"allowed_hosts": ["a.b"]}), base_dir=tmp_path)
+    config = parse_config(_raw(ui={"public_url": "https://a.b"}), base_dir=tmp_path)
 
     assert config.ui.errors == ()
 
 
-def test_the_ui_block_is_not_part_of_the_plan_fingerprint(tmp_path: Path) -> None:
+def test_the_ui_block_is_not_part_of_the_plan_fingerprint(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     before = parse_config(_raw(), base_dir=tmp_path)
-    after = parse_config(_raw(ui={"allowed_hosts": ["a.b"]}), base_dir=tmp_path)
+    monkeypatch.setenv("LIKEARR_ALLOWED_HOSTS", "a.b")
+    after = parse_config(_raw(ui={"cli_command": "x"}), base_dir=tmp_path)
 
     assert before.plan_fingerprint == after.plan_fingerprint
 
@@ -863,7 +971,7 @@ def test_the_old_ui_cron_keys_are_unknown_ui_keys_not_a_schedule(tmp_path: Path)
 def test_a_schedule_block_beside_ui_keys_loads_unchanged(tmp_path: Path) -> None:
     config = parse_config(
         _raw(
-            ui={"allowed_hosts": ["likearr.example.org"]},
+            ui={"lidarr_url": "https://lidarr.example.org"},
             schedule={"cron": "30 3 * * *", "timezone": "America/New_York"},
         ),
         base_dir=tmp_path,
@@ -943,10 +1051,12 @@ def test_a_lidarr_url_that_is_not_a_web_address_is_a_problem(tmp_path: Path, url
     assert any("lidarr_url" in e for e in config.ui.errors)
 
 
-def test_an_unset_lidarr_url_is_never_blamed_for_the_lidarr_url(tmp_path: Path) -> None:
-    raw = _raw(lidarr={"url": "lidarr:8686"})
+def test_an_unset_lidarr_url_is_never_blamed_for_the_lidarr_url(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("LIKEARR_LIDARR_URL", "lidarr:8686")
 
-    config = parse_config(raw, base_dir=tmp_path)
+    config = parse_config(_raw(), base_dir=tmp_path)
 
     assert config.ui.errors == ()
 
@@ -964,8 +1074,11 @@ def test_a_lidarr_url_urlsplit_chokes_on_or_that_carries_more_than_an_address_is
     assert any("lidarr_url" in e for e in config.ui.errors)
 
 
-def test_a_fallback_lidarr_url_a_browser_cannot_use_means_no_lidarr_links(tmp_path: Path) -> None:
-    config = parse_config(_raw(lidarr={"url": "lidarr:8686"}), base_dir=tmp_path)
+def test_a_fallback_lidarr_url_a_browser_cannot_use_means_no_lidarr_links(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("LIKEARR_LIDARR_URL", "lidarr:8686")
+    config = parse_config(_raw(), base_dir=tmp_path)
 
     assert config.ui.lidarr_url == ""
     assert config.ui.errors == ()
@@ -974,9 +1087,9 @@ def test_a_fallback_lidarr_url_a_browser_cannot_use_means_no_lidarr_links(tmp_pa
 def test_an_unknown_ui_key_is_a_recorded_problem_never_a_load_failure(tmp_path: Path) -> None:
     # Issue #110: a misspelt key must never do nothing in silence. [ui] stays checked-but-never-fatal,
     # so the cron run still loads; `start` refuses on the recorded problem and names it.
-    config = parse_config(_raw(ui={"allowed_host": ["a.b"]}), base_dir=tmp_path)
+    config = parse_config(_raw(ui={"public_ur": "https://a.b"}), base_dir=tmp_path)
 
-    assert config.ui.errors == ("[ui] unknown key 'allowed_host' (did you mean 'allowed_hosts'?)",)
+    assert config.ui.errors == ("[ui] unknown key 'public_ur' (did you mean 'public_url'?)",)
     assert config.lidarr.url == "http://lidarr:8686"
 
 
@@ -1148,8 +1261,8 @@ def test_a_native_toml_datetime_is_read_for_paused_at(tmp_path: Path) -> None:
     import tomllib
 
     text = (
-        '[lidarr]\nurl = "http://lidarr:8686"\nroot_folder = "/music"\nquality_profile = "Standard"\n'
-        '[spotify]\ntoken_file = "token.json"\n[musicbrainz]\ncontact = "me@example.invalid"\n'
+        '[lidarr]\nroot_folder = "/music"\nquality_profile = "Standard"\n'
+        '[spotify]\ntoken_file = "token.json"\n'
         '[state]\ndb = "state.sqlite"\n[schedule]\nenabled = false\npaused_at = 2026-01-05T18:00:00Z\n'
     )
     config = parse_config(tomllib.loads(text), base_dir=tmp_path)
@@ -1192,21 +1305,16 @@ def test_the_schedule_block_is_not_part_of_the_plan_fingerprint(tmp_path: Path) 
 # ---------------------------------------------------------------- deploy/config.example.toml
 
 
-def test_the_example_config_loads_and_sets_a_non_loopback_allowed_hosts_placeholder(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Guards against `[ui] allowed_hosts` being commented out again (issue #159): every new
-    install copies this file, and without a non-loopback entry the UI answers 400 to any host
-    other than localhost/127.0.0.1.
-    """
-    monkeypatch.setenv("LIKEARR_LIDARR_API_KEY", "lidarr-key")
-    monkeypatch.setenv("LIKEARR_SPOTIFY_CLIENT_ID", "spotify-client-id")
-
+def test_the_example_config_loads_as_written_leaving_only_the_library_to_pick() -> None:
+    """Issue #3: a first start writes this file verbatim, so it must load as it is, and must not
+    carry a placeholder root folder or quality profile that would be taken for a real choice."""
     config = load_config(EXAMPLE_CONFIG_PATH)
 
     assert config.ui.errors == ()
-    assert config.ui.allowed_hosts
-    assert any(h not in ("localhost", "127.0.0.1") for h in config.ui.allowed_hosts)
+    assert config.prune.errors == ()
+    assert config.lidarr.unset == ("[lidarr] root_folder", "[lidarr] quality_profile")
+    assert config.spotify.token_file.name == "spotify-token.json"
+    assert config.state_db.name == "state.sqlite"
 
 
 # ---------------------------------------------------------------- strict validation (issue #110)
@@ -1375,8 +1483,9 @@ def test_one_second_against_musicbrainz_org_loads(tmp_path: Path) -> None:
     assert config.musicbrainz.min_interval_s == 1.0
 
 
-def test_the_example_contact_placeholder_still_loads() -> None:
+def test_the_old_example_contact_placeholder_still_loads(monkeypatch: pytest.MonkeyPatch) -> None:
     # Option B (issue #110): Doctor warns about it; the load does not refuse it.
+    monkeypatch.setenv("LIKEARR_MUSICBRAINZ_CONTACT", PLACEHOLDER_CONTACT)
     config = load_config(EXAMPLE_CONFIG_PATH)
 
     assert config.musicbrainz.contact == PLACEHOLDER_CONTACT
@@ -1397,9 +1506,10 @@ def test_known_keys_match_the_dataclass_fields() -> None:
     def names(cls: type, *, minus: tuple[str, ...] = ()) -> set[str]:
         return {f.name for f in dataclasses.fields(cls)} - set(minus)
 
-    assert KNOWN_KEYS["lidarr"] == names(LidarrConfig)
+    # The deployment settings are fields, read from the environment, never keys (#3).
+    assert KNOWN_KEYS["lidarr"] == names(LidarrConfig, minus=("url",))
     assert KNOWN_KEYS["spotify"] == names(SpotifyConfig)
-    assert KNOWN_KEYS["musicbrainz"] == names(MusicBrainzConfig)
+    assert KNOWN_KEYS["musicbrainz"] == names(MusicBrainzConfig, minus=("contact",))
     assert KNOWN_KEYS["rules"] == names(RulesConfig)
     assert KNOWN_KEYS["guards"] == names(GuardsConfig)
     assert KNOWN_KEYS["health"] == names(HealthConfig)
@@ -1407,7 +1517,7 @@ def test_known_keys_match_the_dataclass_fields() -> None:
     assert KNOWN_KEYS["health.webhook"] == names(WebhookSinkConfig)
     assert KNOWN_KEYS["schedule"] == names(ScheduleConfig)
     assert KNOWN_KEYS["prune"] == names(PruneConfig, minus=("errors",))
-    assert KNOWN_KEYS["ui"] == names(UiConfig, minus=("errors",))
+    assert KNOWN_KEYS["ui"] == names(UiConfig, minus=("errors", "allowed_hosts"))
     # `[state]` fills two fields of `Config` itself.
     assert KNOWN_KEYS["state"] == {"db", "lock_file"}
     assert {"state_db", "lock_file"} <= names(Config)

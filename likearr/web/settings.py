@@ -20,7 +20,9 @@ documentation only), so a browser save has to be as careful as a hand edit:
 **The allowlist governs reading as well as writing.** The page renders these keys and nothing
 else: no path, no URL, no MusicBrainz contact, no ``[health]`` block, and never an environment
 value. Secrets never live in the TOML at all (see `likearr.config`), but the page does not rely
-on that.
+on that. The one exception is `LIBRARY_KEYS` (#3): `[lidarr] root_folder` and `quality_profile`
+are picked from Lidarr's own lists, not typed, so they have their own small form and
+`plan_library`, and go through the same `write_config` as everything else.
 
 Three kinds of change get a second confirm (`SaveCheck.confirm`): one that re-resolves liked and
 playlist tracks on the next run; one that loosens a guard, because a loosened guard applies
@@ -55,6 +57,7 @@ __all__ = [
     "BACKUP_KEEP",
     "FIELDS",
     "FIELD_BY_NAME",
+    "LIBRARY_KEYS",
     "PAUSED_REASON_LIMIT",
     "SCHEDULE_PREVIEW_COUNT",
     "Change",
@@ -67,6 +70,7 @@ __all__ = [
     "describe_changes",
     "file_hash",
     "parse_form",
+    "plan_library",
     "plan_pause",
     "plan_resume",
     "plan_save",
@@ -561,6 +565,33 @@ def plan_pause(text: str, reason: str, *, base_dir: Path, now: datetime) -> Save
         parse_config(tomllib.loads(new_text), base_dir=base_dir)
     except (ConfigError, tomllib.TOMLDecodeError) as exc:
         check.errors["schedule.paused_reason"] = str(exc)
+    return check
+
+
+LIBRARY_KEYS = ("root_folder", "quality_profile")
+"""The `[lidarr]` keys a first start leaves unset and Settings picks from Lidarr's lists (#3)."""
+
+
+def plan_library(text: str, chosen: Mapping[str, str], *, base_dir: Path) -> SaveCheck:
+    """Set `[lidarr] root_folder` and `quality_profile` from `chosen` (#3), each only when given and
+    different. No confirm: nothing is added to Lidarr until a plan is reviewed and applied."""
+    before = parse_config(tomllib.loads(text), base_dir=base_dir).lidarr
+    doc = tomlkit.parse(text)
+    if "lidarr" not in doc:
+        doc.add("lidarr", tomlkit.table())
+    changes: list[Change] = []
+    for key in LIBRARY_KEYS:
+        new = chosen.get(key, "")
+        old = getattr(before, key)
+        if new and new != old:
+            doc["lidarr"][key] = new  # type: ignore[index]
+            changes.append(Change("lidarr", key, old, new))
+    new_text = tomlkit.dumps(doc)
+    check = SaveCheck(new_text=new_text, changes=changes)
+    try:
+        parse_config(tomllib.loads(new_text), base_dir=base_dir)
+    except (ConfigError, tomllib.TOMLDecodeError) as exc:
+        check.errors["lidarr"] = str(exc)
     return check
 
 

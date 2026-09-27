@@ -83,6 +83,10 @@ class WebSettings:
     auto_preview_prune: bool = False
     """Start Clean up's read-only previews when a review is exported (`routes.cleanup.preview_prune`).
     `likearr start` turns it on; tests only where they test it, for the same reason."""
+    auto_preview_setup: bool = False
+    """Preview the Lidarr setup at start while a root folder or quality profile is not chosen yet
+    (#3, `routes.settings.preview_setup_if_needed`). `likearr start` turns it on; tests only where
+    they test it, for the same reason as `auto_fetch_names`."""
     scheduler: bool = False
     """Start the in-service scheduler (`likearr.web.schedule.Scheduler`) in the lifespan. `likearr
     start` turns it on; tests only where they test it, so a background thread computing `next_fire`

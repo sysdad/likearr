@@ -26,15 +26,11 @@ from likearr.web.schedule import (
 
 CONFIG = """\
 [lidarr]
-url = "http://lidarr:8686"
 root_folder = "/music"
 quality_profile = "Standard"
 
 [spotify]
 token_file = "spotify-token.json"
-
-[musicbrainz]
-contact = "contact@example.invalid"
 
 [state]
 db = "state.sqlite"

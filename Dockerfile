@@ -33,6 +33,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Now add the project itself and install it into the same venv.
 COPY likearr ./likearr
 COPY README.md ./
+# The example config `likearr start` writes to /data/config.toml on a first start with none (#3),
+# inside the package where `config.example_config_text` looks for it.
+COPY deploy/config.example.toml ./likearr/config.example.toml
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
@@ -98,8 +101,8 @@ WORKDIR /data
 # tools container (likearr-cli) passes its own command and never binds this port.
 EXPOSE 8770
 
-# Curl-free (no curl in this image) and on 127.0.0.1, which [ui] allowed_hosts always accepts
-# (tests/web/test_app.py). A fresh install with no state database yet still reads healthy: see
+# Curl-free (no curl in this image) and on 127.0.0.1, which the web UI always accepts, whatever
+# LIKEARR_ALLOWED_HOSTS says (tests/web/test_app.py). A fresh install with no state database yet still reads healthy: see
 # the healthz docstring in likearr/web/app.py and docs/DEPLOY.md, "Running it". likearr-cli never
 # binds the port and inherits this check too; its compose service disables it explicitly.
 HEALTHCHECK --interval=60s --timeout=10s --start-period=20s --retries=3 CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8770/healthz', timeout=5)"]

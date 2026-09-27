@@ -33,12 +33,15 @@ cross-site forgery, and still needs the session cookie.
 from __future__ import annotations
 
 import hmac
+import ipaddress
 import logging
 import time
 import urllib.parse
 from collections import deque
 from collections.abc import Callable, Mapping, MutableMapping, Sequence
 from typing import Any
+
+from likearr.config import ALLOWED_HOSTS_ENV
 
 __all__ = [
     "MAX_BODY_BYTES",
@@ -296,16 +299,26 @@ header nobody has checked yet."""
 
 _GENERIC_REFUSAL = (
     "likearr does not answer to this address. If you reached likearr at this address on purpose, "
-    "add it to [ui] allowed_hosts in config.toml and restart likearr. This check stops other web "
-    "pages from reaching likearr through your browser."
+    f"add it to {ALLOWED_HOSTS_ENV} in likearr's environment and restart likearr. This check stops "
+    "other web pages from reaching likearr through your browser."
 )
 
 _IPV6_REFUSAL = (
-    "likearr does not answer to this address. [ui] allowed_hosts cannot hold an IPv6 address - "
+    f"likearr does not answer to this address. {ALLOWED_HOSTS_ENV} cannot hold an IPv6 address - "
     "browse to likearr by its host name or an IPv4 address instead, or add that name to "
-    "[ui] allowed_hosts in config.toml and restart likearr. This check stops other web pages from "
-    "reaching likearr through your browser."
+    f"{ALLOWED_HOSTS_ENV} in likearr's environment and restart likearr. This check stops other web "
+    "pages from reaching likearr through your browser."
 )
+
+
+def _is_ipv4(host: str) -> bool:
+    """A dotted-quad IPv4 literal, strictly: four decimal parts, no leading zeros, no name that
+    merely looks numeric (`ipaddress` refuses ``1.2.3``, ``0x7f.1`` and ``01.2.3.4``)."""
+    try:
+        ipaddress.IPv4Address(host)
+    except ValueError:
+        return False
+    return True
 
 
 def _sanitized(value: str) -> str:
@@ -315,7 +328,7 @@ def _sanitized(value: str) -> str:
 
 
 def refused_host_message(host_header: str) -> str:
-    """The message for a Host header outside `[ui] allowed_hosts` (issue #169): names the refused
+    """The message for a Host header outside `ALLOWED_HOSTS_ENV` (issues #169, #3): names the refused
     host, sanitised (see `_sanitized`), and the setting that would admit it - conditional wording,
     because a hostile rebinding page might be the one reading this, not the person who typed the
     address on purpose, so it never reads as an order to add the sender's own name.
@@ -333,8 +346,8 @@ def refused_host_message(host_header: str) -> str:
         return _GENERIC_REFUSAL
     return (
         f'likearr does not answer to "{host}". If you reached likearr at this address on purpose, '
-        f'add "{host}" to [ui] allowed_hosts in config.toml and restart likearr. This check stops '
-        "other web pages from reaching likearr through your browser."
+        f'add "{host}" to {ALLOWED_HOSTS_ENV} in likearr\'s environment and restart likearr. This check '
+        "stops other web pages from reaching likearr through your browser."
     )
 
 
@@ -355,13 +368,26 @@ class AllowedHostMiddleware:
     Applies to `http` requests only, like the rest of this module's middleware. Nothing routes a
     websocket - `AuthGateMiddleware` closes every one unconditionally, regardless of Host - so the
     match this class would need for one is moot.
+
+    **With `any_ipv4` (`ALLOWED_HOSTS_ENV` unset, issue #3), any IPv4 literal is accepted as well**,
+    so a Compose install reached at its LAN address answers without naming that address first.
+    Host names are still refused. Security rationale: the hosts check exists to stop DNS
+    rebinding, where a hostile page re-points its own domain at this server and the browser then
+    sends that domain as the Host header. A rebinding page can only ever send a name it controls,
+    never a bare IP address - the browser's origin is the attacker's domain, and the Host header
+    follows the origin - so accepting IP literals does not open the rebinding path. What a bare IP
+    does allow, a person on the LAN typing the address, the network already allowed (the port is
+    published), and the login password still gates every page. "Trust the first host seen" was
+    rejected, because a rebinding page could win that race. IPv6 literals stay refused, as they
+    always have: the match compares only what precedes the first ":" of the header.
     """
 
     _MAX_LOGGED_HOSTS = 20
 
-    def __init__(self, app: ASGIApp, allowed_hosts: Sequence[str]) -> None:
+    def __init__(self, app: ASGIApp, allowed_hosts: Sequence[str], *, any_ipv4: bool = False) -> None:
         self.app = app
         self.allowed_hosts = frozenset(allowed_hosts)
+        self.any_ipv4 = any_ipv4
         self._logged: set[str] = set()
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
@@ -372,7 +398,7 @@ class AllowedHostMiddleware:
         # app builds its URLs from the first, so judging any other would check a name it never uses.
         raw_host = next((v.decode("latin-1") for k, v in scope.get("headers", []) if k.lower() == b"host"), "")
         matched = raw_host.split(":", 1)[0]
-        if matched in self.allowed_hosts:
+        if matched in self.allowed_hosts or (self.any_ipv4 and _is_ipv4(matched)):
             await self.app(scope, receive, send)
             return
         message = refused_host_message(raw_host)

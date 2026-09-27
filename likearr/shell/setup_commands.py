@@ -7,8 +7,8 @@ and creates it only when the user typed `--apply`.
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable
-from dataclasses import dataclass
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
@@ -17,7 +17,7 @@ from likearr.adapters.http import build_client
 from likearr.adapters.lidarr import metadata_profile_diff
 from likearr.adapters.spotify import authorized_request, describe_wait
 from likearr.adapters.state_sqlite import SCHEMA_VERSION
-from likearr.config import PLACEHOLDER_CONTACT
+from likearr.config import MUSICBRAINZ_CONTACT_ENV, PLACEHOLDER_CONTACT
 from likearr.core.diff import artists_by_normalized_name
 from likearr.models import EXIT_ERROR, EXIT_OK, LidarrView, Profile
 from likearr.ports import LidarrError, MetadataError, QuotaExceeded, SourceError
@@ -73,8 +73,8 @@ def doctor_command(ctx: Context, *, no_spotify: bool = False, as_json: bool = Fa
             Check(
                 "WARN",
                 "musicbrainz contact",
-                f"[musicbrainz] contact is still the example's {PLACEHOLDER_CONTACT}; set it to your email "
-                "or project URL, which MusicBrainz asks for so it can reach you",
+                f"{MUSICBRAINZ_CONTACT_ENV} is the old example's {PLACEHOLDER_CONTACT}; set it to your email "
+                "or project URL, which MusicBrainz asks for so it can reach you, or unset it to use likearr's own",
             )
         )
     checks.extend(_check_state(ctx))
@@ -149,7 +149,9 @@ def _check_lidarr(ctx: Context) -> list[Check]:
         folders = []
         out.append(Check("FAIL", "root folder", str(exc)))
     wanted = ctx.config.lidarr.root_folder
-    if folders:
+    if not wanted:
+        out.append(Check("FAIL", "root folder", _not_chosen("root_folder", folders)))
+    elif folders:
         if any(p.rstrip("/") == wanted.rstrip("/") for p in folders):
             out.append(Check("PASS", "root folder", f"{wanted} exists"))
         else:
@@ -158,7 +160,9 @@ def _check_lidarr(ctx: Context) -> list[Check]:
             )
 
     quality = ctx.config.lidarr.quality_profile
-    if quality in view.quality_profiles:
+    if not quality:
+        out.append(Check("FAIL", "quality profile", _not_chosen("quality_profile", sorted(view.quality_profiles))))
+    elif quality in view.quality_profiles:
         out.append(Check("PASS", "quality profile", f"{quality!r} -> id {view.quality_profiles[quality]}"))
     else:
         out.append(
@@ -187,6 +191,14 @@ def _check_lidarr(ctx: Context) -> list[Check]:
     out.extend(_check_duplicate_artists(view))
     out.extend(_check_unmonitored_artists(ctx, view))
     return out
+
+
+def _not_chosen(key: str, options: Sequence[str]) -> str:
+    """Doctor's line for a `[lidarr]` key a first start leaves unset (#3), with Lidarr's choices."""
+    return (
+        f"not set: no run plans or applies until it is. Pick one in Settings, under Lidarr setup, or set "
+        f"[lidarr] {key} in config.toml (Lidarr has: {', '.join(options) or 'none'})"
+    )
 
 
 LOST_STATE_SHOWN = 10
@@ -448,6 +460,10 @@ class SetupProfilesPlan:
     todo: list[str]
     """What `--apply` would create or change - the same lines the text output has always shown.
     Never includes a 'differs' profile (see `profiles`'s docstring): applying would not change it."""
+    root_folders: list[str] = field(default_factory=list)
+    """Every root folder Lidarr has, for Settings to pick `[lidarr] root_folder` from (#3)."""
+    quality_profiles: list[str] = field(default_factory=list)
+    """Every quality profile Lidarr has, for Settings to pick `[lidarr] quality_profile` from (#3)."""
 
     @property
     def needs_apply(self) -> bool:
@@ -460,6 +476,8 @@ class SetupProfilesPlan:
             "root_folder": self.root_folder,
             "todo": self.todo,
             "needs_apply": self.needs_apply,
+            "root_folders": self.root_folders,
+            "quality_profiles": self.quality_profiles,
         }
 
 
@@ -500,11 +518,14 @@ def _build_setup_profiles_plan(ctx: Context) -> SetupProfilesPlan:
         todo.append(f"create tag {config.lidarr.tag!r}")
 
     root = config.lidarr.root_folder
-    folder = next(
-        (f for f in ctx.lidarr.root_folders() if str(f.get("path") or "").rstrip("/") == root.rstrip("/")), None
-    )
+    folders = ctx.lidarr.root_folders()
+    folder = next((f for f in folders if str(f.get("path") or "").rstrip("/") == root.rstrip("/")), None)
     root_folder: dict[str, Any] = {"path": root}
-    if folder is None:
+    if not root:
+        # Not chosen yet (#3): nothing to create or change until Settings picks one.
+        root_folder["status"] = "unset"
+        root_folder["applies"] = False
+    elif folder is None:
         root_folder["status"] = "missing"
         root_folder["applies"] = True
         todo.append(f"create root folder {root!r} (monitor none / new items none)")
@@ -522,7 +543,14 @@ def _build_setup_profiles_plan(ctx: Context) -> SetupProfilesPlan:
         root_folder["status"] = "ok"
         root_folder["applies"] = False
 
-    return SetupProfilesPlan(profiles=profiles, tag=tag, root_folder=root_folder, todo=todo)
+    return SetupProfilesPlan(
+        profiles=profiles,
+        tag=tag,
+        root_folder=root_folder,
+        todo=todo,
+        root_folders=[str(f.get("path") or "") for f in folders if f.get("path")],
+        quality_profiles=sorted(view.quality_profiles),
+    )
 
 
 def _emit_setup_profiles_plan(plan: SetupProfilesPlan) -> None:
@@ -542,6 +570,8 @@ def _emit_setup_profiles_plan(plan: SetupProfilesPlan) -> None:
         emit(f"ok    tag {plan.tag['name']!r} exists (id {plan.tag['id']})")
     if plan.root_folder["status"] == "ok":
         emit(f"ok    root folder {plan.root_folder['path']!r} already defaults to monitor none")
+    elif plan.root_folder["status"] == "unset":
+        emit(f"warn  root folder: {_not_chosen('root_folder', plan.root_folders)}")
 
 
 def setup_profiles_command(ctx: Context, *, do_apply: bool = False, as_json: bool = False) -> int:
@@ -596,10 +626,11 @@ def setup_profiles_command(ctx: Context, *, do_apply: bool = False, as_json: boo
         folder = next(
             (f for f in ctx.lidarr.root_folders() if str(f.get("path") or "").rstrip("/") == root.rstrip("/")), None
         )
-        if folder is None:
+        # No root folder chosen yet (#3): `plan.root_folder` said so, and nothing is done to one.
+        if root and folder is None:
             ctx.lidarr.add_root_folder(root)
             emit(f"ok    root folder {root!r} created")
-        else:
+        elif root:
             ctx.lidarr.set_root_folder_defaults(root, "none", "none")
             emit(f"ok    root folder {root!r} defaults set to none/none")
     except LidarrError as exc:

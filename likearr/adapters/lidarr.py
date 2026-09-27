@@ -27,7 +27,7 @@ from typing import Any
 import httpx
 
 from likearr.adapters.http import HttpError, RedirectRefused, redact, request_with_retries, safe_url
-from likearr.config import LidarrConfig
+from likearr.config import LIDARR_URL_ENV, ConfigError, LidarrConfig
 from likearr.models import (
     LidarrAlbum,
     LidarrArtist,
@@ -152,6 +152,8 @@ class LidarrClient:
                 they never depend on the environment.
             sleep/monotonic: injected so command polling can be tested without waiting.
         """
+        if not config.url:
+            raise ConfigError(f"{LIDARR_URL_ENV} is not set")
         self._config = config
         self._client = client
         self._api_key = api_key if api_key is not None else config.api_key
@@ -187,8 +189,8 @@ class LidarrClient:
         except RedirectRefused as exc:
             # A login portal in front of Lidarr, usually: the key must not follow it there.
             raise LidarrError(
-                f"Lidarr at {safe_url(self._config.url).rstrip('/')} redirected to {exc.origin}; set [lidarr] url to "
-                "Lidarr itself (for example the container address), not a login page"
+                f"Lidarr at {safe_url(self._config.url).rstrip('/')} redirected to {exc.origin}; "
+                f"set {LIDARR_URL_ENV} to Lidarr itself (for example the container address), not a login page"
             ) from exc
         except HttpError as exc:
             raise LidarrError(f"lidarr {method} /{path.lstrip('/')}: {exc}") from exc

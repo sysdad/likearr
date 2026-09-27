@@ -22,7 +22,7 @@ from pathlib import Path
 from likearr import __version__
 from likearr.adapters.health import build_sinks
 from likearr.adapters.lock import LockHeld
-from likearr.config import UI_PASSWORD_ENV, UI_PASSWORD_MIN_LENGTH, ConfigError, load_config
+from likearr.config import UI_PASSWORD_ENV, UI_PASSWORD_MIN_LENGTH, ConfigError, load_config, write_initial_config
 from likearr.logging_setup import setup_logging
 from likearr.models import EXIT_BUSY, EXIT_ERROR
 from likearr.playlist_names import names_path
@@ -384,7 +384,11 @@ def _start(args: argparse.Namespace) -> int:
             f"use at least {UI_PASSWORD_MIN_LENGTH} (openssl rand -base64 24 makes one)"
         )
         return EXIT_ERROR
-    return serve(Path(args.config).resolve(), host=args.host, port=args.port, password=password, verbose=args.verbose)
+    config_path = Path(args.config).resolve()
+    # A first start with only Compose's environment and an empty volume (#3): no hand-written file.
+    if write_initial_config(config_path):
+        emit(f"wrote a new config file at {config_path} from the example; finish setting up in the browser")
+    return serve(config_path, host=args.host, port=args.port, password=password, verbose=args.verbose)
 
 
 def _held_without_state(args: argparse.Namespace) -> int | None:

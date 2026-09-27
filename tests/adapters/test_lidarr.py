@@ -898,7 +898,7 @@ def test_a_redirect_to_another_host_is_refused_and_the_key_never_leaves(location
 
     message = str(excinfo.value)
     assert message == (
-        f"Lidarr at http://lidarr.example.test:8686 redirected to {origin}; set [lidarr] url to Lidarr "
+        f"Lidarr at http://lidarr.example.test:8686 redirected to {origin}; set LIKEARR_LIDARR_URL to Lidarr "
         "itself (for example the container address), not a login page"
     )
     assert [r.url.host for r in seen] == ["lidarr.example.test"]

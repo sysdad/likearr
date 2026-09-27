@@ -1,8 +1,16 @@
-"""Configuration: one TOML file for everything deployment-specific, env vars for secrets.
+"""Configuration: env vars for secrets and for where likearr runs, one TOML file for behaviour.
 
-Nothing personal or site-specific lives in code. Secrets are never read from the TOML file.
+Nothing personal or site-specific lives in code. Secrets are never read from the TOML file, and
+neither are the deployment settings below (issue #3): each setting has one source, so there is
+nothing to reconcile. The file holds what the web UI edits; `likearr start` writes it from
+`deploy/config.example.toml` on a first start with none (`write_initial_config`).
 
-Env vars (secrets only):
+Env vars (deployment):
+  LIKEARR_LIDARR_URL            Lidarr's base URL (required to talk to Lidarr)
+  LIKEARR_ALLOWED_HOSTS         optional, comma-separated host names the web UI answers to
+  LIKEARR_MUSICBRAINZ_CONTACT   optional, MusicBrainz User-Agent contact; the project URL by default
+
+Env vars (secrets):
   LIKEARR_LIDARR_API_KEY        Lidarr API key (required)
   LIKEARR_SPOTIFY_CLIENT_ID     Spotify app client id (required for Spotify)
   LIKEARR_SPOTIFY_CLIENT_SECRET optional; PKCE flow needs none
@@ -17,6 +25,7 @@ import logging
 import math
 import os
 import re
+import secrets
 import sys
 import tomllib
 import unicodedata
@@ -28,6 +37,7 @@ from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from likearr.core.cron import CronError, min_interval_minutes, parse_cron
+from likearr.fsio import write_atomic
 from likearr.models import LIKED_TRACK_SCOPE_ALBUM, LIKED_TRACK_SCOPES, ExclusionRules
 
 log = logging.getLogger(__name__)
@@ -46,11 +56,43 @@ class ConfigError(Exception):
     pass
 
 
+LIDARR_URL_ENV = "LIKEARR_LIDARR_URL"
+ALLOWED_HOSTS_ENV = "LIKEARR_ALLOWED_HOSTS"
+MUSICBRAINZ_CONTACT_ENV = "LIKEARR_MUSICBRAINZ_CONTACT"
+DEFAULT_MUSICBRAINZ_CONTACT = "https://github.com/sysdad/likearr"
+"""The project URL: a normal MusicBrainz User-Agent contact when the install sets none (#3)."""
+
+DEFAULT_TOKEN_FILE = "spotify-token.json"
+DEFAULT_STATE_DB = "state.sqlite"
+"""`[spotify] token_file` and `[state] db` when the file leaves them out, relative to the config
+file's own directory - `/data` in the container, so `/data/spotify-token.json` and
+`/data/state.sqlite`, the names `deploy/config.example.toml` has always used."""
+
+
+def _setup_sentence(missing: tuple[str, ...]) -> str:
+    """`LidarrConfig.unset`'s names as one sentence saying how to set each, or ``""``."""
+    if not missing:
+        return ""
+    steps = []
+    if LIDARR_URL_ENV in missing:
+        steps.append(f"set {LIDARR_URL_ENV} in likearr's environment and restart it")
+    keys = [m.removeprefix("[lidarr] ") for m in missing if m.startswith("[lidarr] ")]
+    if keys:
+        words = " and ".join(k.replace("_", " ") for k in keys)
+        steps.append(f"pick the {words} in Settings, under Lidarr setup, or set {' and '.join(keys)} in config.toml")
+    verb = "is" if len(missing) == 1 else "are"
+    return f"likearr is not set up yet: {' and '.join(missing)} {verb} not set. To finish, {'; '.join(steps)}."
+
+
 @dataclass(frozen=True, slots=True)
 class LidarrConfig:
-    url: str
-    root_folder: str
-    quality_profile: str
+    url: str = ""
+    """From `LIDARR_URL_ENV`, never the file (#3). Empty when unset: the config still loads, so the
+    service starts and says what is missing, and building the Lidarr client refuses instead."""
+    root_folder: str = ""
+    """Empty until chosen (#3): a first start has none, and Settings or a single Lidarr root folder
+    fills it in. No run plans or applies while it or `quality_profile` is empty (`unset`)."""
+    quality_profile: str = ""
     lean_profile: str = "Lean"
     full_profile: str = "Full"
     tag: str = "likearr"
@@ -88,6 +130,25 @@ class LidarrConfig:
         return min(wanted, max(self.refresh_timeout_max_s, self.refresh_timeout_s))
 
     @property
+    def unset(self) -> tuple[str, ...]:
+        """What likearr cannot plan without that is not set yet, by the name the user sets it by."""
+        missing = [] if self.url else [LIDARR_URL_ENV]
+        missing += [f"[lidarr] {key}" for key in ("root_folder", "quality_profile") if not getattr(self, key)]
+        return tuple(missing)
+
+    @property
+    def setup_needed(self) -> str:
+        """`unset` as one sentence saying how to set each, or ``""`` when nothing is missing. The one
+        wording the Status banner and a refused run share."""
+        return _setup_sentence(self.unset)
+
+    @property
+    def library_needed(self) -> str:
+        """`setup_needed` for the root folder and quality profile alone: what a run refuses on. An
+        unset URL is refused where the Lidarr client is built, as the API key is."""
+        return _setup_sentence(tuple(m for m in self.unset if m != LIDARR_URL_ENV))
+
+    @property
     def api_key(self) -> str:
         # Stripped (issue #7): a CR or LF left by a Windows-line-ending env file or a file-based
         # Kubernetes Secret makes h11 refuse the header, quoting the whole key in its error.
@@ -122,8 +183,9 @@ class SpotifyConfig:
 
 @dataclass(frozen=True, slots=True)
 class MusicBrainzConfig:
-    contact: str
-    """Required by MusicBrainz's User-Agent policy: an email or project URL."""
+    contact: str = DEFAULT_MUSICBRAINZ_CONTACT
+    """Required by MusicBrainz's User-Agent policy: an email or project URL. From
+    `MUSICBRAINZ_CONTACT_ENV`, never the file (#3)."""
     base_url: str = "https://musicbrainz.org/ws/2"
     min_interval_s: float = 1.0
     negative_cache_days: int = 7
@@ -268,9 +330,6 @@ class HealthConfig:
     stdout: bool = True
 
 
-_LOOPBACK_HOSTS = ("localhost", "127.0.0.1")
-
-
 DEFAULT_CLI_COMMAND = "docker compose run --rm likearr-cli"
 """The documented install's way to run a likearr command (`deploy/compose.example.yaml`)."""
 MAX_CLI_COMMAND = 200
@@ -284,14 +343,16 @@ class UiConfig:
     which is why it is outside `Config.plan_fingerprint`.
     """
 
-    allowed_hosts: tuple[str, ...] = _LOOPBACK_HOSTS
-    """Host names (without a port) the web UI answers to. Anything else is refused before any page
-    is served, which is what stops DNS rebinding: a hostile page that rebinds its own name to this
-    server still sends its own name as the host. ``localhost`` and ``127.0.0.1`` are always
-    allowed on top of this list, for the container healthcheck. No wildcards, ports or IPv6."""
+    allowed_hosts: tuple[str, ...] = ()
+    """Host names (without a port) the web UI answers to, from `ALLOWED_HOSTS_ENV` (#3), never the
+    file. Anything else is refused before any page is served, which is what stops DNS rebinding: a
+    hostile page that rebinds its own name to this server still sends its own name as the host.
+    ``localhost`` and ``127.0.0.1`` are always allowed on top of this list, for the container
+    healthcheck. No wildcards, ports or IPv6. Empty (unset): loopback plus any IPv4 address, and
+    no host name (see `web.auth.AllowedHostMiddleware`)."""
     lidarr_url: str = ""
     """Where a browser reaches Lidarr, for the Status page's links (``https://lidarr.example.org``).
-    Defaults to `[lidarr] url`, which is what likearr itself calls and may be a container name no
+    Defaults to `LIDARR_URL_ENV`, which is what likearr itself calls and may be a container name no
     browser can resolve. Never called by likearr."""
     cli_command: str = DEFAULT_CLI_COMMAND
     """How a terminal on this install runs likearr, put in front of every command Clean up shows
@@ -390,13 +451,12 @@ class Config:
 
 
 PLACEHOLDER_CONTACT = "you@example.com"
-"""`[musicbrainz] contact` as `deploy/config.example.toml` ships it. Loads, but Doctor warns: it
-identifies nobody, which defeats MusicBrainz's reason for asking (issue #110)."""
+"""The MusicBrainz contact the example config used to ship. Still loads from the env var, but Doctor
+warns: it identifies nobody, which defeats MusicBrainz's reason for asking (issue #110)."""
 
 KNOWN_KEYS: dict[str, frozenset[str]] = {
     "lidarr": frozenset(
         {
-            "url",
             "root_folder",
             "quality_profile",
             "lean_profile",
@@ -412,7 +472,7 @@ KNOWN_KEYS: dict[str, frozenset[str]] = {
     "spotify": frozenset(
         {"token_file", "playlists", "redirect_uri", "followed_artists", "saved_albums", "liked_tracks"}
     ),
-    "musicbrainz": frozenset({"contact", "base_url", "min_interval_s", "negative_cache_days", "positive_cache_days"}),
+    "musicbrainz": frozenset({"base_url", "min_interval_s", "negative_cache_days", "positive_cache_days"}),
     "state": frozenset({"db", "lock_file"}),
     "rules": frozenset(
         {
@@ -438,7 +498,7 @@ KNOWN_KEYS: dict[str, frozenset[str]] = {
     "health": frozenset({"stdout", "mqtt", "webhook"}),
     "health.mqtt": frozenset({"host", "topic", "port", "retain"}),
     "health.webhook": frozenset({"url", "timeout_s", "notify"}),
-    "ui": frozenset({"allowed_hosts", "lidarr_url", "cli_command", "public_url"}),
+    "ui": frozenset({"lidarr_url", "cli_command", "public_url"}),
     "prune": frozenset({"enabled", "holding_dir"}),
     "schedule": frozenset({"cron", "timezone", "enabled", "paused_reason", "paused_at"}),
 }
@@ -473,6 +533,25 @@ _SECRET_ENV: dict[tuple[str, str], str] = {
 """Secrets someone might write into the file. They are never read from it, so they are unknown keys
 like any other; the message names the env var instead of guessing at a spelling."""
 
+REMOVED_KEYS: dict[tuple[str, str], str] = {
+    ("lidarr", "url"): LIDARR_URL_ENV,
+    ("ui", "allowed_hosts"): ALLOWED_HOSTS_ENV,
+    ("musicbrainz", "contact"): MUSICBRAINZ_CONTACT_ENV,
+}
+"""Deployment settings that moved from the file to the environment (#3). One still in the file
+fails the load - `[ui]` included, which otherwise never does - naming the env var to use instead,
+so an upgraded install cannot quietly keep a value likearr no longer reads."""
+
+
+def _removed_keys(raw: dict[str, Any]) -> list[str]:
+    """One message per `REMOVED_KEYS` entry still in `raw`. Never includes a value."""
+    out: list[str] = []
+    for (section, key), env in REMOVED_KEYS.items():
+        table = raw.get(section)
+        if isinstance(table, dict) and key in table:
+            out.append(f"[{section}] {key} is no longer read from config.toml: set {env} instead and delete the key")
+    return out
+
 
 def _unknown_keys(table: dict[str, Any], name: str) -> list[str]:
     """One message per key in `table` that `[name]` does not read, each with its likely intended key.
@@ -496,6 +575,7 @@ def _check_sections(raw: dict[str, Any]) -> None:
         for key in raw
         if key not in KNOWN_SECTIONS
     ]
+    unknown += _removed_keys(raw)
     if unknown:
         raise ConfigError("; ".join(unknown))
 
@@ -650,6 +730,23 @@ def _browser_url(value: str) -> str | None:
     return text
 
 
+def _allowed_hosts(errors: list[str]) -> tuple[str, ...]:
+    """`ALLOWED_HOSTS_ENV`, comma-separated, each entry stripped and lowercased. Unset or blank is
+    ``()``; a bad entry is a recorded problem, like any other in `[ui]`, and leaves it ``()``."""
+    raw = os.environ.get(ALLOWED_HOSTS_ENV, "")
+    names = tuple(h.strip().lower() for h in raw.split(",")) if raw.strip() else ()
+    # Starlette compares only what comes before the first ":" of the Host header, so a port or an
+    # IPv6 literal could never match: refusing them here beats a UI that answers 400 to all.
+    bad = [h for h in names if not h or "*" in h or ":" in h]
+    if bad:
+        errors.append(
+            f"{ALLOWED_HOSTS_ENV} entries {bad!r} must be exact host names or IPv4 addresses, separated by "
+            "commas: no wildcards, no ports, no IPv6 literals"
+        )
+        return ()
+    return tuple(dict.fromkeys(names))
+
+
 def _ui(section: object, *, lidarr_url: str) -> UiConfig:
     """`[ui]`, checked but never fatal: a problem is recorded in `UiConfig.errors` instead of raised.
 
@@ -659,25 +756,15 @@ def _ui(section: object, *, lidarr_url: str) -> UiConfig:
     appear later. A value with a problem falls back to its default, and a key it does not read
     is a recorded problem too (issue #110).
     """
+    host_errors: list[str] = []
+    cleaned = _allowed_hosts(host_errors)
     if not isinstance(section, dict):
-        return UiConfig(lidarr_url=_browser_url(lidarr_url) or "", errors=(f"[ui] must be a table, not {section!r}",))
-    errors: list[str] = _unknown_keys(section, "ui")
-    hosts = section.get("allowed_hosts", list(_LOOPBACK_HOSTS))
-    cleaned: tuple[str, ...] = _LOOPBACK_HOSTS
-    if isinstance(hosts, str) or not isinstance(hosts, list) or not hosts:
-        errors.append("[ui] allowed_hosts must be a non-empty list of host names")
-    else:
-        names = tuple(str(h).strip().lower() for h in hosts)
-        # Starlette compares only what comes before the first ":" of the Host header, so a port or
-        # an IPv6 literal could never match: refusing them here beats a UI that answers 400 to all.
-        bad = [h for h in names if not h or "*" in h or ":" in h]
-        if bad:
-            errors.append(
-                f"[ui] allowed_hosts entries {bad!r} must be exact host names or IPv4 addresses: "
-                "no wildcards, no ports, no IPv6 literals"
-            )
-        else:
-            cleaned = names
+        return UiConfig(
+            allowed_hosts=cleaned,
+            lidarr_url=_browser_url(lidarr_url) or "",
+            errors=(*host_errors, f"[ui] must be a table, not {section!r}"),
+        )
+    errors: list[str] = [*host_errors, *_unknown_keys(section, "ui")]
     # A browser follows these links, so the fallback is held to the same rule as a value written
     # here - it simply is not blamed on a key the user never set, and fails to no links at all.
     browser_lidarr = _browser_url(lidarr_url) or ""
@@ -826,7 +913,7 @@ def _prune(section: object, *, root_folder: str) -> PruneConfig:
     problem = ""
     if path is None or not path.is_absolute() or not _one_line(text, 4096) or ".." in path.parts:
         problem = f"[prune] holding_dir {given!r} must be an absolute path with no '..' in it"
-    elif path == root or path.is_relative_to(root):
+    elif root_folder and (path == root or path.is_relative_to(root)):
         problem = (
             f"[prune] holding_dir {text!r} is inside the Lidarr root folder {str(root)!r}; "
             f"put it beside it, e.g. {default!r}"
@@ -840,6 +927,46 @@ def _req(d: dict, key: str, section: str) -> object:
     if key not in d:
         raise ConfigError(f"[{section}] is missing required key '{key}'")
     return d[key]
+
+
+NEW_CONFIG_MODE = 0o660
+"""A config file `write_initial_config` creates: no world bits, like a Settings save leaves one
+(#171), and group bits kept so a host user in the container's group can edit it by hand (#107)."""
+
+_EXAMPLE_NAME = "config.example.toml"
+
+
+def example_config_text() -> str:
+    """`deploy/config.example.toml`, comments and all: the package's copy (a wheel or the image,
+    see `pyproject.toml` and `Dockerfile`) or, in a source checkout, the repository's own."""
+    here = Path(__file__).resolve().parent
+    for candidate in (here / _EXAMPLE_NAME, here.parent / "deploy" / _EXAMPLE_NAME):
+        if candidate.is_file():
+            return candidate.read_text(encoding="utf-8")
+    raise ConfigError(f"{_EXAMPLE_NAME} is missing from this install, so no config file could be written")
+
+
+def write_initial_config(path: Path) -> bool:
+    """Create `path` from the example config if there is no file there yet (#3). Never overwrites.
+
+    The text is written to a temp file beside `path` and hard-linked into place, so a reader sees
+    no file or the whole one, and a file that appears in the meantime is kept rather than replaced
+    (the link fails). Everything the example leaves unset has a default or is chosen later in the
+    browser, so the result loads as written. Returns whether a file was written.
+    """
+    if path.exists() or path.is_symlink():
+        return False
+    text = example_config_text()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.{secrets.token_hex(4)}.tmp")
+    write_atomic(tmp, text, mode=NEW_CONFIG_MODE)
+    try:
+        os.link(tmp, path)
+    except FileExistsError:
+        return False
+    finally:
+        tmp.unlink(missing_ok=True)
+    return True
 
 
 def load_config(path: Path | str) -> Config:
@@ -863,9 +990,9 @@ def parse_config(raw: dict, *, base_dir: Path | None = None) -> Config:
     _check_sections(raw)
     li = _checked(raw, "lidarr", "lidarr")
     lidarr = LidarrConfig(
-        url=str(_req(li, "url", "lidarr")).rstrip("/"),
-        root_folder=str(_req(li, "root_folder", "lidarr")),
-        quality_profile=str(_req(li, "quality_profile", "lidarr")),
+        url=os.environ.get(LIDARR_URL_ENV, "").strip().rstrip("/"),
+        root_folder=str(li.get("root_folder", "")),
+        quality_profile=str(li.get("quality_profile", "")),
         lean_profile=str(li.get("lean_profile", "Lean")),
         full_profile=str(li.get("full_profile", "Full")),
         tag=str(li.get("tag", "likearr")),
@@ -877,7 +1004,7 @@ def parse_config(raw: dict, *, base_dir: Path | None = None) -> Config:
     )
     sp = _checked(raw, "spotify", "spotify")
     spotify = SpotifyConfig(
-        token_file=path_of(_req(sp, "token_file", "spotify")),
+        token_file=path_of(sp.get("token_file", DEFAULT_TOKEN_FILE)),
         playlists=tuple(str(x) for x in sp.get("playlists", [])),
         redirect_uri=str(sp.get("redirect_uri", "http://127.0.0.1:8765/callback")),
         followed_artists=_bool(sp, "followed_artists", True, name="spotify"),
@@ -893,14 +1020,14 @@ def parse_config(raw: dict, *, base_dir: Path | None = None) -> Config:
             f"which allows one request a second, got {min_interval_s:g}; only a self-hosted mirror may go lower"
         )
     musicbrainz = MusicBrainzConfig(
-        contact=str(_req(mb, "contact", "musicbrainz")),
+        contact=os.environ.get(MUSICBRAINZ_CONTACT_ENV, "").strip() or DEFAULT_MUSICBRAINZ_CONTACT,
         base_url=base_url,
         min_interval_s=min_interval_s,
         negative_cache_days=_int(mb, "negative_cache_days", 7, name="musicbrainz", at_least=0),
         positive_cache_days=_int(mb, "positive_cache_days", 90, name="musicbrainz", at_least=0),
     )
     st = _checked(raw, "state", "state")
-    state_db = path_of(_req(st, "db", "state"))
+    state_db = path_of(st.get("db", DEFAULT_STATE_DB))
     lock_file = path_of(st["lock_file"]) if "lock_file" in st else None
     ru = _checked(raw, "rules", "rules")
     scope = str(ru.get("liked_track_scope", LIKED_TRACK_SCOPE_ALBUM))

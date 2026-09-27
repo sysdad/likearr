@@ -260,6 +260,8 @@ def prune_stage_command(
     """
     now = now or datetime.now(UTC)
     root_folder = ctx.config.lidarr.root_folder
+    if not root_folder:
+        raise PruneStageError("[lidarr] root_folder is not set, so there is no library to move files out of")
     _check_holding(holding, root_folder)
     if do_apply and not check_mount:
         raise PruneStageError("--no-mount-check is for a preview only; --apply always checks the mount")

@@ -33,7 +33,6 @@ CONFIG = """\
 # likearr configuration - the comments must survive a browser save.
 
 [lidarr]
-url = "http://lidarr:8686"
 root_folder = "/music"
 quality_profile = "Standard"
 
@@ -42,9 +41,6 @@ token_file = "spotify-token.json"
 # Playlists I own.
 playlists = ["pl1", "pl2"]
 liked_tracks = true
-
-[musicbrainz]
-contact = "me@example.invalid"
 
 [state]
 db = "state.sqlite"
