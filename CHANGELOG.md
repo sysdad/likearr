@@ -20,6 +20,9 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
 
 ### Fixed
 
+- The Status page and the Not added page rebuilt a set of monitored releases for every wanted
+  release, so `coverage()` slowed down quadratically with the library's size (a few seconds at
+  several thousand wanted releases). The set is now built once.
 - The identity guard's commit check (the pre-push hook and CI) now also reads every line each
   pushed or pull-request commit added. A denylisted string added in one commit and removed in the
   next is caught, where before only the final tree was scanned and the string still reached the
