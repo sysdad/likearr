@@ -20,6 +20,10 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
 
 ### Fixed
 
+- The ambiguous-artist explanation ("Nothing of theirs is monitored.") no longer claims nothing is
+  monitored when releases for that artist can in fact still be monitored - by an earlier likearr
+  version that resolved the follow before this check existed, or by hand, a like, a saved album or
+  a playlist. The wording now holds either way.
 - The Status page and the Not added page rebuilt a set of monitored releases for every wanted
   release, so `coverage()` slowed down quadratically with the library's size (a few seconds at
   several thousand wanted releases). The set is now built once.
