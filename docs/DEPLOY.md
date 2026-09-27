@@ -62,7 +62,7 @@ for an arbitrary uid with no passwd entry needs a live check before it is recomm
 Pull the published image:
 
 ```
-docker pull ghcr.io/sysdad/likearr:0.5.0
+docker pull ghcr.io/sysdad/likearr:0.5.1
 ```
 
 Pin the version tag rather than `:latest`, so an upgrade is something you choose (bump the tag)

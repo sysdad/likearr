@@ -32,11 +32,20 @@ def test_the_unreleased_section_comes_before_0_5_0() -> None:
     assert unreleased_idx < released_idx
 
 
-def test_exactly_one_version_heading_exists_and_it_is_0_5_0() -> None:
+def test_version_headings_are_newest_first_and_the_newest_is_pyprojects_version() -> None:
+    import tomllib
+
     text = CHANGELOG_PATH.read_text()
-    # 0.5.0 is the first public release (option C, issue #168); no other version heading exists
-    # yet, and none should until the next one is tagged.
-    assert re.findall(r"^##\s*\[\d[^\]]*\]", text, re.MULTILINE) == ["## [0.5.0]"]
+    version = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())["project"]["version"]
+    assert re.findall(r"^##\s*\[\d[^\]]*\]", text, re.MULTILINE) == [f"## [{version}]", "## [0.5.0]"]
+
+
+def test_the_0_5_1_section_opens_with_its_breaking_changes() -> None:
+    # 0.5.1 moves three config.toml keys to the environment; an upgrader must see that first.
+    section = CHANGELOG_PATH.read_text().partition("## [0.5.1]")[2].partition("\n## ")[0]
+    assert section.lstrip().startswith("### Breaking")
+    for name in ("LIKEARR_LIDARR_URL", "LIKEARR_ALLOWED_HOSTS", "LIKEARR_MUSICBRAINZ_CONTACT", "RESOLVER_VERSION"):
+        assert name in section.partition("### Added")[0], name
 
 
 def _the_0_5_0_section() -> str:

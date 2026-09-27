@@ -19,7 +19,7 @@
 
 services:
   likearr:
-    image: ghcr.io/sysdad/likearr:0.5.0
+    image: ghcr.io/sysdad/likearr:0.5.1
     # build:
     #   context: .
     #   # Uncomment to build the image as your data dir's owner instead of the default 1000:1000
@@ -57,7 +57,7 @@ services:
   # each command is `compose run --rm likearr-cli ...`. `[ui] cli_command` in config.toml is the
   # command Clean up shows in front of its own arguments; it defaults to this service's name.
   likearr-cli:
-    image: ghcr.io/sysdad/likearr:0.5.0
+    image: ghcr.io/sysdad/likearr:0.5.1
     # build:
     #   context: .
     #   # See the `likearr` service above - keep both services' build args (and, if you switch
@@ -94,7 +94,7 @@ services:
   # LIKEARR_UI_PASSWORD; LIKEARR_LIDARR_API_KEY and LIKEARR_SPOTIFY_CLIENT_ID can stay the same
   # when the app is shared).
   # likearr-2:
-  #   image: ghcr.io/sysdad/likearr:0.5.0
+  #   image: ghcr.io/sysdad/likearr:0.5.1
   #   container_name: likearr-2
   #   env_file:
   #     - .env.likearr-2
