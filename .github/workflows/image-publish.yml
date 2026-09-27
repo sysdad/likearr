@@ -78,21 +78,10 @@ jobs:
           set -euo pipefail
 
           workdir="$(mktemp -d)"
-          cat > "${workdir}/config.toml" <<'EOF'
-          [lidarr]
-          url = "http://127.0.0.1:9"
-          root_folder = "/data/media/music"
-          quality_profile = "Standard"
-
-          [spotify]
-          token_file = "spotify-token.json"
-
-          [musicbrainz]
-          contact = "ci@example.invalid"
-
-          [state]
-          db = "state.sqlite"
-          EOF
+          # No config.toml (#3): a first start writes one from the example baked into the image, so
+          # this is the Compose quick start exactly - an empty /data and environment variables only.
+          # Nothing here needs to be reachable: `/healthz` only requires the config to parse and
+          # /data to exist and be writable.
           # --user 1030:100 (#105) is an arbitrary uid/gid with no /etc/passwd
           # entry in the image, so the bind mount has to be world-writable rather than owned by it.
           chmod -R a+rwX "${workdir}"
@@ -128,6 +117,7 @@ jobs:
           echo "::group::likearr start (smoke)"
           docker run -d --name likearr-smoke --user 1030:100 \
             -e LIKEARR_UI_PASSWORD="ci-smoke-test-password-not-a-secret" \
+            -e LIKEARR_LIDARR_URL="http://127.0.0.1:9" \
             -v "${workdir}:/data" \
             likearr:publish-smoke
 
@@ -150,6 +140,10 @@ jobs:
           docker rm -f likearr-smoke || true
           echo "::endgroup::"
 
+          if [ ! -f "${workdir}/config.toml" ]; then
+            echo "::error::the first start wrote no /data/config.toml"
+            exit 1
+          fi
           if [ "${status}" != "healthy" ]; then
             echo "::error::likearr-smoke never reported healthy (last status: ${status}, 24 attempts, 5s apart, 120s total)"
             exit 1

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import httpx
@@ -86,7 +87,7 @@ def test_doctor_warns_about_the_example_contact_placeholder(
     out = capsys.readouterr().out
 
     assert code == EXIT_OK, "a placeholder contact is a WARN, not a FAIL"
-    assert "WARN  musicbrainz contact: [musicbrainz] contact is still the example's you@example.com" in out
+    assert "WARN  musicbrainz contact: LIKEARR_MUSICBRAINZ_CONTACT is the old example's you@example.com" in out
 
 
 def test_doctor_says_nothing_about_a_real_contact(
@@ -154,6 +155,29 @@ def test_doctor_fails_on_a_missing_root_folder(
 
     assert code == EXIT_ERROR
     assert "FAIL  root folder" in capsys.readouterr().out
+
+
+def _unset_library(tmp_path: Path, **unset: str):
+    """A config as a first start leaves it (#3): no root folder, no quality profile, or neither."""
+    config = make_config(tmp_path)
+    return make_config(tmp_path, lidarr=replace(config.lidarr, **unset))
+
+
+def test_doctor_fails_while_the_root_folder_and_quality_profile_are_unset_and_lists_lidarrs_choices(
+    tmp_path: Path, sink: CapturingSink, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source, lookup, lidarr = followed_world()
+    lidarr.root_folder_paths = ["/music", "/audiobooks"]
+    config = _unset_library(tmp_path, root_folder="", quality_profile="")
+    with make_context(tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink, config=config) as ctx:
+        code = setup_commands.doctor_command(ctx, no_spotify=True)
+
+    out = capsys.readouterr().out
+    assert code == EXIT_ERROR
+    assert "FAIL  root folder: not set: no run plans or applies until it is." in out
+    assert "(Lidarr has: /music, /audiobooks)" in out
+    assert "FAIL  quality profile: not set" in out
+    assert "(Lidarr has: Standard)" in out
 
 
 # --------------------------------------------------------------------------- setup-profiles
@@ -583,3 +607,36 @@ def test_doctor_passes_every_spotify_page_that_answers(
     assert "PASS  spotify token" in out
     assert "PASS  spotify followed artists: 3 total" in out
     assert "skipped" not in out, "the summary only counts skips when there are some"
+
+
+def test_setup_profiles_json_lists_lidarrs_root_folders_and_quality_profiles(
+    tmp_path: Path, sink: CapturingSink, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Issue #3: Settings picks `[lidarr] root_folder` and `quality_profile` from these lists."""
+    source, lookup, lidarr = followed_world()
+    lidarr.root_folder_paths = ["/music", "/audiobooks"]
+    lidarr.quality_profiles = {"Standard": 1, "Lossless": 2}
+    with make_context(tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink) as ctx:
+        setup_commands.setup_profiles_command(ctx, do_apply=False, as_json=True)
+
+    payload = json.loads(capsys.readouterr().out.strip())
+    assert payload["root_folders"] == ["/music", "/audiobooks"]
+    assert payload["quality_profiles"] == ["Lossless", "Standard"]
+
+
+def test_setup_profiles_with_no_root_folder_chosen_plans_and_applies_nothing_for_one(
+    tmp_path: Path, sink: CapturingSink, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source, lookup, lidarr = followed_world()
+    lidarr.metadata_profiles = {}
+    config = _unset_library(tmp_path, root_folder="")
+    with make_context(tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink, config=config) as ctx:
+        setup_commands.setup_profiles_command(ctx, do_apply=False, as_json=True)
+        payload = json.loads(capsys.readouterr().out.strip())
+        code = setup_commands.setup_profiles_command(ctx, do_apply=True)
+
+    assert payload["root_folder"] == {"path": "", "status": "unset", "applies": False}
+    assert not any("root folder" in item for item in payload["todo"])
+    assert code == EXIT_OK
+    assert set(lidarr.metadata_profiles) == {"Lean", "Full"}
+    assert not [w for w in lidarr.writes() if "root_folder" in w]

@@ -255,6 +255,28 @@ def test_a_zero_positive_cache_age_checks_every_answer_every_run() -> None:
     assert resolution_max_age(0)("liked:track-1") == timedelta(0)
 
 
+@pytest.mark.parametrize("unset", ["root_folder", "quality_profile"])
+@pytest.mark.parametrize(("do_apply", "scheduled"), [(False, False), (True, False), (True, True)])
+def test_every_run_refuses_while_the_root_folder_or_quality_profile_is_unset(
+    tmp_path: Path, sink: CapturingSink, unset: str, do_apply: bool, scheduled: bool
+) -> None:
+    """Issue #3: a first start leaves both unset until Settings picks them. No plan or apply runs,
+    none touches Lidarr, and the refusal is published, so a scheduled one still reaches the sinks."""
+    source, lookup, lidarr = followed_world()
+    config = make_config(tmp_path)
+    config = make_config(tmp_path, lidarr=replace(config.lidarr, **{unset: ""}))
+    with make_context(tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink, config=config) as ctx:
+        code = run_command(ctx, now=NOW, out=tmp_path / "diff.json", do_apply=do_apply, scheduled=scheduled)
+
+    assert code == EXIT_ERROR
+    assert lidarr.calls == []
+    assert source.reads == 0
+    assert not (tmp_path / "diff.json").exists()
+    assert sink.last.status is RunStatus.ERROR
+    assert f"[lidarr] {unset} is not set" in sink.last.message
+    assert "Settings" in sink.last.message
+
+
 def test_source_error_stops_before_any_lidarr_call(tmp_path: Path, sink: CapturingSink) -> None:
     _source, lookup, lidarr = followed_world()
     source = FakeSource(error=SourceError("spotify: QUOTA_EXCEEDED"))
@@ -3311,9 +3333,8 @@ def test_build_context_wires_the_composite_lookup_as_the_relationship_lookup(
     monkeypatch.setattr(context_module, "setup_logging", lambda _verbose: None)
     config = tmp_path / "config.toml"
     config.write_text(
-        '[lidarr]\nurl = "http://lidarr.test:8686"\nroot_folder = "/music"\nquality_profile = "Standard"\n'
+        '[lidarr]\nroot_folder = "/music"\nquality_profile = "Standard"\n'
         '[spotify]\ntoken_file = "token.json"\n'
-        '[musicbrainz]\ncontact = "likearr@example.test"\n'
         '[state]\ndb = "state.sqlite"\n'
     )
 

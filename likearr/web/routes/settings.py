@@ -41,7 +41,7 @@ from likearr.web import doctor as doctor_view
 from likearr.web import lidarr_setup, spotify_connect
 from likearr.web import settings as cfg
 from likearr.web.auth import content_security_policy
-from likearr.web.context import POLL_STOP, _Web, _web
+from likearr.web.context import POLL_STOP, AfterCallback, _Web, _web
 from likearr.web.helpers import _first_applied, _form_pairs, _parse_playlists, _playlist_jobs, _read_config, _readable
 from likearr.web.jobs import JobMeta, JobRefused, JobState
 from likearr.web.status import reauth_view
@@ -761,7 +761,10 @@ def _broken_settings(web: _Web, exc: Exception) -> dict[str, Any]:
 
 def _setup_panel(web: _Web, meta: JobMeta | None, **extra: Any) -> dict[str, Any]:
     """The Lidarr setup section for its newest job: a preview (and its table once finished) or
-    an apply (and its output once finished). `extra` is `confirm`, `note` or `recheck`."""
+    an apply (and its output once finished). `extra` is `confirm`, `note` or `recheck`.
+
+    `library` is what the "Lidarr library" picker (#3) needs: the file's hash and the two
+    `[lidarr]` keys a first start leaves unset, or ``None`` when config.toml does not load."""
     view = None
     output = ""
     if meta is not None and meta.finished:
@@ -770,7 +773,14 @@ def _setup_panel(web: _Web, meta: JobMeta | None, **extra: Any) -> dict[str, Any
         else:
             # Shown in the browser, so with this process's secrets removed, as the job page does.
             output = web.runner.shown_output(meta.id).strip()
-    return {"job": meta, "view": view, "output": output, **extra}
+    try:
+        text, config = _read_config(web)
+    except (OSError, ConfigError, tomllib.TOMLDecodeError):
+        library = None
+    else:
+        values = {key: getattr(config.lidarr, key) for key in cfg.LIBRARY_KEYS}
+        library = {"file_hash": cfg.file_hash(text), **values, "unset": not all(values.values())}
+    return {"job": meta, "view": view, "output": output, "library": library, **extra}
 
 
 def _setup_answer(request: Request, web: _Web, panel: dict[str, Any]) -> Response:
@@ -845,6 +855,90 @@ async def lidarr_setup_apply(request: Request) -> Response:
         return _setup_answer(request, web, {**panel, "note": f"could not apply the Lidarr setup: {exc}"})
     log.info("lidarr setup apply started from the web UI (job %s)", started.id)
     return _setup_answer(request, web, _setup_panel(web, started))
+
+
+def _library_choices(web: _Web) -> lidarr_setup.LidarrSetupView | None:
+    """The newest finished preview's view, whose lists are the only values a pick may take."""
+    meta = next((m for m in web.runner.jobs() if m.kind == "lidarr-setup-preview" and m.finished), None)
+    return lidarr_setup.parse_setup_profiles_json(web.runner.output(meta.id)) if meta is not None else None
+
+
+async def lidarr_library(request: Request) -> Response:
+    """POST /settings/lidarr-library: save the root folder and quality profile picked from Lidarr's
+    own lists (#3), through the same backed-up write as every other save. A value must be one the
+    newest preview listed, so the form can only ever write a name Lidarr has."""
+    web = _web(request)
+    posted = await _posted(request)
+    try:
+        text, _config = _read_config(web)
+    except (ConfigError, tomllib.TOMLDecodeError) as exc:
+        return web.render(request, "settings.html", _broken_settings(web, exc), 409)
+    if posted.get("file_hash", [""])[0] != cfg.file_hash(text):
+        request.session["flash"] = "config.toml changed since you opened this page, so nothing was saved. Pick again."
+        return RedirectResponse("/settings#lidarr-setup", status_code=303)
+    view = _library_choices(web)
+    allowed = {
+        "root_folder": view.root_folders if view is not None else (),
+        "quality_profile": view.quality_profiles if view is not None else (),
+    }
+    chosen = {key: posted.get(key, [""])[0] for key in cfg.LIBRARY_KEYS}
+    if any(value and value not in allowed[key] for key, value in chosen.items()):
+        request.session["flash"] = "That is not one of Lidarr's choices any more. Preview Lidarr setup again."
+        return RedirectResponse("/settings#lidarr-setup", status_code=303)
+    check = cfg.plan_library(text.decode("utf-8"), chosen, base_dir=web.config_path.parent)
+    if check.errors or not check.changes:
+        request.session["flash"] = "; ".join(check.errors.values()) or "Nothing changed, so nothing was saved."
+        return RedirectResponse("/settings#lidarr-setup", status_code=303)
+    try:
+        backup = cfg.write_config(web.config_path, check.new_text, expected_hash=cfg.file_hash(text), now=web.now())
+    except cfg.SaveConflict:
+        request.session["flash"] = "config.toml changed while saving, so nothing was saved. Pick again."
+        return RedirectResponse("/settings#lidarr-setup", status_code=303)
+    saved = ", ".join(f"{c.key.replace('_', ' ')} {c.new}" for c in check.changes)
+    log.info("lidarr library set from the web UI: %s (backup %s)", saved, backup.name)
+    request.session["flash"] = f"Saved: {saved}. The previous file is {backup.name}."
+    return RedirectResponse("/settings#lidarr-setup", status_code=303)
+
+
+def _after_setup_preview(web: _Web, meta: JobMeta) -> None:
+    """A preview's after-callback (#3): with no root folder chosen and exactly one in Lidarr, use
+    it - there is nothing to choose between. Written like any Settings save, backup included. The
+    quality profile is always picked by hand: Lidarr ships several."""
+    view = lidarr_setup.parse_setup_profiles_json(web.runner.output(meta.id))
+    if view is None or view.error or len(view.root_folders) != 1:
+        return
+    try:
+        text, config = _read_config(web)
+    except (OSError, ConfigError, tomllib.TOMLDecodeError):
+        return
+    if config.lidarr.root_folder:
+        return
+    check = cfg.plan_library(
+        text.decode("utf-8"), {"root_folder": view.root_folders[0]}, base_dir=web.config_path.parent
+    )
+    if check.errors or not check.changes:
+        return
+    try:
+        backup = cfg.write_config(web.config_path, check.new_text, expected_hash=cfg.file_hash(text), now=web.now())
+    except (cfg.SaveConflict, OSError) as exc:
+        log.warning("could not save Lidarr's only root folder as [lidarr] root_folder: %s", exc)
+        return
+    log.info("[lidarr] root_folder set to Lidarr's only root folder %s (backup %s)", view.root_folders[0], backup.name)
+
+
+def preview_setup_if_needed(web: _Web) -> None:
+    """At start (#3): with the Lidarr URL set but a root folder or quality profile not chosen, ask
+    Lidarr for its lists now, so Settings has them and a single root folder is taken by itself."""
+    try:
+        lidarr = web.config().lidarr
+    except ConfigError:
+        return
+    if not lidarr.url or (lidarr.root_folder and lidarr.quality_profile):
+        return
+    try:
+        web.runner.start("lidarr-setup-preview", ["setup-profiles", "--json"], label="Preview Lidarr setup")
+    except JobRefused as exc:
+        log.info("Lidarr setup preview not started at start: %s", exc)
 
 
 async def doctor_start(request: Request) -> Response:
@@ -937,6 +1031,7 @@ ROUTES: list[Route] = [
     Route("/settings/spotify/finish", spotify_connect_finish, methods=["POST"]),
     Route("/spotify/callback", spotify_callback, methods=["GET"]),
     Route("/settings/lidarr-setup/preview", lidarr_setup_preview_start, methods=["POST"]),
+    Route("/settings/lidarr-library", lidarr_library, methods=["POST"]),
     Route("/settings/lidarr-setup/{job_id}", lidarr_setup_poll, methods=["GET"]),
     Route("/settings/lidarr-setup/{job_id}/apply", lidarr_setup_apply, methods=["POST"]),
     Route("/doctor", doctor_redirect, methods=["GET"]),
@@ -944,3 +1039,6 @@ ROUTES: list[Route] = [
     Route("/settings/doctor/{job_id}", doctor_poll, methods=["GET"]),
 ]
 """In `create_app`'s order: Starlette matches the first route that fits."""
+
+AFTER: dict[str, AfterCallback] = {"lidarr-setup-preview": _after_setup_preview}
+"""This module's after-callbacks by job kind, which `create_app` passes to `_Web`."""

@@ -56,7 +56,7 @@ def client(demo: tuple[Path, Any]) -> Iterator[TestClient]:
             shutdown_timeout_s=5,
         )
     )
-    # The demo's config keeps the default `[ui] allowed_hosts` (loopback), as `likearr start` sees it.
+    # Loopback is always allowed, whatever LIKEARR_ALLOWED_HOSTS says.
     with TestClient(app, base_url="http://127.0.0.1") as c:
         response = c.post("/login", data={"password": PASSWORD}, follow_redirects=False)
         assert response.status_code == 303

@@ -12,16 +12,12 @@ from likearr.web.app import WebSettings, create_app
 
 CONFIG = """\
 [lidarr]
-url = "http://lidarr:8686"
 root_folder = "/music"
 quality_profile = "Standard"
 
 [spotify]
 token_file = "spotify-token.json"
 playlists = ["pl-owned"]
-
-[musicbrainz]
-contact = "contact@example.invalid"
 
 [state]
 db = "state.sqlite"
@@ -56,6 +52,7 @@ ROUTES = [
     ("/settings/spotify/finish", ("POST",), "spotify_connect_finish"),
     ("/spotify/callback", ("GET", "HEAD"), "spotify_callback"),
     ("/settings/lidarr-setup/preview", ("POST",), "lidarr_setup_preview_start"),
+    ("/settings/lidarr-library", ("POST",), "lidarr_library"),
     ("/settings/lidarr-setup/{job_id}", ("GET", "HEAD"), "lidarr_setup_poll"),
     ("/settings/lidarr-setup/{job_id}/apply", ("POST",), "lidarr_setup_apply"),
     ("/doctor", ("GET", "HEAD"), "doctor_redirect"),

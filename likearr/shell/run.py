@@ -176,6 +176,25 @@ def run_command(
         _publish(ctx, _held_record(held, dry_run=dry_run), diff=None)
         return EXIT_OK
 
+    if setup_needed := ctx.config.lidarr.library_needed:
+        # Issue #3: a first start has no root folder or quality profile until one is picked, and
+        # a plan without them could not add an artist anywhere. Refused, not skipped, so a
+        # scheduled run past the first-apply gate still turns the health sensor.
+        log.error("refusing to run: %s", setup_needed)
+        _publish(
+            ctx,
+            _record(
+                status=RunStatus.ERROR,
+                exit_code=EXIT_ERROR,
+                message=setup_needed,
+                dry_run=dry_run,
+                changes_made=nothing_changed,
+                lidarr_changed=unchanged,
+            ),
+            diff=None,
+        )
+        return EXIT_ERROR
+
     try:
         with run_lock(ctx.lock_path):
             return _run_locked(

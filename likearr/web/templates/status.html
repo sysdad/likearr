@@ -6,6 +6,7 @@
 <p class="error">config.toml does not load: {{ config_error }}</p>
 {% else %}
 {% for problem in ui_errors %}<p class="error">config.toml: {{ problem }}. Fix it and restart likearr start; runs are not affected.</p>{% endfor %}
+{% if setup_needed %}<p class="warn" id="setup-needed">{{ setup_needed }} <a href="/settings#lidarr-setup">Open Settings</a>.</p>{% endif %}
 {% if state_missing %}<p class="error">No state database at the configured path yet. It appears after the first run; if runs have happened, the path or the mount is wrong.</p>{% endif %}
 {% if lost_state %}<p class="error">{{ lost_state }}</p>{% endif %}
 {% from "_macros.html" import icon, state_pill, coverage_card, reauth_sentence %}

@@ -26,16 +26,12 @@ CONFIG = """\
 # likearr - fixture config for the web tests.
 
 [lidarr]
-url = "http://lidarr:8686"
 root_folder = "/music"
 quality_profile = "Standard"
 
 [spotify]
 token_file = "spotify-token.json"
 playlists = ["pl-owned", "pl-gone"]
-
-[musicbrainz]
-contact = "contact-SENTINEL@example.invalid"
 
 [state]
 db = "state.sqlite"
@@ -52,7 +48,6 @@ timezone = "America/New_York"
 enabled = true  # Clean up is off by default (#148); its suites run with it on
 
 [ui]
-allowed_hosts = ["testserver", "likearr.example.org"]
 """
 
 
@@ -363,10 +358,7 @@ def _names_done(data_dir: Path) -> bool:
     return bool(jobs) and all(m.state != "running" for m in jobs)
 
 
-_PUBLIC_URL = (
-    'allowed_hosts = ["testserver", "likearr.example.org"]',
-    'allowed_hosts = ["testserver", "likearr.example.org"]\npublic_url = "https://likearr.example.org"',
-)
+_PUBLIC_URL = ("[ui]\n", '[ui]\npublic_url = "https://likearr.example.org"\n')
 
 
 def _build_prune(client: TestClient) -> str:

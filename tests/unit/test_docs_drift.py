@@ -94,11 +94,12 @@ def test_every_pinned_image_and_release_tag_matches_pyprojects_version() -> None
 
     version = tomllib.loads(PYPROJECT_PATH.read_text())["project"]["version"]
     image_ref = f"ghcr.io/sysdad/likearr:{version}"
-    tag_ref = f"/likearr/v{version}/"
 
     readme = README_PATH.read_text()
     assert image_ref in readme, "README.md's compose block doesn't pin the current version"
-    assert tag_ref in readme, "README.md's curl URL doesn't fetch the current version's tag"
+    # The quick start fetches nothing by tag since #3, but any release-tag URL added later must match.
+    for tag in re.findall(r"/likearr/v(\d+\.\d+\.\d+)/", readme):
+        assert tag == version, "a README.md release-tag URL doesn't point at the current version"
 
     deploy = DEPLOY_PATH.read_text()
     assert image_ref in deploy, "docs/DEPLOY.md's docker pull example doesn't pin the current version"

@@ -188,16 +188,25 @@ def test_the_example_ui_password_is_empty_so_an_unedited_copy_fails_closed() -> 
     assert line.group(1).strip() == ""
 
 
-def test_the_quick_start_makes_likearr_data_before_writing_into_it() -> None:
-    """The compose-first quick start fetches the example config straight from the pinned release
-    tag rather than cloning the repo, but `likearr-data` still has to exist before anything is
-    written into it."""
+def test_the_quick_start_is_compose_only_with_no_config_file_to_write() -> None:
+    """Issue #3: the Compose block and `docker compose up -d` are the whole install. No clone, no
+    fetched or edited config.toml - `likearr start` writes it on a first start - and the Lidarr URL
+    is an environment variable in the block and in env.example alike."""
     commands = _quick_start_commands()
-    assert not any(c.startswith("git clone ") for c in commands)
-    mkdirs = [i for i, c in enumerate(commands) if c.startswith("mkdir") and "likearr-data" in c]
-    writes_in = [i for i, c in enumerate(commands) if "likearr-data/" in c and ("curl" in c or c.startswith("cp "))]
-    assert mkdirs and writes_in
-    assert mkdirs[0] < writes_in[0]
+    assert commands == ["docker compose up -d"]
+    assert "LIKEARR_LIDARR_URL:" in _quick_start_yaml_block()
+    assert re.search(r"^LIKEARR_LIDARR_URL=\S", ENV_EXAMPLE_PATH.read_text(), re.MULTILINE)
+
+
+def test_the_image_carries_the_example_config_a_first_start_writes() -> None:
+    """`config.example_config_text` reads it from inside the package, in the image and in a wheel."""
+    dockerfile = DOCKERFILE_PATH.read_text()
+    assert "COPY deploy/config.example.toml ./likearr/config.example.toml" in dockerfile
+    dockerignore = (REPO_ROOT / ".dockerignore").read_text().splitlines()
+    assert "!deploy/config.example.toml" in dockerignore
+    assert dockerignore.index("!deploy/config.example.toml") > dockerignore.index("deploy")
+    pyproject = (REPO_ROOT / "pyproject.toml").read_text()
+    assert '"deploy/config.example.toml" = "likearr/config.example.toml"' in pyproject
 
 
 def test_ignore_files_cover_the_env_file_and_the_data_dir() -> None:
@@ -247,7 +256,7 @@ def test_the_dockerfile_declares_a_healthcheck_after_expose() -> None:
     healthcheck_line = next((line for line in after_expose.splitlines() if line.startswith("HEALTHCHECK")), None)
     assert healthcheck_line is not None, "no HEALTHCHECK after EXPOSE 8770"
     # Curl-free (no curl in the final image) and on 127.0.0.1, same host the compose example and
-    # the [ui] allowed_hosts loopback allowance use (tests/web/test_app.py).
+    # the always-allowed loopback hosts use (tests/web/test_app.py).
     assert "curl" not in healthcheck_line
     assert "127.0.0.1:8770/healthz" in healthcheck_line
     assert '"python"' in healthcheck_line

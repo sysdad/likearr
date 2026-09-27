@@ -2,7 +2,7 @@
 
     uv run python scripts/demo_state.py /tmp/likearr-demo
     LIKEARR_UI_PASSWORD='a demo password, 16+ chars' LIKEARR_SPOTIFY_CLIENT_ID=demo \
-        uv run likearr start -c /tmp/likearr-demo/config.toml --port 8770
+        LIKEARR_LIDARR_URL=http://127.0.0.1:9 uv run likearr start -c /tmp/likearr-demo/config.toml --port 8770
 
 `LIKEARR_SPOTIFY_CLIENT_ID` is only there so Settings doesn't say Spotify is not configured; it
 is never sent anywhere unless someone clicks Connect Spotify.
@@ -24,7 +24,7 @@ made up. Nothing comes from anyone's library.
 
 **No network.** The suite's own network guard (`tests/_network_guard.py`) is installed before
 anything runs, so a lookup that slipped past the fakes fails instead of reaching anyone.
-`[lidarr] url` is `http://127.0.0.1:9`, where nothing answers. The token file carries no access or
+`LIKEARR_LIDARR_URL` is `http://127.0.0.1:9`, where nothing answers. The token file carries no access or
 refresh token, so a job started from the browser (Check for changes, Run and apply now, a scheduled
 fire, the live Look up) fails at once without calling anything: take screenshots, don't click those.
 
@@ -408,16 +408,12 @@ def _config_text(cron: str) -> str:
 # Nothing here is real: no Lidarr answers at this address, and the Spotify token file holds no token.
 
 [lidarr]
-url = "http://127.0.0.1:9"
 root_folder = "/music"
 quality_profile = "Standard"
 
 [spotify]
 token_file = "spotify-token.json"
 playlists = ["{PLAYLIST_ID}"]
-
-[musicbrainz]
-contact = "demo@example.invalid"
 
 [state]
 db = "state.sqlite"
@@ -666,6 +662,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "  /unmatched  (Not added)",
             "start it:",
             f"  LIKEARR_UI_PASSWORD='{PASSWORD_HINT}' LIKEARR_SPOTIFY_CLIENT_ID=demo "
+            "LIKEARR_LIDARR_URL=http://127.0.0.1:9 "
             f"uv run likearr start -c {config} --port 8770",
         ]
     )

@@ -25,7 +25,7 @@ from likearr.adapters.musicbrainz import MusicBrainzLookup, build_user_agent
 from likearr.adapters.spotify import SpotifyAuth, SpotifySource
 from likearr.adapters.spotify_library import OwnedPlaylist, PlaylistEntry, SpotifyLibrary
 from likearr.adapters.state_sqlite import SqliteState
-from likearr.config import Config, ConfigError, load_config
+from likearr.config import LIDARR_URL_ENV, Config, ConfigError, load_config
 from likearr.logging_setup import setup_logging
 from likearr.ports import (
     ArtistDetails,
@@ -185,6 +185,11 @@ def build_context(
     except Exception as exc:
         raise ConfigError(f"cannot open the state database at {config.state_db}: {exc}") from exc
     closeables.append(state)
+
+    if not config.lidarr.url:
+        # Checked before anything is opened, like the API key: likearr has nowhere to send it.
+        _close_all(closeables)
+        raise ConfigError(f"{LIDARR_URL_ENV} is not set")
 
     try:
         # The API key travels in X-Api-Key, which httpx does not strip on a cross-origin

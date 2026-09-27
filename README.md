@@ -80,16 +80,22 @@ copying the full [`deploy/compose.example.yaml`](deploy/compose.example.yaml) in
 Prefer secrets in a file over inline values? Skip the `environment:` block below: use
 `env_file: [.env]` instead and fill in [`deploy/env.example`](deploy/env.example) as `.env` next to
 `compose.yaml`. Otherwise, paste this as `compose.yaml` (or into an existing stack) and fill in the
-three values directly:
+values directly:
 
 ```yaml
 services:
   likearr:
     image: ghcr.io/sysdad/likearr:0.5.0
     environment:
+      LIKEARR_LIDARR_URL: "http://lidarr:8686"              # how this container reaches Lidarr
       LIKEARR_LIDARR_API_KEY: "<your lidarr api key>"       # Lidarr Settings -> General -> Security
       LIKEARR_SPOTIFY_CLIENT_ID: "<your spotify client id>" # developer.spotify.com/dashboard - see docs/spotify.md
       LIKEARR_UI_PASSWORD: "<16+ random characters>"        # e.g. `openssl rand -base64 24`
+      # Optional: host names you browse to likearr by, comma-separated. Unset, it answers to
+      # any IPv4 address (http://192.168.1.20:8770) but to no host name.
+      # LIKEARR_ALLOWED_HOSTS: "likearr.example.org"
+      # Optional: an email or URL MusicBrainz can reach you at. Unset, likearr's project URL.
+      # LIKEARR_MUSICBRAINZ_CONTACT: "you@example.org"
     volumes:
       - ./likearr-data:/data
     ports:
@@ -99,24 +105,17 @@ services:
     restart: unless-stopped
 ```
 
-Then the config it needs before it can start, next to `compose.yaml`:
-
-```bash
-mkdir -p likearr-data
-curl -fsSL https://raw.githubusercontent.com/sysdad/likearr/v0.5.0/deploy/config.example.toml -o likearr-data/config.toml
-```
-
-Edit `likearr-data/config.toml`: `[lidarr] url`, `root_folder` and `quality_profile`, and `[ui]
-allowed_hosts` (the name or address you'll browse to), all need a real value before the first run.
-
 Now start it:
 
 ```bash
 docker compose up -d
 ```
 
-`docker ps` shows the container as healthy once the config loads, even before the first run writes
-the state database (see [`docs/DEPLOY.md`, "Running it"](docs/DEPLOY.md#running-it)). If it comes
+There is no config file to write first: on a first start with an empty `likearr-data`, likearr
+writes `likearr-data/config.toml` itself, from
+[`deploy/config.example.toml`](deploy/config.example.toml), and everything left to set is set in
+the browser. `docker ps` shows the container as healthy once the config loads, even before the
+first run writes the state database (see [`docs/DEPLOY.md`, "Running it"](docs/DEPLOY.md#running-it)). If it comes
 up unhealthy instead, `./likearr-data` is very likely not writable by the container - see
 [`docs/DEPLOY.md`, "Docker Compose"](docs/DEPLOY.md#docker-compose) for the writability
 requirement (including a NAS or root-run host's uid mismatch) and the `chown` fix.
@@ -130,7 +129,9 @@ scheduling - are all in the browser:
   `https://` address, Spotify instead sends you straight back with no copy/paste.
 - **Settings -> Preview Lidarr setup**, then **Apply** (behind a confirm). Creates the Lean and
   Full metadata profiles, the `likearr` tag, and safe root-folder defaults - and says so first,
-  without changing anything until you confirm.
+  without changing anything until you confirm. The same section is where you pick the root folder
+  and quality profile likearr adds artists with, from Lidarr's own lists (a Lidarr with only one
+  root folder has it picked for you). Until both are set, Status says so and no run plans.
 - **Settings -> Doctor -> Run checks** is a read-only check of config, Lidarr, MusicBrainz and
   Spotify - useful any time, and works even before the first run or with a broken config.toml.
 - **Review changes -> Check for changes**, read the plan, then **Apply** it. That first apply is

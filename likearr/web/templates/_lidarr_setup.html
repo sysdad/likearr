@@ -61,16 +61,38 @@
         <td>Tag {{ view.tag.get("name") }}</td>
         <td>{% if view.tag.get("status") == "ok" %}exists (id {{ view.tag.get("id") }}){% else %}will be created{% endif %}</td>
       </tr>
-      <tr class="tone-{{ 'ok' if view.root_folder.get('status') == 'ok' else ('warn' if view.root_folder.get('status') == 'differs' else 'bad') }}">
+      <tr class="tone-{{ 'ok' if view.root_folder.get('status') == 'ok' else ('warn' if view.root_folder.get('status') in ('differs', 'unset') else 'bad') }}">
         <td>Root folder {{ view.root_folder.get("path") }}</td>
         <td>
           {% if view.root_folder.get("status") == "ok" %}already defaults to monitor none
+          {% elif view.root_folder.get("status") == "unset" %}not chosen yet - pick one below
           {% elif view.root_folder.get("status") == "missing" %}will be created
           {% else %}defaults will be set to monitor none / new items none{% endif %}
         </td>
       </tr>
     </tbody>
   </table>
+
+  {% set library = setup.library %}
+  {% if library and library.unset %}
+  {# Issue #3: a first start has no root folder or quality profile; both come from Lidarr's lists. #}
+  <form method="post" action="/settings/lidarr-library" class="lidarr-library" id="lidarr-library">
+    <input type="hidden" name="file_hash" value="{{ library.file_hash }}">
+    <p class="warn">No run plans or applies until the root folder and quality profile are set.</p>
+    <label for="library-root">Root folder</label>
+    <select id="library-root" name="root_folder">
+      {% if not library.root_folder %}<option value="">Choose...</option>{% endif %}
+      {% for path in view.root_folders %}<option value="{{ path }}"{% if path == library.root_folder or view.root_folders | length == 1 %} selected{% endif %}>{{ path }}</option>{% endfor %}
+    </select>
+    <label for="library-quality">Quality profile</label>
+    <select id="library-quality" name="quality_profile">
+      {% if not library.quality_profile %}<option value="">Choose...</option>{% endif %}
+      {% for name in view.quality_profiles %}<option value="{{ name }}"{% if name == library.quality_profile %} selected{% endif %}>{{ name }}</option>{% endfor %}
+    </select>
+    {% if not view.root_folders %}<p class="note">Lidarr has no root folder yet: add one in Lidarr (Settings, Media Management), then check again.</p>{% endif %}
+    <button type="submit" class="primary">Save</button>
+  </form>
+  {% endif %}
 
   {% if view.needs_apply and setup.confirm %}
   <p class="warn">This writes to Lidarr:</p>

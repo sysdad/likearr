@@ -1374,8 +1374,8 @@ gate entirely and authorizes itself with a single-use, server-side PKCE `state` 
 Spotify", below), rather than depending on this cookie reaching it on a cross-site redirect. Five
 failed logins from one TCP peer in a minute pause that address for a minute. No forwarded header
 is trusted for any access decision (uvicorn runs with `proxy_headers` off), and there is no
-"local addresses need no password" switch. Under the login: `AllowedHostMiddleware` with `[ui]
-allowed_hosts` plus the loopback literals (DNS rebinding) - likearr's own small middleware rather
+"local addresses need no password" switch. Under the login: `AllowedHostMiddleware` with
+`LIKEARR_ALLOWED_HOSTS` plus the loopback literals (DNS rebinding) - likearr's own small middleware rather
 than Starlette's `TrustedHostMiddleware`, so a refusal can name the host it refused and the setting
 that would admit it (issue #169) instead of a bare "Invalid host header" - and on every unsafe method a
 cross-origin check after Go 1.25's `CrossOriginProtection` - `Sec-Fetch-Site` of `same-origin` or
@@ -1388,10 +1388,23 @@ direct-callback mode (#11, "Direct callback" below).
 The open paths (`/login`, `/healthz`, `/static/`) are matched exactly, and websockets are refused.
 
 **`[ui]` never stops a run.** Every command loads the same `config.toml`, so a problem in the
-UI-only block is recorded (`UiConfig.errors`), never raised: `start` refuses to start on one, and
-the Status page shows one that appears later. `allowed_hosts` takes host names and IPv4 addresses
-without a port; `AllowedHostMiddleware` compares only what precedes the first ":" of the Host
-header, and only the first Host header when a request carries more than one.
+UI-only block, or in `LIKEARR_ALLOWED_HOSTS`, is recorded (`UiConfig.errors`), never raised: `start`
+refuses to start on one, and the Status page shows one that appears later. `LIKEARR_ALLOWED_HOSTS`
+takes host names and IPv4 addresses without a port, comma-separated; `AllowedHostMiddleware`
+compares only what precedes the first ":" of the Host header, and only the first Host header when
+a request carries more than one. Unset (issue #3), it accepts loopback and any IPv4 literal and
+refuses every host name: a rebinding page always sends its own domain as the Host header, never a
+bare address, so the literals do not open the rebinding path, and the login still gates the UI.
+"Trust the first host seen" was rejected because a rebinding page could win that race.
+
+**Deployment settings are environment-only (issue #3).** Where likearr runs and how it is reached -
+`LIKEARR_LIDARR_URL`, `LIKEARR_ALLOWED_HOSTS`, `LIKEARR_MUSICBRAINZ_CONTACT` - come from the
+environment, like the secrets; everything the web UI edits stays in `config.toml` and has no
+variable. One source per setting, so nothing to reconcile. The file's old `[lidarr] url`,
+`[ui] allowed_hosts` and `[musicbrainz] contact` fail the load by name. `likearr start` writes
+`config.toml` from the example on a first start with none; `[lidarr] root_folder` and
+`quality_profile` start unset and are picked in Settings from a Lidarr setup preview's lists (one
+root folder is taken by itself), and until both are set every run refuses.
 
 **Navigation and look.** The pages are named for what a person does, not for the CLI command behind
 them: **Status** (`/`), **Review changes** (`/plan`: check for changes, review them, apply them),
@@ -2104,7 +2117,7 @@ the one Lidarr holds and how many releases the skip left unmonitored. It links b
 pages, the existing artist in Lidarr (`/artist/<mbid>`: Lidarr's SPA keys the artist page by the
 MusicBrainz id) and Lidarr's add search opened on the wanted artist (`/add/search?term=lidarr:<mbid>`,
 an id lookup). All of these are routes read from Lidarr's own source at v3.1.0.4875, not guessed.
-Links go to `[ui] lidarr_url`, the browser-facing address, which defaults to `[lidarr] url`. Either
+Links go to `[ui] lidarr_url`, the browser-facing address, which defaults to `LIKEARR_LIDARR_URL`. Either
 must be http(s) with a host name and no query or fragment; a fallback that is not gives no Lidarr
 links, and a value written in `[ui]` that is not is a recorded problem. An
 Look up button comes first, because a collision is often likearr picking the wrong artist (#32),

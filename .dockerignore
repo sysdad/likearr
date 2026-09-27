@@ -16,6 +16,7 @@ htmlcov
 tests
 docs
 deploy
+!deploy/config.example.toml
 
 *.sqlite
 *.sqlite-journal

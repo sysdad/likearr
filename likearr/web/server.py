@@ -28,6 +28,7 @@ def serve(config_path: Path, *, host: str, port: int, password: str, verbose: bo
             auto_fetch_names=True,
             auto_count_files=True,
             auto_preview_prune=True,
+            auto_preview_setup=True,
             scheduler=True,
         )
     )

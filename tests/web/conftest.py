@@ -27,6 +27,13 @@ from tests.web.app_support import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _web_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The host names the test client uses, and a contact no page may show (#3: both env-only)."""
+    monkeypatch.setenv("LIKEARR_ALLOWED_HOSTS", "testserver,likearr.example.org")
+    monkeypatch.setenv("LIKEARR_MUSICBRAINZ_CONTACT", "contact-SENTINEL@example.invalid")
+
+
 @pytest.fixture
 def data_dir(tmp_path: Path) -> Path:
     (tmp_path / "config.toml").write_text(CONFIG)

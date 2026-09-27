@@ -959,7 +959,7 @@ def test_a_fresh_answer_is_shown_when_settings_opens(client: TestClient) -> None
 
 
 def test_switching_a_source_on_asks_first_through_the_real_form(client: TestClient, data_dir: Path) -> None:
-    (data_dir / "config.toml").write_text(CONFIG.replace("[musicbrainz]", "liked_tracks = false\n\n[musicbrainz]"))
+    (data_dir / "config.toml").write_text(CONFIG.replace("[state]", "liked_tracks = false\n\n[state]"))
     _login(client)
     form = _settings_form(client.get("/settings").text)
     form["spotify.liked_tracks"] = ["on"]
@@ -1192,8 +1192,8 @@ def test_callback_mode_redirect_uri_wording_is_unchanged(
     monkeypatch.setenv("LIKEARR_SPOTIFY_CLIENT_ID", SPOTIFY_CLIENT_ID)
     (data_dir / "config.toml").write_text(
         CONFIG.replace(
-            'allowed_hosts = ["testserver", "likearr.example.org"]',
-            'allowed_hosts = ["testserver", "likearr.example.org"]\npublic_url = "https://likearr.example.org"',
+            "[ui]\n",
+            '[ui]\npublic_url = "https://likearr.example.org"\n',
         )
     )
     app = create_app(
@@ -1257,8 +1257,8 @@ def test_the_https_callback_mode_is_only_offered_when_a_public_url_is_configured
     monkeypatch.setenv("LIKEARR_SPOTIFY_CLIENT_ID", SPOTIFY_CLIENT_ID)
     (data_dir / "config.toml").write_text(
         CONFIG.replace(
-            'allowed_hosts = ["testserver", "likearr.example.org"]',
-            'allowed_hosts = ["testserver", "likearr.example.org"]\npublic_url = "https://likearr.example.org"',
+            "[ui]\n",
+            '[ui]\npublic_url = "https://likearr.example.org"\n',
         )
     )
     app = create_app(
@@ -1488,8 +1488,8 @@ def test_the_callback_route_never_requires_login(
     monkeypatch.setenv("LIKEARR_LIDARR_API_KEY", API_KEY_SENTINEL)
     (data_dir / "config.toml").write_text(
         CONFIG.replace(
-            'allowed_hosts = ["testserver", "likearr.example.org"]',
-            'allowed_hosts = ["testserver", "likearr.example.org"]\npublic_url = "https://likearr.example.org"',
+            "[ui]\n",
+            '[ui]\npublic_url = "https://likearr.example.org"\n',
         )
     )
     app = create_app(
@@ -1537,8 +1537,8 @@ def test_the_callback_never_echoes_an_arbitrary_error_text(
     monkeypatch.setenv("LIKEARR_LIDARR_API_KEY", API_KEY_SENTINEL)
     (data_dir / "config.toml").write_text(
         CONFIG.replace(
-            'allowed_hosts = ["testserver", "likearr.example.org"]',
-            'allowed_hosts = ["testserver", "likearr.example.org"]\npublic_url = "https://likearr.example.org"',
+            "[ui]\n",
+            '[ui]\npublic_url = "https://likearr.example.org"\n',
         )
     )
     app = create_app(
@@ -1565,8 +1565,8 @@ def test_a_valid_state_from_an_unauthenticated_client_still_connects(
     monkeypatch.setenv("LIKEARR_SPOTIFY_CLIENT_ID", SPOTIFY_CLIENT_ID)
     (data_dir / "config.toml").write_text(
         CONFIG.replace(
-            'allowed_hosts = ["testserver", "likearr.example.org"]',
-            'allowed_hosts = ["testserver", "likearr.example.org"]\npublic_url = "https://likearr.example.org"',
+            "[ui]\n",
+            '[ui]\npublic_url = "https://likearr.example.org"\n',
         )
     )
     app = create_app(
@@ -2386,3 +2386,139 @@ def test_with_clean_up_off_a_re_authorize_still_keeps_write_access_it_has(
     _login(client)
 
     assert _asked_scopes(_paste_back_url(_connect_start(client))) == [*READ, *WRITE]
+
+
+# ---------------------------------------------------------------- Lidarr library, first start (#3)
+
+
+UNSET_LIBRARY = CONFIG.replace('root_folder = "/music"\nquality_profile = "Standard"\n', "")
+
+
+def _lidarr_lists(monkeypatch: pytest.MonkeyPatch, root_folders: list[str]) -> None:
+    """The fake CLI's `setup-profiles --json` answer, with no root folder chosen yet."""
+    monkeypatch.setenv(
+        "FAKE_SETUP_PROFILES",
+        json.dumps(
+            {
+                "profiles": [
+                    {"name": "Lean", "kind": "lean", "status": "ok", "id": 1},
+                    {"name": "Full", "kind": "full", "status": "ok", "id": 2},
+                ],
+                "tag": {"name": "likearr", "status": "ok", "id": 3},
+                "root_folder": {"path": "", "status": "unset", "applies": False},
+                "todo": [],
+                "needs_apply": False,
+                "root_folders": root_folders,
+                "quality_profiles": ["Lossless", "Standard"],
+            }
+        ),
+    )
+
+
+def _library(data_dir: Path) -> tuple[str, str]:
+    from likearr.config import load_config
+
+    lidarr = load_config(data_dir / "config.toml").lidarr
+    return lidarr.root_folder, lidarr.quality_profile
+
+
+def test_lidarrs_only_root_folder_is_taken_when_none_is_chosen(
+    client: TestClient, data_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (data_dir / "config.toml").write_text(UNSET_LIBRARY)
+    _lidarr_lists(monkeypatch, ["/music"])
+    _login(client)
+
+    preview = _preview(client)
+
+    assert "not chosen yet" in preview
+    _wait_until(lambda: _library(data_dir)[0] == "/music")
+    assert _library(data_dir) == ("/music", ""), "the quality profile is always picked by hand"
+    assert list(data_dir.glob("config.toml.bak-*")), "written like any Settings save, backup first"
+    assert "# likearr - fixture config for the web tests." in (data_dir / "config.toml").read_text()
+
+
+def test_two_root_folders_are_left_to_the_picker_and_a_pick_is_saved(
+    client: TestClient, data_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (data_dir / "config.toml").write_text(UNSET_LIBRARY)
+    _lidarr_lists(monkeypatch, ["/music", "/audiobooks"])
+    _login(client)
+    _preview(client)
+    time.sleep(0.3)  # long enough for an after-callback that would (wrongly) pick one
+    assert _library(data_dir) == ("", "")
+
+    section = _section(client.get("/settings").text, "lidarr-setup")
+    assert 'action="/settings/lidarr-library"' in section
+    assert '<option value="/audiobooks">' in section
+    assert '<option value="Lossless">' in section
+    file_hash = re.search(r'id="lidarr-library".*?name="file_hash" value="([^"]+)"', section, re.S)[1]  # type: ignore[index]
+
+    response = client.post(
+        "/settings/lidarr-library",
+        data={"file_hash": file_hash, "root_folder": "/audiobooks", "quality_profile": "Lossless"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert _library(data_dir) == ("/audiobooks", "Lossless")
+    assert 'action="/settings/lidarr-library"' not in _section(client.get("/settings").text, "lidarr-setup")
+
+
+@pytest.mark.parametrize(
+    "pick",
+    [{"root_folder": "/elsewhere"}, {"quality_profile": "Made Up"}],
+)
+def test_a_pick_lidarr_did_not_list_writes_nothing(
+    client: TestClient, data_dir: Path, monkeypatch: pytest.MonkeyPatch, pick: dict[str, str]
+) -> None:
+    (data_dir / "config.toml").write_text(UNSET_LIBRARY)
+    _lidarr_lists(monkeypatch, ["/music", "/audiobooks"])
+    _login(client)
+    _preview(client)
+    before = (data_dir / "config.toml").read_bytes()
+
+    response = client.post(
+        "/settings/lidarr-library", data={"file_hash": _file_hash(client), **pick}, follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert (data_dir / "config.toml").read_bytes() == before
+    assert "not one of Lidarr's choices" in html.unescape(client.get("/settings").text)
+
+
+def test_status_says_what_is_not_set_up_yet(client: TestClient, data_dir: Path) -> None:
+    _login(client)
+    assert 'id="setup-needed"' not in client.get("/").text
+
+    (data_dir / "config.toml").write_text(UNSET_LIBRARY)
+    page = html.unescape(client.get("/").text)
+
+    assert 'id="setup-needed"' in page
+    assert "[lidarr] root_folder and [lidarr] quality_profile are not set" in page
+    assert 'href="/settings#lidarr-setup"' in page
+
+
+def test_status_names_the_lidarr_url_variable_while_it_is_unset(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _login(client)
+    monkeypatch.delenv("LIKEARR_LIDARR_URL")
+
+    page = client.get("/").text
+
+    assert "LIKEARR_LIDARR_URL is not set" in page
+
+
+@pytest.mark.parametrize(("config", "started"), [(UNSET_LIBRARY, True), (CONFIG, False)])
+def test_the_service_previews_lidarr_at_start_only_while_the_library_is_unset(
+    data_dir: Path, fake_cli: list[str], monkeypatch: pytest.MonkeyPatch, config: str, started: bool
+) -> None:
+    (data_dir / "config.toml").write_text(config)
+    _lidarr_lists(monkeypatch, ["/music", "/audiobooks"])
+
+    with TestClient(_app(data_dir, fake_cli, auto_preview_setup=True)):
+        jobs = _jobs_of(data_dir, "lidarr-setup-preview")
+        assert bool(jobs) is started
+        if jobs:
+            _wait_until(lambda: all(m.state != "running" for m in _jobs_of(data_dir, "lidarr-setup-preview")))

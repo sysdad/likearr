@@ -40,6 +40,10 @@ class LidarrSetupView:
     root_folder: dict[str, Any]
     todo: tuple[str, ...] = field(default_factory=tuple)
     error: str = ""
+    root_folders: tuple[str, ...] = ()
+    """Lidarr's root folders, for Settings to pick `[lidarr] root_folder` from (#3)."""
+    quality_profiles: tuple[str, ...] = ()
+    """Lidarr's quality profiles, for Settings to pick `[lidarr] quality_profile` from (#3)."""
 
     @property
     def needs_apply(self) -> bool:
@@ -88,4 +92,18 @@ def parse_setup_profiles_json(output: str) -> LidarrSetupView | None:
                 diff=entry.get("diff") if isinstance(entry.get("diff"), dict) else None,
             )
         )
-    return LidarrSetupView(profiles=tuple(profiles), tag=tag, root_folder=root_folder, todo=tuple(todo))
+    return LidarrSetupView(
+        profiles=tuple(profiles),
+        tag=tag,
+        root_folder=root_folder,
+        todo=tuple(todo),
+        root_folders=_names(payload.get("root_folders")),
+        quality_profiles=_names(payload.get("quality_profiles")),
+    )
+
+
+def _names(value: object) -> tuple[str, ...]:
+    """A list of non-empty strings from the payload, or ``()`` - an older CLI never sends one."""
+    if not isinstance(value, list):
+        return ()
+    return tuple(v for v in value if isinstance(v, str) and v)

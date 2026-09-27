@@ -53,6 +53,16 @@ def _network_guard_per_test(request: pytest.FixtureRequest) -> Iterator[None]:
         yield
 
 
+@pytest.fixture(autouse=True)
+def _deployment_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The env-only deployment settings (#3), the same for every test whatever the shell running
+    the suite has set: a Lidarr URL the fixtures' fakes answer for, and no allowed hosts or
+    MusicBrainz contact, so each test that cares sets its own."""
+    monkeypatch.setenv("LIKEARR_LIDARR_URL", "http://lidarr:8686")
+    monkeypatch.delenv("LIKEARR_ALLOWED_HOSTS", raising=False)
+    monkeypatch.delenv("LIKEARR_MUSICBRAINZ_CONTACT", raising=False)
+
+
 @pytest.fixture
 def preserve_root_logging() -> Iterator[None]:
     """Saves the root logger's handlers and level, and restores them after the test.

@@ -121,11 +121,34 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
   Spotify accounts is supported" (one instance per person, sharing one Spotify app and Lidarr)
   instead of reading like a single account is all that works, with a new README section and a
   compose example for the second instance.
-- The quick start now pastes a Docker Compose block and fetches the example config directly,
-  instead of cloning the repository first just to copy three files out of it.
+- The quick start now pastes a Docker Compose block instead of cloning the repository first just
+  to copy three files out of it.
 - The identity guard has a `--counts-only` option, and CI uses it: a failing check in CI now says
   how many hits there are, not which file, line, commit or denylist entry, since the CI logs of a
   public repository can be read by anyone. Run the guard locally with the list to see where.
+- **Breaking:** `docker compose up -d` with only environment variables and an empty `/data` is now
+  a complete install. Where likearr runs and how it is reached come only from the environment:
+  `LIKEARR_LIDARR_URL` (required), `LIKEARR_ALLOWED_HOSTS` (optional, comma-separated) and
+  `LIKEARR_MUSICBRAINZ_CONTACT` (optional; likearr's project URL by default). `[lidarr] url`,
+  `[ui] allowed_hosts` and `[musicbrainz] contact` are no longer read from `config.toml`, and a
+  file that still has any of them fails to load, naming the variable to set instead. On a first
+  start with no `config.toml`, `likearr start` writes one from `deploy/config.example.toml`,
+  comments intact, and never overwrites an existing file. `[spotify] token_file` and `[state] db`
+  default to `spotify-token.json` and `state.sqlite` beside `config.toml`. `[lidarr] root_folder`
+  and `quality_profile` may now be left unset: Settings, under Lidarr setup, picks them from
+  Lidarr's own lists (one root folder is taken by itself), and until both are set, Status and
+  Doctor say so and every run refuses. With `LIKEARR_ALLOWED_HOSTS` unset, the web UI answers to
+  loopback and any IPv4 address, and refuses every host name; set, it answers only to the listed
+  names and addresses, as before. The README quick start no longer fetches or edits a config file.
+
+### Upgrade notes
+
+- Before upgrading, move three settings out of `config.toml` into the environment (the Compose
+  `environment:` block or `.env`), then delete them from `config.toml`: `[lidarr] url` becomes
+  `LIKEARR_LIDARR_URL`, `[ui] allowed_hosts` becomes `LIKEARR_ALLOWED_HOSTS` (the list joined with
+  commas, for example `likearr.example.org,192.168.1.20`), and `[musicbrainz] contact` becomes
+  `LIKEARR_MUSICBRAINZ_CONTACT`. A `config.toml` that still has any of the three does not load, and
+  the service does not start, until they are removed.
 
 ## [0.5.0]
 

@@ -1,8 +1,12 @@
 # likearr configuration - example.
 #
-# Copy this file to config.toml (e.g. into the /data volume the container mounts) and fill in
-# your own values. This file holds everything deployment-specific EXCEPT secrets. Secrets
-# (API keys, MQTT credentials) come only from environment variables - see env.example.
+# `likearr start` writes this file to /data/config.toml on a first start when there is none, so a
+# Compose install never needs to copy it by hand (copying it is still fine). This file holds how
+# likearr behaves. Where it runs and how it is reached - LIKEARR_LIDARR_URL,
+# LIKEARR_ALLOWED_HOSTS, LIKEARR_MUSICBRAINZ_CONTACT - and every secret (API keys, MQTT
+# credentials) come only from environment variables: see env.example. A [lidarr] url,
+# [ui] allowed_hosts or [musicbrainz] contact in this file fails the load, naming the variable
+# to set instead.
 #
 # Paths that are not absolute are resolved relative to this file's own directory.
 #
@@ -12,20 +16,20 @@
 # run, and is reported where they are used instead.
 #
 # ================================================================================================
-# REQUIRED - edit these before your first run: [lidarr] url, root_folder, quality_profile;
-# [spotify] token_file; [musicbrainz] contact; [state] db; [ui] allowed_hosts. Everything past the
-# "OPTIONAL" heading further down already has a working default and can be left alone.
+# Nothing here needs editing before a first start. The two settings without a default,
+# [lidarr] root_folder and quality_profile, are picked in Settings from Lidarr's own lists (or
+# filled in by themselves when Lidarr has exactly one root folder). No run plans or applies until
+# both are set. Everything past the "OPTIONAL" heading further down can be left alone.
 # ================================================================================================
 
 [lidarr]
-# Base URL of your Lidarr instance. No trailing slash needed.
-url = "http://lidarr:8686"
 # An existing Lidarr root folder (Settings -> Media Management -> Root Folders), exactly as Lidarr
 # spells it. The likearr container must see the library at this SAME path (see docs/DEPLOY.md,
-# "Mounting the library").
-root_folder = "/data/media/music"
-# Name of an existing Lidarr quality profile to use for artists likearr adds.
-quality_profile = "Standard"
+# "Mounting the library"). Picked in Settings; or uncomment and set it here.
+# root_folder = "/data/media/music"
+# Name of an existing Lidarr quality profile to use for artists likearr adds. Picked in Settings;
+# or uncomment and set it here.
+# quality_profile = "Standard"
 # Names for the two metadata profiles likearr creates/uses. `setup-profiles` creates them if
 # missing.
 lean_profile = "Lean"
@@ -52,7 +56,7 @@ recent_gap_refresh_hours = 24
 
 [spotify]
 # Where the OAuth token likearr obtained via `likearr auth` is stored. Keep this file mode 0600;
-# it is a long-lived credential. Not committed, not shared.
+# it is a long-lived credential. Not committed, not shared. This is the default.
 token_file = "spotify-token.json"
 # Which Spotify sources to read. All default to true; turn any off you don't want synced.
 followed_artists = true
@@ -68,9 +72,8 @@ playlists = []
 redirect_uri = "http://127.0.0.1:8765/callback"
 
 [musicbrainz]
-# Required by MusicBrainz's User-Agent policy: an email address or a project URL identifying you.
-# `likearr doctor` warns while this is still the placeholder below.
-contact = "you@example.com"
+# The contact MusicBrainz's User-Agent policy asks for comes from LIKEARR_MUSICBRAINZ_CONTACT (an
+# email address or a URL), and is likearr's project URL when that is unset.
 base_url = "https://musicbrainz.org/ws/2"
 # Minimum seconds between MusicBrainz requests. musicbrainz.org allows one request a second, so
 # against it anything below 1.0 fails the load. A self-hosted mirror (another base_url) may go lower.
@@ -86,21 +89,19 @@ positive_cache_days = 90
 
 [state]
 # Where the SQLite state database lives. This is likearr's memory of what it owns - back it up.
+# This is the default.
 db = "state.sqlite"
 # Optional: the run lock file, used to prevent overlapping runs.
 # If omitted, likearr locks <db>.lock beside the state database.
 lock_file = "likearr.lock"
 
 [ui]
-# REQUIRED: host names the UI answers to - the name you browse to and the LAN address, without a
-# port. No wildcards, no IPv6 literals. localhost and 127.0.0.1 are always allowed on top, for the
-# container healthcheck. Replace the placeholder below with your own; without it the UI answers
-# every other host with "400 Invalid host header". Only read by `likearr start` (the service): a
-# mistake here never stops a run, and `likearr start` refuses to start and names the problem
-# instead.
-allowed_hosts = ["192.168.1.20"]
+# Only read by `likearr start` (the service): a mistake here never stops a run, and `likearr start`
+# refuses to start and names the problem instead. The host names the UI answers to come from
+# LIKEARR_ALLOWED_HOSTS (see env.example).
+#
 # Where a browser reaches Lidarr, for the links on the Status page's name-collision cards. Defaults
-# to [lidarr] url, which may be a container name no browser can resolve. likearr never calls it.
+# to LIKEARR_LIDARR_URL, which may be a container name no browser can resolve. likearr never calls it.
 # lidarr_url = "https://lidarr.example.org"
 # How a terminal on this host runs likearr, put in front of every command Clean up shows so they
 # paste and run as they are. Shown only, never run. It must run the likearr-cli image WITH the

@@ -275,7 +275,7 @@ def _pin_origin(pinned_url: str) -> Callable[[httpx.Request], None]:
     (Lidarr's ``X-Api-Key``) would otherwise go wherever the ``Location`` points.
 
     ``pinned_url`` is parsed on the first request, not when the client is built, so a malformed
-    ``[lidarr] url`` still fails only the commands that call Lidarr, as it did before.
+    ``LIKEARR_LIDARR_URL`` still fails only the commands that call Lidarr, as it did before.
     """
 
     def check(request: httpx.Request) -> None:

@@ -58,6 +58,11 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["likearr"]
 
+# `likearr start` writes a first config.toml from the example (#3, `config.write_initial_config`),
+# so an installed package carries its own copy. A source checkout reads deploy/ directly.
+[tool.hatch.build.targets.wheel.force-include]
+"deploy/config.example.toml" = "likearr/config.example.toml"
+
 [tool.ruff]
 line-length = 120
 target-version = "py312"
