@@ -19,7 +19,7 @@ scripting.
 
 ## Screenshots
 
-![Status page showing "All good", the last and next scheduled run, download coverage in Lidarr and what the last applied run changed](docs/images/status.png)
+![Status page showing "All good", automatic runs, the last change to Lidarr, pending changes to review, download coverage in Lidarr and the recent runs](docs/images/status.png)
 
 ![Review changes page showing a plan: two artists to add, releases to monitor grouped by why they're wanted, and releases to unmonitor](docs/images/review-changes.png)
 
