@@ -5,7 +5,7 @@ deterministic and versioned by :data:`likearr.models.RESOLVER_VERSION`. Given th
 and the same `MetadataLookup` answers it always produces the same resolutions, including the
 same `step` and the same `detail`. Nothing here reads the clock: `now` is always a parameter.
 
-The Singles rule (see ``docs/dev/DESIGN.md``) is implemented in :func:`resolve_track`. In short: a
+The Singles rule is implemented in :func:`resolve_track`. In short: a
 liked song should put the *studio album or EP* the song lives on into Lidarr, not the single,
 because singles mostly duplicate a track the album will bring anyway.
 """

@@ -177,7 +177,7 @@ class Decisions:
 
 def read_decisions(path: Path) -> Decisions:
     """Read `promote`, `save`, `save_releases` and `save_exclude_releases` out of a decisions file
-    (docs/dev/DESIGN.md, "Prune decisions file").
+    (docs/cli.md, "Decisions file").
 
     `trash` and `trash_artists` are `prune-stage`'s business and are ignored here, exactly as
     `prune-stage` ignores these two.

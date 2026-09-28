@@ -227,7 +227,7 @@ def _check_state_matches_lidarr(ctx: Context, view: LidarrView) -> Check:
             "FAIL",
             "state matches lidarr",
             f"{len(lost)} artist(s) in Lidarr carry the {tag!r} tag, but the state database records no artist "
-            "at all: it was lost or replaced. Restore it from backup (docs/DEPLOY.md, Backup and restore); "
+            "at all: it was lost or replaced. Restore it from backup (docs/troubleshooting.md, Restoring from backup); "
             f"until you do, nothing likearr monitored before is ever unmonitored. {names}",
         )
     return Check(

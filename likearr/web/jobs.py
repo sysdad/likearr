@@ -1,6 +1,6 @@
 """The web UI's job runner: long work runs as a child `likearr` process, never in the server.
 
-Why a child process and not a thread (docs/dev/DESIGN.md, "Web UI"):
+Why a child process and not a thread:
 
 - **The CLI stays the single implementation by construction.** A job is exactly the command a
   human would type, so there is no second call path into `plan` or `apply` that could drift.

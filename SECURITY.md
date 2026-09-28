@@ -18,6 +18,5 @@ This is a single-maintainer project, so responses are best effort, not a guarant
 
 ## Exposure model
 
-likearr is built for LAN or VPN use only - it is not designed to be port-forwarded or put behind
-a public tunnel. See ["Exposure and reverse proxy"](docs/DEPLOY.md#exposure-and-reverse-proxy) in
-the deploy docs for the full model and how to add a reverse proxy safely.
+Run likearr on a LAN or VPN only. Don't port-forward it or put it behind a public tunnel. See
+[Reverse proxy and exposure](docs/install.md#reverse-proxy-and-exposure) for adding a reverse proxy.

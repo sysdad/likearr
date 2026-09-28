@@ -430,7 +430,7 @@ def _execute(
     # (d3) ------------------------------------------------------------ chase recent releases
     # A followed artist whose new album Lidarr's catalogue does not hold yet. `refresh_artist`
     # sends `isNewArtist: true`, so the follow-up rescan stays inside the artist's own folder
-    # rather than walking every root (see docs/dev/DESIGN.md, upstream quirks). The release is NOT
+    # rather than walking every root. The release is NOT
     # monitored this run even if it appears: the diff is the plan of record, and it listed this
     # release as a gap rather than as a monitor. The next run picks it up.
     #

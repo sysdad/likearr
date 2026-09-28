@@ -438,8 +438,8 @@ def test_doctor_fails_when_lidarr_has_tagged_artists_and_the_state_database_has_
     assert code == EXIT_ERROR
     assert (
         "FAIL  state matches lidarr: 1 artist(s) in Lidarr carry the 'likearr' tag, but the state database "
-        "records no artist at all: it was lost or replaced. Restore it from backup (docs/DEPLOY.md, "
-        "Backup and restore); until you do, nothing likearr monitored before is ever unmonitored. "
+        "records no artist at all: it was lost or replaced. Restore it from backup (docs/troubleshooting.md, "
+        "Restoring from backup); until you do, nothing likearr monitored before is ever unmonitored. "
         "Wet Leg (artist-9)"
     ) in out
     assert lidarr.writes() == [] and owned_artists == {}, "doctor writes nothing and claims nothing"

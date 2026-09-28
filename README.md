@@ -11,12 +11,11 @@ sets Lidarr's monitoring to match. Unfollow an artist or un-like a song and the 
 are unmonitored again. A run never unmonitors anything you monitored by hand.
 
 likearr is a self-hosted service - one container, managed in the browser. It checks Spotify on a
-schedule and sets Lidarr's monitoring to match; a CLI is there underneath for first-time setup,
-hand work and scripting.
+schedule and sets Lidarr's monitoring to match; a CLI is there underneath for hand work and
+scripting.
 
-> Status: beta. The scope and safety model below are settled; defaults such as Clean up's may
-> still change before 1.0, once more people have run it. Expect rough edges; read the safety
-> model before pointing it at a library you love.
+> Status: beta. Defaults such as Clean up's may still change before 1.0. Expect rough edges, and
+> read the [safety model](#safety-model) before pointing it at a library you love.
 
 ## Screenshots
 
@@ -26,52 +25,40 @@ hand work and scripting.
 
 ![Look up page answering why "Abbey Road" is monitored, matched from a liked song to the album on Spotify and in Lidarr](docs/images/look-up.png)
 
-Taken from a demo library seeded from well-known public artists, not a real listener's account -
-see [`scripts/demo_state.py`](scripts/demo_state.py).
+Taken from a demo library seeded from well-known public artists - see
+[`scripts/demo_state.py`](scripts/demo_state.py).
 
 ## Is this for you?
 
-**For you:**
-- You want your Spotify follows, saved albums and Liked Songs, mirrored into a Lidarr instance you already run.
-- You want the exact releases you like monitored, not whole discographies.
+**For you** if you want your Spotify follows, saved albums and Liked Songs mirrored into a Lidarr
+you already run, with the exact releases you like monitored rather than whole discographies.
 
-**Not for you:**
-- You need to monitor playlists you neither own nor collaborate on (e.g. Spotify-generated playlists); see
-  [What can't be synced](#what-cant-be-synced).
-- You want a tool for downloading or searching (that's still Lidarr and your indexers); see
-  [Getting the music downloaded](#getting-the-music-downloaded).
-
-See [Scope](#scope) for the full statement of what likearr does and does not do.
+**Not for you** if you need playlists you neither own nor collaborate on (see
+[What can't be synced](#what-cant-be-synced)), or a tool that searches or downloads (that's still
+Lidarr and your indexers - see [Getting the music downloaded](#getting-the-music-downloaded)).
 
 ## Why not Lidarr's import lists?
 
-Lidarr's metadata profile is per *artist*, not per *source*. It can't say "albums and EPs for the
-artists I follow, but only this one single I liked". It has no Liked Songs list. And its lists go
-through a shared auth proxy whose token can die without a health warning. likearr keeps Lidarr as
-the library manager and moves the *intent* out to where it can be expressed.
+Lidarr's metadata profile is per *artist*, not per *source*: it can't say "albums and EPs for the
+artists I follow, but only this one single I liked". It has no Liked Songs list, and its lists go
+through a shared auth proxy whose token can die without a warning.
 
-If you move to likearr, disable Lidarr's own Spotify import lists first, especially before a
-Clean up: they re-add every artist you just removed, monitored, and RSS downloads them again.
+If you move to likearr, disable Lidarr's own Spotify import lists first. Otherwise they re-add
+every artist Clean up removes.
 
 ## Requirements
 
 - A host that can run Docker.
-- Lidarr 2.x or 3.x (`SUPPORTED_MAJORS` in `likearr/adapters/lidarr.py`; anything else is refused).
-- One Spotify Premium account that owns a free developer app in Development Mode (one-time setup -
-  see [`docs/spotify.md`](docs/spotify.md)). Up to five people's accounts can use that one app -
-  see [More than one Spotify account](#more-than-one-spotify-account).
+- Lidarr 2.x or 3.x. Any other major version is refused.
+- A Spotify Premium account that owns a free developer app in Development Mode - see
+  [`docs/spotify.md`](docs/spotify.md). Up to five Spotify accounts can share that app, one likearr
+  instance each - see [More than one instance](docs/install.md#more-than-one-instance-or-spotify-account).
 
 ## Quick start
 
-No clone needed. This is the smallest install: one service, `likearr` itself, no `likearr-cli` -
-see [`docs/DEPLOY.md`, "Docker Compose"](docs/DEPLOY.md#docker-compose) for the difference and for
-copying the full [`deploy/compose.example.yaml`](deploy/compose.example.yaml) instead if you want
-`likearr-cli` (for hand commands), a second instance, or secrets kept in a file from the start.
-
-Prefer secrets in a file over inline values? Skip the `environment:` block below: use
-`env_file: [.env]` instead and fill in [`deploy/env.example`](deploy/env.example) as `.env` next to
-`compose.yaml`. Otherwise, paste this as `compose.yaml` (or into an existing stack) and fill in the
-values directly:
+No clone needed. Paste this as `compose.yaml` (or into an existing stack) and fill in the values.
+To keep secrets out of `compose.yaml`, replace the `environment:` block with `env_file: [.env]` and
+fill in [`deploy/env.example`](deploy/env.example) as `.env` beside it.
 
 ```yaml
 services:
@@ -80,7 +67,7 @@ services:
     environment:
       LIKEARR_LIDARR_URL: "http://lidarr:8686"              # how this container reaches Lidarr
       LIKEARR_LIDARR_API_KEY: "<your lidarr api key>"       # Lidarr Settings -> General -> Security
-      LIKEARR_SPOTIFY_CLIENT_ID: "<your spotify client id>" # developer.spotify.com/dashboard - see docs/spotify.md
+      LIKEARR_SPOTIFY_CLIENT_ID: "<your spotify client id>" # see docs/spotify.md
       LIKEARR_UI_PASSWORD: "<16+ random characters>"        # e.g. `openssl rand -base64 24`
       # Optional: host names you browse to likearr by, comma-separated. Unset, it answers to
       # any IPv4 address (http://192.168.1.20:8770) but to no host name.
@@ -96,199 +83,85 @@ services:
     restart: unless-stopped
 ```
 
-Now start it:
+`http://lidarr:8686` works when both containers share a Docker network. Otherwise use Lidarr's
+LAN address, such as `http://192.168.1.10:8686`. Then start it:
 
 ```bash
 docker compose up -d
 ```
 
-There is no config file to write first: on a first start with an empty `likearr-data`, likearr
-writes `likearr-data/config.toml` itself, from
-[`deploy/config.example.toml`](deploy/config.example.toml), and everything left to set is set in
-the browser. `docker ps` shows the container as healthy once the config loads, even before the
-first run writes the state database (see [`docs/DEPLOY.md`, "Running it"](docs/DEPLOY.md#running-it)). If it comes
-up unhealthy instead, `./likearr-data` is very likely not writable by the container - see
-[`docs/DEPLOY.md`, "Docker Compose"](docs/DEPLOY.md#docker-compose) for the writability
-requirement (including a NAS or root-run host's uid mismatch) and the `chown` fix.
+The container runs as uid 1000. If it shows as unhealthy in `docker ps`, it can't write
+`./likearr-data`: see [Troubleshooting](docs/troubleshooting.md#the-container-is-unhealthy).
 
-Open `http://<host>:8770` and log in with `LIKEARR_UI_PASSWORD`. From here on, first-time setup
-and day-to-day use - connecting Spotify, setting up Lidarr, reading a plan, applying it, settings,
-scheduling - are all in the browser:
+Open `http://<host>:8770` and log in with `LIKEARR_UI_PASSWORD`. Everything else is set up in the
+browser:
 
-- **Settings -> Connect Spotify.** Approve access on Spotify's page, then paste back the address it
-  sends you to (it will fail to load - that's expected). If `[ui] public_url` is set to an
-  `https://` address, Spotify instead sends you straight back with no copy/paste.
-- **Settings -> Preview Lidarr setup**, then **Apply** (behind a confirm). Creates the Lean and
-  Full metadata profiles, the `likearr` tag, and safe root-folder defaults - and says so first,
-  without changing anything until you confirm. The same section is where you pick the root folder
-  and quality profile likearr adds artists with, from Lidarr's own lists (a Lidarr with only one
-  root folder has it picked for you). Until both are set, Status says so and no run plans.
-- **Settings -> Doctor -> Run checks** is a read-only check of config, Lidarr, MusicBrainz and
-  Spotify - useful any time, and works even before the first run or with a broken config.toml.
-- **Review changes -> Check for changes**, read the plan, then **Apply** it. That first apply is
-  always yours: the schedule is on from the start, but scheduled runs (and Status's "Run and apply
-  now") wait for your first reviewed apply. Until then each one changes nothing, and Status says
-  "Scheduled runs start after your first reviewed apply".
+1. **Settings -> Connect Spotify.** Approve access on Spotify's page, then paste back the address
+   it sends you to. That page fails to load; that's expected.
+2. **Settings -> Preview Lidarr setup**, then **Apply**. This creates the metadata profiles and tag
+   likearr needs. Pick the root folder and quality profile likearr adds artists with.
+3. **Review changes -> Check for changes**, read the plan, then **Apply** it.
 
-For a normal setup, nothing further is needed from a terminal. Prefer a terminal, want to script
-it, or the box has no browser handy? Those three steps need the `likearr-cli` service, which isn't
-in the minimal block above - copy the full
-[`deploy/compose.example.yaml`](deploy/compose.example.yaml) (or add that service to what you
-already have), then see [`docs/DEPLOY.md`](docs/DEPLOY.md) for the equivalent terminal commands
-("First run: authenticate with Spotify", "Sanity check: doctor" and "Lidarr setup: profiles, tag,
-root folder"), the rest of the install (Docker without Compose, or from source on bare metal) and
-the env var reference, and [`docs/spotify.md`](docs/spotify.md) for the Spotify developer app you
-need to create - including which redirect URI to register.
+Scheduled runs start after that first apply. The first check reads every song through MusicBrainz
+at one request a second, so it can take several hours for a few thousand songs. Later checks take
+minutes. If you stop it, it keeps what it has already looked up.
 
-The first check reads every song through MusicBrainz at 1 request per second, so with an empty
-cache it can take several hours for a few thousand songs. Later checks take minutes, since a song
-already resolved stays cached. Cancelling or restarting keeps what it has already looked up, so
-let it finish.
-
-## More than one Spotify account
-
-Yes: a household with several Spotify accounts can work. This requires running one likearr instance per account, but you can share one
-Spotify developer app and one Lidarr instance. A single likearr instance still reads only one account - there's no
-way to point it at two.
-
-| | Shared across instances | Each instance keeps its own |
-|---|---|---|
-| Spotify | The developer app | Account, Connect flow and token |
-| Lidarr | One install, one library | - |
-| likearr | - | `/data` directory (state database, token file, `config.toml`), UI password, port |
-
-See [docs/DEPLOY.md, "Running more than one instance"](docs/DEPLOY.md#running-more-than-one-instance)
-for the allowlist steps, the compose setup, the one-app-vs-an-app-per-person tradeoffs (quota,
-Premium), and what a shared Lidarr means for `adopt` and Clean up.
+[`docs/install.md`](docs/install.md) covers the rest: taking over an existing library, a second
+instance, scheduling, a reverse proxy and Home Assistant.
 
 ## Safety model
 
-likearr is built to be wrong in the safe direction:
-
-- **Nothing changes without a plan.** A run plans first. What you apply is exactly the plan you
-  reviewed, and it is refused if Spotify, Lidarr or your rules changed since.
-- **It only unmonitors what it monitored.** likearr records every release it monitors and a run
-  never unmonitors anything else. It never deletes a file. See
-  [Changing things in Lidarr by hand](#changing-things-in-lidarr-by-hand) for what happens when you
-  disagree with it.
-- **A bad read never looks like un-liking.** A failed or partial Spotify read unmonitors nothing,
-  and a source or artist that suddenly shrinks is held back until you accept it.
-- **Scheduled runs are capped.** At most 100 unmonitors per run by default.
-- **It won't guess an artist.** Artists are matched by MusicBrainz's link to the Spotify page, not
-  by name. When two artists share a name it reports the clash instead of adding the wrong one.
-- **It never monitors a stranger's album.** A different credit is accepted only when MusicBrainz
-  records the two artists as related.
-- **It never searches or downloads.** Lidarr and your existing tools do that - see
-  [Getting the music downloaded](#getting-the-music-downloaded).
+- **Nothing changes without a plan.** What you apply is exactly the plan you reviewed, and it is
+  refused if Spotify, Lidarr or your settings changed since.
+- **It only unmonitors what it monitored**, and never deletes a file.
+- **A bad read never looks like un-liking.** A failed Spotify read unmonitors nothing, and a source
+  or artist that suddenly shrinks is held back until you accept it.
+- **Scheduled runs are capped.** A scheduled run that would unmonitor more than 100 releases
+  unmonitors none of them and reports why. Review and apply those by hand.
+- **It won't guess an artist.** Artists are matched by MusicBrainz's link to the Spotify page, and
+  a different credit is accepted only when MusicBrainz records the two artists as related.
+- **It writes to Spotify only when you run `promote-save --apply`.**
 - **Every run records its health**, to stdout and the run history, and to MQTT or a webhook if you
-  set one up, so a silent failure shows. Dry runs publish to stdout only.
-- **Clean up moves files, never deletes them.** Files go to a holding folder you empty yourself,
-  and only after checks that the move is safe.
+  set one up.
+- **Clean up moves files, never deletes them.**
 
-### What likearr writes
-
-Below is everything likearr changes in Lidarr and Spotify. Changes can come from a scheduled run or a plan you apply from
-Review changes. It never does the lines marked *by hand* without confirmation.
-
-**Changes in Lidarr**
-
-- Adds artists with nothing monitored and no search, tagged `likearr`.
-- Monitors releases a source wants.
-- Unmonitors only releases it monitored, when no longer wanted.
-- Re-monitors an artist you unmonitored if it holds a release a source wants.
-- Creates the Lean and Full metadata profiles and the `likearr` tag when they are missing, and never
-  overwrites one that exists.
-- Sets "Monitor New Albums" to None on artists holding a release likearr owns (one it added,
-  claimed or adopted), and on any artist it re-monitors or moves to the Full profile, including
-  artists you added yourself. This is so Lidarr never auto-monitors a release you never asked for. An
-  artist whose wanted releases you already monitor keeps its setting. likearr never sets it back.
-- Moves an artist from the Lean to the Full metadata profile when a wanted release needs it
-  (never in the other direction).
-- Asks Lidarr to refresh an artist (`RefreshArtist`) it just added or widened, or one with a new
-  release Lidarr's catalogue does not have yet.
-- *By hand*, Settings' Lidarr setup (after a confirm) or `setup-profiles --apply`: the same
-  profiles and tag, plus the root folder, created or with its defaults set so new artists monitor
-  nothing.
-- *By hand*, `adopt --apply` (from a reviewed plan): takes over the releases a source wants,
-  keeps the ones on your keep list, and unmonitors every other monitored release.
-- *By hand*, Clean up's `prune-stage --apply`: moves files to a holding folder, removes the Lidarr
-  artists left with nothing (files kept, no import list exclusion), and asks Lidarr to rescan the
-  rest. Never deletes a file.
-
-**Changes in Spotify**
-
-- Nothing, except *by hand* with `promote-save --apply` (from a reviewed plan): it follows artists
-  and saves albums. Signing in asks Spotify to read only; the write access `promote-save` needs is
-  asked for only when you opt in (see [Scopes](#scopes-and-when-you-have-to-re-authorize)).
-
-**Never**
-
-- Searches or downloads, deletes a file, changes the quality profile of an artist already in
-  Lidarr, or unmonitors a release it did not monitor (outside the `adopt` plan you review).
-
-The full rules, with every guard and exit code, are in
-[`docs/dev/DESIGN.md`](docs/dev/DESIGN.md#safety).
+In Lidarr, likearr adds artists (tagged `likearr`, nothing monitored, no search), monitors and
+unmonitors releases, re-monitors an artist holding a wanted release, moves an artist from the Lean
+to the Full metadata profile when a wanted release needs it, and sets "Monitor New Albums" to None
+on artists holding a release it monitors. It never changes an existing artist's quality profile.
+Lidarr setup and the by-hand commands (`adopt`, `prune-stage`) change more, and each shows you what
+it will change before it does.
 
 ## Using likearr
 
-`likearr start` (the image's default `CMD`) is the whole service: web UI, in-service scheduler and
-job runner, behind one password. Every run - scheduled or started from the UI - is a child process
-of the same CLI described below.
-
 | Page | What it's for |
 |---|---|
-| **Status** | Health in plain words, the last and next scheduled run (with a "Run and apply now" button), and what the last applied run changed, by name. |
-| **Review changes** | Start a dry run, read the plan in plain language (what gets added, monitored, unmonitored and why), then apply exactly that plan. |
-| **Look up** | Why a song, album or artist is monitored, waiting, left out or unmatched, answered instantly from the last run. |
-| **Not added** | What couldn't be added, split by reason: not on MusicBrainz, not in Lidarr's catalogue yet, two artists share a name, left out by your settings, waiting for an album. |
-| **Settings** | Connect or re-authorize Spotify; preview and apply Lidarr's setup (metadata profiles, tag, root folder); `[rules]`, `[guards]`, which Spotify sources to read, playlist choices, and the schedule (cron line and timezone) with pause/resume and a live preview of the next few fires. The cron expression can't fire more often than every 60 minutes. Clean up's switch is under Advanced, at the bottom. |
+| **Status** | Health in plain words, the last and next scheduled run with a "Run and apply now" button, and what the last applied run changed. |
+| **Review changes** | Check for changes, read the plan (what gets added, monitored, unmonitored and why), then apply exactly that plan. |
+| **Look up** | Why a song, album or artist is monitored, waiting, left out or unmatched, from the last run. |
+| **Not added** | What couldn't be added, and why. |
+| **Settings** | Spotify connection, Lidarr setup, Doctor, rules, guards, sources, playlists and the schedule. Clean up's switch is under Advanced. |
 
-A fire missed while the service was down is caught up once, five minutes after it starts back up -
-never once per fire missed. Pausing the schedule (Settings) stops scheduled runs and Run now
-completely, with no Spotify, MusicBrainz or Lidarr call - but it never touches a plan you review
-and apply yourself from Review changes; that always runs, paused or not.
-
-The web UI never runs anything with `--force`, and never applies Clean up's file moves or Spotify
-changes: it previews them and gives you the commands to run in a terminal (see
-[what likearr writes](#what-likearr-writes)).
+The web UI never applies Clean up's file moves or Spotify changes. It shows you the commands to run
+in a terminal instead - see [`docs/cli.md`](docs/cli.md).
 
 ### Optional: Clean up
 
-Clean up is **off by default**. It reviews the albums on disk that nothing on Spotify asks for:
-you decide per artist and per album what to keep and what to trash, and it exports those
-decisions. The file moves themselves stay a deliberate by-hand CLI step (`prune-stage`), which
-Clean up hands you the exact command for after its previews, and following artists or saving
-albums on Spotify is `promote-save`, also by hand.
+Clean up is off by default. It lists the albums on disk that nothing on Spotify asks for, lets you
+decide per artist and per album what to keep and what to trash, and exports those decisions. You
+then move the files with `prune-stage` and, if you like, follow artists or save albums on Spotify
+with `promote-save`. Trash goes to a holding folder; nothing is deleted until you empty it.
 
-A review opens with your earlier decisions filled in, so you only decide what is new, and asks
-Spotify to follow or save only what you choose in that review. Trash moves albums to a holding
-folder; nothing is deleted until you empty it yourself.
-
-Carrying it out needs more setup than the rest of likearr: the library mounted at Lidarr's exact
-path in the `likearr-cli` container, and a holding folder on the same filesystem, outside the
-library (see [`docs/DEPLOY.md`](docs/DEPLOY.md)). Turn it on in Settings > Advanced, or with
-`[prune] enabled = true` in `config.toml`; that adds Clean up to the menu and the "Also let
-promote-save follow artists and save albums" box to Settings. Turning it off hides both again and
-forgets nothing: past decisions and earlier reviews stay where they are. The CLI commands
-(`prune-report`, `prune-stage`, `prune-checks`, `promote-save`) run either way, and say so when
-Clean up is off.
+It needs the library mounted in the `likearr-cli` container - see
+[Clean up setup](docs/install.md#clean-up-setup). Turn it on in Settings > Advanced.
 
 ## Getting the music downloaded
 
-likearr decides what's wanted and monitors it in Lidarr. It never searches for or downloads
-anything itself.
-
-- A release that comes out after likearr monitors it is usually grabbed by Lidarr on its own, as
-  your indexers post it to their RSS feeds.
-- An album that's already out needs a search. Lidarr doesn't search its own backlog on a schedule,
-  so a monitored back-catalogue album can sit unmatched until something searches for it. Three
-  ways to do that:
-  - Lidarr's own Wanted > Missing > Search All, for a one-off catch-up.
-  - A scheduled missing-album search through Lidarr's API (the `MissingAlbumSearch` command), if
-    you want it to happen on its own.
-  - A companion tool that triggers from Lidarr's wanted list.
-- *Note:* Pace it. Searching hundreds of albums at once hits indexers hard and risks a ban or a
-  jammed queue - spread a first Search All out after a big apply rather than firing it all at once.
+likearr never searches or downloads. A release that comes out after likearr monitors it is usually
+grabbed by Lidarr from your indexers' RSS feeds. An album that's already out needs a search: use
+Lidarr's Wanted > Missing > Search All, a scheduled `MissingAlbumSearch` through Lidarr's API, or a
+companion tool that works from Lidarr's wanted list. After a big first apply, spread the searches
+out: hundreds at once can get you banned from an indexer.
 
 ## What it monitors
 
@@ -296,149 +169,57 @@ anything itself.
 |---|---|
 | Followed an artist | Their studio **albums and EPs**, present and future. No singles, remixes, live albums, compilations or DJ mixes. |
 | Saved an album | That album, whatever type it is. |
-| Liked a song | With `liked_track_scope = "album"` (default): the studio album or EP the song lives on. If Spotify points at the single, likearr finds the album; if the album isn't out yet it waits, and after 180 days it monitors the single. With `"smallest"`: the smallest studio release holding the song, single first, unless you also follow the artist (then the album, which the follow already monitors). |
-| Added a song to a playlist you own or collaborate on | Same as a liked song. Only playlists you **own or collaborate on** - see [What can't be synced](#what-cant-be-synced). |
-| Added an artist in Lidarr yourself | Nothing new. What you monitored there stays monitored. Once a source wants one of its releases, likearr monitors that one and can change artist-level settings: see [what likearr writes](#what-likearr-writes). |
+| Liked a song | The studio album or EP the song is on. If that album isn't out yet, it waits, and after 180 days monitors the single. Set `liked_track_scope = "smallest"` for the smallest release holding the song instead. |
+| Added a song to a playlist you own or collaborate on | Same as a liked song. |
+| Added an artist in Lidarr yourself | Nothing new. Once a source wants one of its releases, likearr monitors that one. |
 
-Liked songs map to the album they live on, with opt-outs for box sets, remix EPs and a deny list,
-and a credit-relationship check for when MusicBrainz files a record under a different artist name
-than Spotify; the exact rules are in [`docs/dev/DESIGN.md`](docs/dev/DESIGN.md).
+The rules and opt-outs (box sets, remix EPs, a deny list) are set in Settings and described in
+[`deploy/config.example.toml`](deploy/config.example.toml).
 
 ## What can't be synced
 
 Spotify's Development Mode only returns playlist items for playlists you own or collaborate on.
-Followed playlists, other people's playlists, and Spotify's own playlists (Discover Weekly,
-Release Radar, Daily Mix, and editorial playlists like Rap Caviar) all come back empty from the
-API - likearr can't read what's on them, no matter how the playlist reaches your config.
+Followed playlists, other people's playlists, and Spotify's own (Discover Weekly, Release Radar,
+Daily Mix, editorial playlists) come back empty, so likearr can't read them. The playlist picker in
+Settings greys them out.
 
-A playlist you collaborate on works like one you own, once Spotify has been connected with
-collaborative access (`playlist-read-collaborative`). likearr asks for it from this version on;
-if you connected before, re-authorize once (Settings' "Re-authorize Spotify", or `likearr auth`)
-and refresh the playlist list. Until then everything else keeps syncing as it is, and Settings and
-Status say to re-authorize.
+**Workaround:** like the songs you want, or copy them into a playlist you own.
 
-The playlist picker in Settings shows every playlist your account can see. Anything likearr can't
-read is greyed out with the reason and can't be selected:
-Spotify doesn't share this playlist's songs with a personal app. A playlist you collaborate on
-says to re-authorize instead, until you have.
-
-**Workaround:** like the songs you want, or copy them into a playlist you own (a running
-"Discover keepers" playlist, say). Either one is a source likearr already reads.
+If Settings says a playlist you collaborate on needs a re-authorization, use **Re-authorize
+Spotify** in Settings, then refresh the playlist list.
 
 ## Changing things in Lidarr by hand
 
-You will disagree with likearr sometimes, and the first thing to reach for is Lidarr's own
-Monitor toggle. Here's how to ensure those edits aren't undone on the next run.
-
-**You don't want a release likearr monitored.** Unmonitoring it in Lidarr is undone on the next
-run, as long as a source still wants it. Use **Not this one** on the plan row or on the Look up
-card instead, or unlike the song on Spotify. Not this one works for releases wanted by liked or
-playlist songs and by a followed artist's catalogue. A saved album always wins, so for one of
-those the button is not offered and the row says to unsave the album on Spotify instead.
-
-**You don't want Lidarr searching an artist.** Unmonitoring the artist is undone while likearr
-still wants any of their releases, because Lidarr never searches an unmonitored artist's albums.
-The routes are Spotify (unfollow the artist, unlike their songs, unsave their albums) or Not this
-one on each release. The albums-only tag does not help here either: it narrows a followed
-artist's monitoring to studio albums, it does not stop likearr wanting them.
-
-**You want to keep a release after you unlike it.** Let likearr unmonitor it, then monitor it
-again in Lidarr by hand. From then on it is yours and likearr leaves it alone.
+- **You don't want a release likearr monitored.** Unmonitoring it in Lidarr is undone on the next
+  run. Use **Not this one** on the plan row or the Look up card, or unlike the song on Spotify. For
+  a saved album, unsave it on Spotify.
+- **You don't want Lidarr searching an artist.** Unfollow them, unlike their songs and unsave their
+  albums on Spotify, or use Not this one on each release.
+- **You want to keep a release after you unlike it.** Let likearr unmonitor it, then monitor it
+  again in Lidarr. From then on it's yours and likearr leaves it alone.
 
 ## Scope
 
-One Spotify account into one Lidarr, per instance. likearr reads followed artists, saved albums,
-Liked Songs and playlists you own or collaborate on, works out what your library should want, and
-sets Lidarr's monitoring to match - on a schedule or on demand, with a plan you review before it applies.
+One Spotify account into one Lidarr, per instance. A household runs one instance per account.
 
-It never searches or downloads. It only unmonitors what it monitored, and Clean up moves files
-rather than deleting them. It writes to Spotify only when you run `promote-save --apply` yourself.
-See [Safety model](#safety-model) for the full list.
+**Not planned:** one instance reading several Spotify accounts; likes from Deezer, Tidal, YouTube
+Music, Apple Music, Qobuz, Plex or Navidrome. **Possible later:** ListenBrainz loved tracks.
 
-likearr sets Lidarr's monitoring; getting the files is Lidarr's own missing-album search or a tool
-like Soularr - see [Getting the music downloaded](#getting-the-music-downloaded).
+## Upgrading
 
-**Not planned:** one instance reading several Spotify accounts. Households are supported with one
-instance per account - see [More than one Spotify account](#more-than-one-spotify-account). Also
-not planned: likes from Deezer, Tidal, YouTube Music, Apple Music, Qobuz, Plex or Navidrome.
+1. Back up by copying the `likearr-data` folder somewhere safe.
+2. Read [`CHANGELOG.md`](CHANGELOG.md) for the new version.
+3. Change the image tag in `compose.yaml`, then run `docker compose pull && docker compose up -d`.
 
-**Possible later:** ListenBrainz loved tracks.
+To roll back, see [Troubleshooting](docs/troubleshooting.md#rolling-back-an-upgrade).
 
-## CLI
+## More
 
-The service runs the same CLI underneath. First-time setup, the by-hand steps (`prune-stage --apply`,
-`promote-save --apply`) and scripting use it directly: see [`docs/CLI.md`](docs/CLI.md).
-
-## Spotify Development Mode
-
-Any app you create yourself runs under Spotify's Development Mode rules (February 2026 onward):
-
-- Playlist contents are returned **only for playlists you own or collaborate on**. Followed,
-  other people's, and Spotify's own algorithmic and editorial playlists all come back empty;
-  likearr refuses them loudly rather than treating them as empty. See
-  [What can't be synced](#what-cant-be-synced).
-- The app owner needs Spotify Premium. Quota is shared across all your apps, and it is small: a
-  burst of ~700 `search` calls from an ad-hoc script hit `QUOTA_EXCEEDED` on a fresh app. A normal
-  likearr run stays well under, but don't run probes against the same client id in the same window.
-  Every run, dry or not, reads every source: a day of back-to-back verification dry runs is enough
-  to exhaust it, and then every run aborts with zero unmonitors until it recovers. Space them out.
-- `external_ids` (ISRC/UPC) were removed and then restored in 2026. likearr treats them as helpful,
-  not required, and falls back to name lookups through MusicBrainz and Lidarr.
-
-### More than one person
-
-The app owner's Premium requirement above is per developer app, not per person it reads for -
-see [More than one Spotify account](#more-than-one-spotify-account) for how a household shares one
-app across up to five accounts, and
-["Running more than one instance"](docs/DEPLOY.md#running-more-than-one-instance) for the
-allowlist, the setup and what a shared Lidarr means for `adopt` and Clean up.
-
-### Scopes, and when you have to re-authorize
-
-Signing in is read-only by default: likearr asks for `user-follow-read user-library-read
-playlist-read-private playlist-read-collaborative`, which is all it needs to mirror your likes and
-your own and collaborative playlists into Lidarr. The write scopes,
-`user-follow-modify user-library-modify`, are only for `promote-save` (Clean up's follow and save
-on Spotify), and likearr asks for them only when you opt in: `likearr auth --promote-save`, or the
-"Also let promote-save follow artists and save albums" box in Settings before you connect (shown
-once Clean up is on).
-
-Spotify grants scopes when you approve the consent screen and a token refresh **never widens
-them**, so a read-only token cannot write. `promote-save` checks up front and refuses with the fix
-rather than failing halfway through:
-
-```
-likearr auth --manual --promote-save -c config.toml     # approve write access, then re-run promote-save
-```
-
-A plain re-authorization (Settings' "Re-authorize Spotify", or `likearr auth` without the flag)
-keeps what you have: if your current token already has the write scopes, it asks for them again;
-if not, it stays read-only. Every other command works on a read-only token.
-
-A token from before likearr asked for `playlist-read-collaborative` keeps working for everything it
-did before, scheduled runs included: nothing checks for the new scope except the playlist picker,
-which offers a playlist you collaborate on only once your token has it. Re-authorize when you want
-one; a token with the write scopes keeps them.
-
-## Design
-
-Functional core, imperative shell. Sources produce an immutable snapshot; a pure resolver turns it
-into a desired state; a pure diff compares that with Lidarr and the ownership state; only the apply
-step has side effects, in per-batch SQLite transactions. Details, diagrams and the failure model:
-[`docs/dev/DESIGN.md`](docs/dev/DESIGN.md).
-
-## Development
-
-Dev setup, the check commands and the contribution rules are in
-[`CONTRIBUTING.md`](CONTRIBUTING.md).
-
-## Changelog
-
-Notable changes are recorded in [`CHANGELOG.md`](CHANGELOG.md).
-
-## Security
-
-To report a vulnerability, or to see the intended exposure model, see [`SECURITY.md`](SECURITY.md).
+- [`docs/install.md`](docs/install.md) - setup in detail
+- [`docs/troubleshooting.md`](docs/troubleshooting.md) - when something goes wrong
+- [`docs/cli.md`](docs/cli.md) - every command
+- [`docs/spotify.md`](docs/spotify.md) - the Spotify developer app
+- [`CONTRIBUTING.md`](CONTRIBUTING.md), [`SECURITY.md`](SECURITY.md), [`CHANGELOG.md`](CHANGELOG.md)
 
 ## Licence
 

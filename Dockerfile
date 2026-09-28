@@ -63,7 +63,7 @@ ARG LIKEARR_GID=1000
 # which commit is running, which the image otherwise has no way to know (`.dockerignore` excludes
 # `.git`). Neither is required: an image built without them is simply unlabelled and shows no
 # commit. Pass them with, for example, `--build-arg VCS_REF=$(git rev-parse --short HEAD)
-# --build-arg VERSION=$(git describe --tags --always)` (see docs/DEPLOY.md).
+# --build-arg VERSION=$(git describe --tags --always)`.
 ARG VCS_REF=""
 ARG VERSION=""
 LABEL org.opencontainers.image.revision="${VCS_REF}" \
@@ -106,7 +106,7 @@ EXPOSE 8770
 
 # Curl-free (no curl in this image) and on 127.0.0.1, which the web UI always accepts, whatever
 # LIKEARR_ALLOWED_HOSTS says (tests/web/test_app.py). A fresh install with no state database yet still reads healthy: see
-# the healthz docstring in likearr/web/app.py and docs/DEPLOY.md, "Running it". likearr-cli never
+# the healthz docstring in likearr/web/app.py. likearr-cli never
 # binds the port and inherits this check too; its compose service disables it explicitly.
 HEALTHCHECK --interval=60s --timeout=10s --start-period=20s --retries=3 CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8770/healthz', timeout=5)"]
 

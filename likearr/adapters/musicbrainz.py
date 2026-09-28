@@ -919,9 +919,9 @@ class MusicBrainzLookup:
         ``GET /url?resource=https://open.spotify.com/artist/<id>&inc=artist-rels``, reading
         ``relations[].artist``. This is the authoritative direction: an editor linked *that*
         Spotify page to *that* artist, so it cannot confuse two artists who merely share a name -
-        which a name search does, catastrophically (see docs/dev/DESIGN.md, "Resolving a followed
-        artist"). Verified by hand: the Spotify "Lawrence" page links to the New York group and
-        one bad eurobeat link, and not at all to the German DJ a name search had been picking.
+        which a name search does, catastrophically. Verified by hand: the Spotify "Lawrence" page
+        links to the New York group and one bad eurobeat link, and not at all to the German DJ a
+        name search had been picking.
 
         Returns every linked artist, in MusicBrainz's order, for the caller to choose between.
         Empty when MusicBrainz has no such URL or no artist relation on it - a plain "not found",
