@@ -2,7 +2,8 @@
 
 Nothing personal or site-specific lives in code. Secrets are never read from the TOML file, and
 neither are the deployment settings below: each setting has one source, so there is
-nothing to reconcile. The file holds what the web UI edits; `likearr start` writes it from
+nothing to reconcile. The file can still hold one secret: a `[health.webhook] url` that carries a
+token. The file holds what the web UI edits; `likearr start` writes it from
 `deploy/config.example.toml` on a first start with none (`write_initial_config`).
 
 Env vars (deployment):
@@ -213,14 +214,14 @@ class RulesConfig:
     liked_track_scope: str = LIKED_TRACK_SCOPE_ALBUM
     """Which release a liked/playlist track resolves to: 'album' (the Singles rule) or 'smallest'.
 
-    Validated in `parse_config`, so the resolver may trust it. See docs/dev/DESIGN.md.
+    Validated in `parse_config`, so the resolver may trust it.
     """
     recent_release_days: int = 60
     """How new a followed artist's release group has to be for its catalogue gap to be 'recent'.
 
     A gap this new (or future-dated) is Lidarr's metadata lagging behind MusicBrainz, which a
     scoped RefreshArtist fixes; an older one is almost always a promo or bootleg Lidarr will never
-    track. See docs/dev/DESIGN.md, "Catalogue gaps".
+    track.
     """
     allow_compilation_fallback: bool = True
     """Opt-out: when false, a track whose only home is a Compilation never monitors it."""
@@ -272,7 +273,7 @@ class ScheduleConfig:
     """`[schedule]`: when the scheduled run fires, and whether it does. Read by the in-service
     scheduler (`likearr.web.schedule`) and by `run --scheduled` itself, not just the web
     UI, which is why it lives here rather than in `[ui]` - `[ui]` never stops or times a run
-    (docs/dev/DESIGN.md) - and outside `Config.plan_fingerprint`, so pausing or rescheduling can never make
+    - and outside `Config.plan_fingerprint`, so pausing or rescheduling can never make
     a reviewed plan stale.
     """
 

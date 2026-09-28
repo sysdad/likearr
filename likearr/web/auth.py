@@ -1,7 +1,7 @@
 """Access control for `likearr start`: one shared password, and a same-origin rule under it.
 
 The UI has a button that can unmonitor hundreds of albums, and every host on the LAN can reach
-its port directly over plain http, so it authenticates for itself (docs/dev/DESIGN.md, "Web UI"):
+its port directly over plain http, so it authenticates for itself:
 
 - **One password**, ``LIKEARR_UI_PASSWORD``, compared in constant time. The server refuses to
   start without it, or with one shorter than 16 characters - there is no open mode to fall back to.

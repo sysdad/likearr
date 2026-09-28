@@ -54,7 +54,7 @@ counted from its last use (the latest decision or export), not from when it was 
 
 
 STOP_GRACE_PERIOD_S = 30 * 60
-"""The compose ``stop_grace_period`` (deploy/compose.example.yaml, DEPLOY.md): 30 minutes, because
+"""The compose ``stop_grace_period`` (deploy/compose.example.yaml): 30 minutes, because
 an apply that adds many artists waits up to `[lidarr] refresh_timeout_s` (300 s) for each one's
 RefreshArtist and can run past ten. Keep the two in step."""
 

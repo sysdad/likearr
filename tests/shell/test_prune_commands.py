@@ -711,7 +711,7 @@ def test_prune_stage_preview_refuses_a_root_folder_that_is_not_mounted(tmp_path:
             prune_commands.prune_stage_command(
                 ctx, manifest=manifest, holding=tmp_path / "holding", all_candidates=True, now=NOW
             )
-    assert "DEPLOY.md" in str(exc.value)
+    assert "install.md" in str(exc.value)
 
 
 def test_prune_stage_preview_refuses_the_old_example_holding_path(tmp_path: Path, sink: CapturingSink) -> None:

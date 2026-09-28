@@ -31,6 +31,9 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
 
 - The Spotify box in Settings and Clean up's intro are shorter; the detail is in
   `docs/spotify.md` and the README.
+- The docs are rewritten around installing, using and troubleshooting likearr: `docs/install.md`,
+  `docs/troubleshooting.md` and `docs/cli.md` replace `docs/DEPLOY.md` and `docs/CLI.md`, and
+  `deploy/config.example.toml` is the configuration reference.
 
 ## [0.5.1]
 

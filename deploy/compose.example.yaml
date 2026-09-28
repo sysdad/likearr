@@ -1,32 +1,16 @@
-# likearr - example docker-compose service.
+# likearr - example Compose file. See docs/install.md.
 #
-# likearr is a single long-running service: the web UI, the scheduler and every run (as a child
-# process of the service) all live in one container, `likearr`. `docker compose up -d` starts it;
-# there is nothing else to run on a schedule. The image's own CMD runs `likearr start`, so no
-# `command:` line is needed here.
-#
-# likearr-cli (below, profile "tools") is the same image for by-hand work only: first-time auth,
-# doctor, setup-profiles, adopt, and the prune/promote-save applies that stay CLI by design (see
-# docs/dev/DESIGN.md). It is never scheduled and never reachable from the UI.
-#
-# Copy this file to compose.yaml at the repo root: `.env` and `./likearr-data` are relative to
-# that directory. Both services default to pulling the published image, pinned to a version tag
-# rather than floating on `:latest`, so `docker compose up -d` never silently changes what you're
-# running - see "Upgrading and pinning" at the bottom. Prefer building it yourself? Comment out
-# each `image:` line and uncomment the matching `build:` block instead.
-#
-# To fold the services into an existing compose project elsewhere, point `build:` at your clone.
+# Copy to compose.yaml and fill in env.example as .env beside it (then `chmod 600 .env`).
+# `docker compose up -d` starts the service; schedules are set on its Settings page.
+# To build the image yourself, comment out each `image:` line and uncomment the `build:` block
+# below it, in a clone of the repository.
 
 services:
   likearr:
     image: ghcr.io/sysdad/likearr:0.5.1
     # build:
     #   context: .
-    #   # Uncomment to build the image as your data dir's owner instead of the default 1000:1000
-    #   # (a Linux desktop uid). A NAS is usually something else - Synology starts at 1026, Unraid
-    #   # uses 99, TrueNAS apps use 568 - and the first write to /data (the Spotify token, then a
-    #   # settings save) fails until the uid that runs the container can write there. See
-    #   # docs/DEPLOY.md, "Docker Compose", for the writability requirement.
+    #   # To run as your data folder's owner instead of 1000:1000:
     #   args:
     #     LIKEARR_UID: "1026"
     #     LIKEARR_GID: "100"
@@ -34,35 +18,21 @@ services:
     env_file:
       - .env
     volumes:
-      - ./likearr-data:/data
-    # Published on the host's LAN interface so a reverse proxy on another host can reach it. That
-    # also means any LAN host can reach it directly over http, which is why the UI has a login.
+      - ./likearr-data:/data  # must be writable by uid 1000 (or LIKEARR_UID)
+    # Use "127.0.0.1:8770:8770" if a reverse proxy on this host is the only way in.
     ports:
       - "8770:8770"
     restart: unless-stopped
-    # The server is small, but its jobs run as child processes that share this limit, and
-    # "Find unneeded albums" (prune-report) builds the whole library report in-process: 256m was
-    # OOM-killed on a large library. A scheduled apply uses far less, so 768m leaves room to spare.
     mem_limit: 768m
-    # Long enough for an apply, scheduled or from the UI, to finish when the container is stopped:
-    # one that adds many artists waits up to 300 s for each RefreshArtist. The server waits 28
-    # minutes of this for the apply (likearr.web.context.STOP_GRACE_PERIOD_S); keep the two in step.
+    # Lets a running apply finish when the container stops.
     stop_grace_period: 30m
-    # The healthcheck is baked into the image now (Dockerfile HEALTHCHECK); nothing to set here.
-    # A fresh install with a valid config and no state database yet reads healthy - see
-    # docs/DEPLOY.md, "Running it".
 
-  # By-hand work only: first-time auth, doctor, setup-profiles, adopt, and the prune/promote-save
-  # applies (never scheduled, never reachable from the UI - see docs/dev/DESIGN.md). Not `up -d`;
-  # each command is `compose run --rm likearr-cli ...`. `[ui] cli_command` in config.toml is the
-  # command Clean up shows in front of its own arguments; it defaults to this service's name.
+  # For commands you run by hand: `docker compose run --rm likearr-cli <command> -c /data/config.toml`.
   likearr-cli:
     image: ghcr.io/sysdad/likearr:0.5.1
     # build:
     #   context: .
-    #   # See the `likearr` service above - keep both services' build args (and, if you switch
-    #   # back to `image:`, both tags) in step so a container started from either one can write
-    #   # the same /data mount.
+    #   # Keep in step with the likearr service above.
     #   args:
     #     LIKEARR_UID: "1026"
     #     LIKEARR_GID: "100"
@@ -71,28 +41,17 @@ services:
       - .env
     volumes:
       - ./likearr-data:/data
-      # OPTIONAL: only `prune-stage` needs the library, and only on this service - never on
-      # `likearr` above. Mount the library's PARENT so Lidarr's root folder (lidarr.root_folder in
-      # config.toml, e.g. /data/media/music) is at the SAME path here as in Lidarr, and the
-      # holding folder (/data/media/_likearr-holding) sits beside it on the same filesystem, so
-      # every move is a rename. prune-stage checks both before it moves anything:
+      # Clean up only: the library's parent, so Lidarr's root folder has the same path here as in
+      # Lidarr. See docs/install.md, "Clean up setup".
       # - /path/to/media:/data/media
-    # The image's default CMD is the always-on service (`likearr start`); a bare
-    # `docker compose run --rm likearr-cli` prints the help instead of starting a second one.
     command: ["--help"]
     profiles: ["tools"]
     restart: "no"
-    # This service never binds :8770, so the image's inherited healthcheck would never pass -
-    # disable it so a long `prune-stage` run never shows unhealthy.
     healthcheck:
       disable: true
 
-  # A household with a second Spotify account: a second instance, its own /data directory and
-  # port, sharing this Lidarr and (usually) the Spotify developer app above - see docs/DEPLOY.md,
-  # "Running more than one instance", for the allowlist and what a shared Lidarr means for `adopt`
-  # and Clean up. Uncomment and give it its own env file too (a copy of .env with a different
-  # LIKEARR_UI_PASSWORD; LIKEARR_LIDARR_API_KEY and LIKEARR_SPOTIFY_CLIENT_ID can stay the same
-  # when the app is shared).
+  # A second instance for another Spotify account: its own data folder, port and env file (with its
+  # own LIKEARR_UI_PASSWORD). See docs/install.md, "More than one instance or Spotify account".
   # likearr-2:
   #   image: ghcr.io/sysdad/likearr:0.5.1
   #   container_name: likearr-2
@@ -106,19 +65,5 @@ services:
   #   mem_limit: 768m
   #   stop_grace_period: 30m
 
-# Usage:
-#   docker compose -f compose.yaml run --rm likearr-cli auth --manual -c /data/config.toml   # first-time, interactive
-#   docker compose -f compose.yaml run --rm likearr-cli doctor -c /data/config.toml
-#   docker compose -f compose.yaml run --rm likearr-cli prune-stage --manifest /data/prune.json \
-#       --holding /data/media/_likearr-holding --decisions /data/decisions.json -c /data/config.toml
-# (Clean up in the web UI shows these commands with the right paths filled in, after its previews.)
-#
-# Scheduling lives in the service's Settings page, not a host crontab: pause/resume, the missed-
-# fire catch-up and the cron expression are all set there while `likearr` is running (see
-# docs/DEPLOY.md, "Scheduling").
-#
-# Upgrading and pinning: bump every `image:` tag to the new version and run
-# `docker compose up -d`. To roll back, set the tag back to the older version instead - GHCR keeps
-# every published version tag, so an older one is still there to pull. `:latest` always tracks the
-# newest published release; a version tag like `:0.5.0` never moves, which is why it's the default
-# above.
+# Upgrading: change every `image:` tag to the new version, then
+# `docker compose pull && docker compose up -d`. To roll back, set the tags back.

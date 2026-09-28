@@ -234,7 +234,7 @@ def prune_stage_command(
     every source, destination, size and timestamp, so the move can be undone by hand.
 
     Selection is exactly one of `artists`, `all_candidates` or `decisions` - a prune-review
-    decisions file (see :func:`_select_from_decisions` and ``docs/dev/DESIGN.md``, "Prune decisions
+    decisions file (see :func:`_select_from_decisions` and ``docs/cli.md``, "Decisions
     file").
 
     Lidarr is told afterwards: an artist whose every candidate was staged is removed from Lidarr
@@ -485,8 +485,8 @@ def _move_problem(exc: OSError, move: Move, root_folder: str) -> str:
         return (
             f"{move.source} and the holding folder are on different mounts, so it can only be copied, and "
             "likearr never copies instead of moving. Mount the library's parent directory once, so the root "
-            f"folder {root_folder} and the holding folder sit side by side on one mount (docs/DEPLOY.md, "
-            "'Mounting the library for prune-stage')"
+            f"folder {root_folder} and the holding folder sit side by side on one mount (docs/install.md, "
+            "'Mounting the library for Clean up')"
         )
     return f"{move.source}: {exc.strerror or exc}"
 
@@ -566,7 +566,7 @@ def _stage_summary(
     }
 
 
-_HOW_TO_MOUNT = "docs/DEPLOY.md, 'Mounting the library for prune-stage'"
+_HOW_TO_MOUNT = "docs/install.md, 'Mounting the library for Clean up'"
 MOUNTINFO = Path("/proc/self/mountinfo")
 _SHOWN = 3
 
@@ -685,7 +685,7 @@ def _string_list(value: object) -> list[str]:
 def _select_from_decisions(path: Path, candidates: Sequence[PruneRow], protected: Sequence[PruneRow]) -> list[PruneRow]:
     """Turn a prune-review decisions file into the candidate rows it selects.
 
-    See ``docs/dev/DESIGN.md``, "Prune decisions file", for the format. Only ``trash`` (release-group
+    See ``docs/cli.md``, "Decisions file", for the format. Only ``trash`` (release-group
     mbids) and ``trash_artists`` (every candidate row for that artist) are consumed here;
     ``promote``/``save`` are the review page's way of saying what a later Spotify step should do
     with a release, and prune-stage - which only ever moves files - reports them and does nothing

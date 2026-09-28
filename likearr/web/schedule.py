@@ -16,7 +16,7 @@ sqlite file, a transient filesystem error, anything not already handled - is log
 iteration retries after one `_RECHECK_S`, rather than silently ending the schedule for good.
 
 **Paused stays one code path.** `[schedule] enabled = false` is not checked here. The scheduler
-fires on schedule regardless, and the child (`run_command`, `likearr/shell/run.py:1050`) is the one
+fires on schedule regardless, and the child (`run_command` in `likearr/shell/run.py`) is the one
 that reads the pause and publishes `RunStatus.PAUSED` without doing any work - the same path phase
 1 already built and ships. The alternative - this module skipping the fire and publishing PAUSED
 itself - would need a second place that knows how to publish a health record, and a second answer
@@ -87,7 +87,7 @@ def scheduled_argv() -> list[str]:
     ...) - so this is the whole of what `submit_scheduled` adds.
 
     `--accept-shrink` / `--accept-health` are never here and never will be - `run_command` already
-    refuses them with `--scheduled` (`shell/run.py:1034-1049`); this is the second lock on the same
+    refuses them with `--scheduled` (`run_command` in `shell/run.py`); this is the second lock on the same
     door, so the argv itself is never the thing anyone would need to change to loosen it.
     """
     return ["run", "--scheduled", "--apply"]

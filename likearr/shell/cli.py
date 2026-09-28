@@ -194,7 +194,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="FILE",
         help=(
             "a prune-review decisions file (JSON: trash, trash_artists, promote, save, save_releases, notes - "
-            "see docs/dev/DESIGN.md); prune-stage acts on 'trash' and 'trash_artists' only"
+            "see docs/cli.md); prune-stage acts on 'trash' and 'trash_artists' only"
         ),
     )
 
@@ -217,7 +217,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="FILE",
         help=(
-            "a prune-review decisions file (JSON: promote, save, save_releases - see docs/dev/DESIGN.md); required "
+            "a prune-review decisions file (JSON: promote, save, save_releases - see docs/cli.md); required "
             "to plan, and defaults to the path the plan recorded when applying"
         ),
     )

@@ -4,7 +4,7 @@
 reads that report, keeps the reviewer's decisions in a draft beside it, and turns them into the
 two files the terminal steps take - it exports, it never executes:
 
-- **the decisions file** (docs/dev/DESIGN.md, "Prune decisions file"): ``trash`` and
+- **the decisions file** (docs/cli.md, "Decisions file"): ``trash`` and
   ``trash_artists`` for `prune-stage --decisions`; ``promote``, ``save``, ``save_releases`` and
   ``save_exclude_releases`` for `promote-save`;
 - **the review snapshot** (``review-data.json``) that `promote-save --reviewed` requires: the

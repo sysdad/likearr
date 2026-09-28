@@ -1,251 +1,149 @@
-# likearr configuration - example.
+# likearr configuration - the reference for every key.
 #
-# `likearr start` writes this file to /data/config.toml on a first start when there is none, so a
-# Compose install never needs to copy it by hand (copying it is still fine). This file holds how
-# likearr behaves. Where it runs and how it is reached - LIKEARR_LIDARR_URL,
-# LIKEARR_ALLOWED_HOSTS, LIKEARR_MUSICBRAINZ_CONTACT - and every secret (API keys, MQTT
-# credentials) come only from environment variables: see env.example. A [lidarr] url,
-# [ui] allowed_hosts or [musicbrainz] contact in this file fails the load, naming the variable
-# to set instead.
+# likearr writes this file to /data/config.toml on first start, and Settings edits it. Nothing here
+# needs editing before a first start. Relative paths are relative to this file's folder.
 #
-# Paths that are not absolute are resolved relative to this file's own directory.
+# Secrets and addresses come from environment variables (see env.example), not this file. The one
+# exception: a [health.webhook] url with a token in it is a secret, so keep this file private
+# (`chmod o-rwx config.toml`).
 #
-# Every key is checked when the file loads. A misspelt key or section, a quoted number or a value
-# out of range fails the load with a message naming the key (and the key you probably meant),
-# rather than being ignored. [ui] and [prune] are the exception: a problem there never stops a
-# run, and is reported where they are used instead.
-#
-# ================================================================================================
-# Nothing here needs editing before a first start. The two settings without a default,
-# [lidarr] root_folder and quality_profile, are picked in Settings from Lidarr's own lists (or
-# filled in by themselves when Lidarr has exactly one root folder). No run plans or applies until
-# both are set. Everything past the "OPTIONAL" heading further down can be left alone.
-# ================================================================================================
+# A misspelt key or an out-of-range value fails the load with a message naming it. Mistakes in
+# [ui] and [prune] don't stop a run; they are reported where they are used.
 
 [lidarr]
-# An existing Lidarr root folder (Settings -> Media Management -> Root Folders), exactly as Lidarr
-# spells it. The likearr container must see the library at this SAME path (see docs/DEPLOY.md,
-# "Mounting the library"). Picked in Settings; or uncomment and set it here.
+# An existing Lidarr root folder, exactly as Lidarr spells it (Settings -> Media Management).
+# Picked in Settings; or uncomment and set it here.
 # root_folder = "/data/media/music"
-# Name of an existing Lidarr quality profile to use for artists likearr adds. Picked in Settings;
-# or uncomment and set it here.
+# An existing Lidarr quality profile for the artists likearr adds. Picked in Settings.
 # quality_profile = "Standard"
-# Names for the two metadata profiles likearr creates/uses. `setup-profiles` creates them if
-# missing.
+# Names of the two metadata profiles likearr creates and uses.
 lean_profile = "Lean"
 full_profile = "Full"
-# Lidarr tag applied to every artist likearr itself adds.
+# Tag likearr puts on every artist it adds.
 tag = "likearr"
-# How long to wait (seconds) for Lidarr's RefreshArtist to finish before giving up on an artist
-# for this run. This is the floor: the wait grows by refresh_per_album_s for every release group
-# in the artist's catalogue, up to refresh_timeout_max_s. A big catalogue (Sibelius, Bing Crosby,
-# Springsteen) needs many minutes. An artist whose wait still runs out is skipped for this run
-# only; Lidarr keeps refreshing, so it is picked up next run.
+# Seconds to wait for Lidarr to refresh an artist: the base, plus this much per release, up to the
+# maximum. An artist that runs out of time is retried next run.
 refresh_timeout_s = 300
 refresh_per_album_s = 2
 refresh_timeout_max_s = 3600
-# How many followed artists one run may refresh to chase a release MusicBrainz lists and Lidarr's
-# catalogue does not hold yet (see rules.recent_release_days). Each refresh is a Lidarr command
-# likearr waits on, so this caps how long a busy release week can hold a run. Artists past the cap
-# are still reported and are picked up by the next run. 0 disables the chase entirely.
+# Most followed artists one run asks Lidarr to refresh for a new release it doesn't have yet.
+# 0 turns this off.
 max_refreshes_per_run = 10
-# How long to leave an artist alone after refreshing them for a recent catalogue gap, so the same
-# artist is not re-asked on every run while the gap sits inside the recency window. Default 24
-# hours; see docs/dev/DESIGN.md for the full reasoning.
+# Hours before the same artist is refreshed again for the same missing release.
 recent_gap_refresh_hours = 24
 
 [spotify]
-# Where the OAuth token likearr obtained via `likearr auth` is stored. Keep this file mode 0600;
-# it is a long-lived credential. Not committed, not shared. This is the default.
+# The Spotify sign-in. Keep it private (mode 600).
 token_file = "spotify-token.json"
-# Which Spotify sources to read. All default to true; turn any off you don't want synced.
+# Which sources to read.
 followed_artists = true
 saved_albums = true
 liked_tracks = true
-# Spotify playlist IDs you OWN (or collaborate on) whose tracks should be mirrored like Liked
-# Songs. Leave empty to mirror only follows / saved albums / Liked Songs. Followed and editorial
-# playlists return no items to your own app (Spotify Development Mode) and cannot be listed here;
-# nothing in them protects a release from `prune-report`.
+# IDs of playlists you own or collaborate on, read like Liked Songs. Pick them in Settings.
 playlists = []
-# Loopback redirect URI registered on your Spotify app. Must be a loopback IP literal, not
-# "localhost" (Spotify Dev Mode requirement).
+# Must match a redirect URI registered in your Spotify app. Use 127.0.0.1, never localhost.
 redirect_uri = "http://127.0.0.1:8765/callback"
 
 [musicbrainz]
-# The contact MusicBrainz's User-Agent policy asks for comes from LIKEARR_MUSICBRAINZ_CONTACT (an
-# email address or a URL), and is likearr's project URL when that is unset.
 base_url = "https://musicbrainz.org/ws/2"
-# Minimum seconds between MusicBrainz requests. musicbrainz.org allows one request a second, so
-# against it anything below 1.0 fails the load. A self-hosted mirror (another base_url) may go lower.
+# Seconds between requests. musicbrainz.org needs at least 1.0; a mirror may go lower.
 min_interval_s = 1.0
-# How many days to keep a "not found" MusicBrainz lookup cached before retrying it. Each lookup
-# waits up to 25% longer, set by its key, so the ones cached in one run do not all come due at once.
+# Days to remember a lookup that found nothing.
 negative_cache_days = 7
-# How many days to trust a successful MusicBrainz answer before looking it up again. Default 90;
-# a refetch that fails keeps serving the cached answer, so raising or lowering this only ever
-# costs requests, never a mapping. See docs/dev/DESIGN.md for the full reasoning. A
-# resolved song or saved album is looked up again at 4/3 of this (120 days), spread the same way.
+# Days to trust a lookup that found something.
 positive_cache_days = 90
 
 [state]
-# Where the SQLite state database lives. This is likearr's memory of what it owns - back it up.
-# This is the default.
+# likearr's record of what it monitored. Back it up.
 db = "state.sqlite"
-# Optional: the run lock file, used to prevent overlapping runs.
-# If omitted, likearr locks <db>.lock beside the state database.
+# Stops two runs overlapping. Default: <db>.lock.
 lock_file = "likearr.lock"
 
 [ui]
-# Only read by `likearr start` (the service): a mistake here never stops a run, and `likearr start`
-# refuses to start and names the problem instead. The host names the UI answers to come from
-# LIKEARR_ALLOWED_HOSTS (see env.example).
-#
-# Where a browser reaches Lidarr, for the links on the Status page's name-collision cards. Defaults
-# to LIKEARR_LIDARR_URL, which may be a container name no browser can resolve. likearr never calls it.
+# Where a browser reaches Lidarr, for links on Status. Default: LIKEARR_LIDARR_URL.
 # lidarr_url = "https://lidarr.example.org"
-# How a terminal on this host runs likearr, put in front of every command Clean up shows so they
-# paste and run as they are. Shown only, never run. It must run the likearr-cli image WITH the
-# library mounted (prune-stage moves files), and pass the rest of the command through unchanged:
-# nothing in between may re-parse it, as `ssh host '...'` would. The default is the documented
-# install; set it only if yours differs, e.g. a compose file elsewhere:
-# "docker compose -f /opt/likearr/compose.yaml run --rm likearr-cli".
+# The command Clean up puts in front of the commands it shows you. It must run the likearr-cli
+# service with the library mounted.
 # cli_command = "docker compose run --rm likearr-cli"
-# This service's own https address. When set, Spotify Connect (Settings) offers a direct-callback
-# mode - Spotify redirects straight back to <public_url>/spotify/callback, no copy/paste - instead
-# of the paste-back flow that works everywhere. That exact URI must also be registered as a
-# redirect URI in the Spotify developer app. Must be https://; leave unset to keep paste-back only.
+# likearr's own https:// address. When set, Connect Spotify needs no copy and paste; register
+# <public_url>/spotify/callback in your Spotify app.
 # public_url = "https://likearr.example.org"
 
-# ================================================================================================
-# OPTIONAL - the defaults below are fine for most installs. Nothing past this point needs to
-# change before your first run.
-# ================================================================================================
+# ------------------------------------------------------------------------------------------------
+# The defaults below suit most installs. After changing a rule, check for changes and apply by
+# hand: the change can unmonitor more than a scheduled run will.
+# ------------------------------------------------------------------------------------------------
 
 [rules]
-# A liked/playlist single with no matching Album/EP yet is re-checked every run. After this many
-# days since its release, likearr monitors the single itself and ratchets the artist to Full.
+# Days a liked single waits for its album before likearr monitors the single instead.
 singles_fallback_days = 180
-# Lidarr tag meaning "studio Albums only, no EPs" for a followed artist (see docs/dev/DESIGN.md).
+# Lidarr tag for a followed artist whose studio albums you want, but not their EPs.
 albums_only_tag = "albums-only"
-# Which release a liked/playlist track resolves to (see docs/dev/DESIGN.md):
-#   "album"    - the studio Album/EP the song lives on (the Singles rule). The default.
-#   "smallest" - the smallest official studio release holding the song: Single, then EP, then
-#                Album. A song by an artist you FOLLOW resolves to that artist's Album/EP
-#                instead, because the follow already monitors it.
-# Changing this changes what every liked track resolves to, which is a big diff: review a dry-run
-# and apply it by hand, do not let a scheduled run be the first to see it. Switching the value
-# later re-resolves every liked track on the next run (each cached resolution records its scope).
+# What a liked or playlist song monitors:
+#   "album"    - the studio album or EP it's on (the default).
+#   "smallest" - the smallest studio release holding it: single, then EP, then album. For an
+#                artist you follow, the album.
 liked_track_scope = "album"
-# How new a followed artist's release group has to be for a "Lidarr does not have this" report to
-# read as "Lidarr's metadata has not caught up" rather than "Lidarr will never track this". Within
-# this window (or dated in the future) likearr queues a RefreshArtist for that artist, capped by
-# lidarr.max_refreshes_per_run; outside it, the release is almost always a promo, a bootleg or a
-# non-Official pressing and is reported as an ordinary informational catalogue gap.
+# Days a followed artist's release counts as new, so likearr asks Lidarr to refresh the artist
+# when Lidarr doesn't have it yet.
 recent_release_days = 60
-# ---------------------------------------------------------------- opt-outs (see docs/dev/DESIGN.md)
-# All three default to the original behaviour, so leaving this block alone changes nothing and
-# re-resolves nothing. Turning either switch on DOES re-resolve every liked and
-# playlist track on the next run, and re-baselines the health comparison, because it is a change
-# of rule: review a dry-run and apply it by hand.
-#
-# false: a track whose only home is a COMPILATION is reported instead of monitoring it. This is
-# the box-set rule - one liked song pulling in "The Complete ... Volume 2" (3 discs, 53 tracks).
-# Compilation-typed only: a live album or a soundtrack is still monitored, because for some songs
-# that IS the record. Note the cost - a song that exists nowhere else is a song you no longer get.
-# Save the album on Spotify to override it; a saved album is monitored whatever its type.
+# Opt-outs.
+# false: don't monitor a compilation or box set that is a song's only release; report it instead.
 allow_compilation_fallback = true
-# false: a remix release is never chosen, unless the track you liked is itself a remix. "Remix"
-# means MusicBrainz's Remix secondary type OR the word in the release title - and the title is the
-# half that does the work, because releases like "Grease (The Remix EP)" and "The Feeling
-# (Remixes)" carry no secondary type at all and so read as ordinary studio EPs. Under
-# liked_track_scope = "smallest" an EP outranks an Album, which is how a remix EP holding the
-# original recording ends up winning.
+# false: don't pick a remix release for a song that isn't itself a remix.
 allow_remix_releases = true
-# Only read while allow_remix_releases = false. true: a liked or playlist song whose every release
-# is a remix is still monitored, on one of them (an Album or EP first), instead of being reported -
-# The Knocks' "Learn To Fly" is on MusicBrainz only on "The Feeling (Remixes)". false: such a song
-# is left out too. Never overrides deny_releases or allow_compilation_fallback, and a song that
-# also lives on a Various Artists release is not remix-only, so it stays left out either way.
+# With remix releases off - true: a song found only on remix releases is still monitored on one.
 keep_remix_only_tracks = true
-# Release group MBIDs likearr must never choose, for the cases no rule can express. It is a
-# candidate filter, not a veto: the resolver simply picks its next-best answer, and only reports
-# the track when nothing is left. Entries must be real MBIDs, and the key must be spelt
-# deny_releases: the run fails on a typo in either rather than silently refusing nothing. Adding
-# one re-resolves only the tracks that landed on it, and removing one only the tracks it had kept
-# off it. A followed artist's catalogue leaves these out too; a saved album is monitored whatever
-# this list says.
+# Release group MBIDs never to monitor for a song or followed artist. A saved album still wins.
 deny_releases = []
 
 [guards]
-# Scheduled (non-interactive) runs refuse to apply more than this many unmonitors in one go.
+# A scheduled run that would unmonitor more than this many releases unmonitors none of them and
+# reports why.
 max_unmonitors_scheduled = 100
-# If a source's item count drops more than this percent since the last run, its unmonitors are
-# refused (status "guarded"). The shrunken count is not recorded, so the refusal holds on every run
-# until the count recovers or you accept it with `likearr run --accept-shrink` (hand-run plan).
+# Percent a source may shrink since the last run before its unmonitors are held back. Accept a real
+# shrink with "Let this check unmonitor what a shrink guard held back", or `run --accept-shrink`.
 source_shrink_pct = 10.0
-# Same idea, per followed artist: refuse unmonitors if its Album/EP count shrank more than this.
+# The same, per followed artist's studio releases.
 artist_shrink_pct = 30.0
-# Report "degraded" (but block nothing) when more than this fraction of the library newly fails to
-# map in a single run. It measures the change since the last run, not the standing total, so
-# liking a few hundred songs at once - where the usual share never maps - is not a fault. Default
-# 0.05; see docs/dev/DESIGN.md ("What makes a run degraded") for how "newly fails" is counted.
+# Report "degraded" when more than this fraction of songs newly fail to match.
 unmapped_ratio_amber = 0.05
-# Advisory ceiling on the releases the diff would leave "wanted" with no files on disk. Going over
-# it is reported in the run's guards and message; it blocks nothing.
+# Warn when more than this many monitored releases would have no files.
 projected_wanted_max = 1000
 
 [health]
-# Print one JSON health-record line to stdout after every run.
+# Print a JSON health record after every run.
 stdout = true
 
-# Uncomment to also publish the health record to an MQTT broker (retained, QoS 1). Credentials
-# come from LIKEARR_MQTT_USERNAME / LIKEARR_MQTT_PASSWORD (see env.example), never from this file.
+# MQTT. Login comes from LIKEARR_MQTT_USERNAME / LIKEARR_MQTT_PASSWORD. See docs/install.md.
 # [health.mqtt]
 # host = "mqtt.example.internal"
 # port = 1883
 # topic = "likearr/health"
 # retain = true
 
-# Uncomment to also POST the health record as JSON to a generic webhook (e.g. a Home Assistant
-# webhook trigger, Apprise API, ntfy, a monitoring endpoint, ...). The body adds `title`, `body`
-# and `type` for notification services; docs/DEPLOY.md ("Generic webhook") has Apprise API and
-# ntfy recipes.
-# A url that carries a token (an ntfy topic, a Home Assistant webhook id, a Discord webhook) is a
-# secret: keep this file unreadable by other users. A Settings save drops its world bits.
-# notify: "always" (the default when the key is left out) sends every run. "problems" sends only
-# a new error, guard, degraded or stale run, and one "back to ok" when it clears - never paused
-# or skipped. It cannot tell you likearr has stopped running: watch `ts` for that.
+# Webhook: POSTs the health record as JSON, with title, body and type. See docs/install.md.
+# A url with a token in it is a secret. notify: "always" (default) or "problems".
 # [health.webhook]
 # url = "https://example.internal/hooks/likearr"
 # timeout_s = 10
 # notify = "problems"
 
 [schedule]
-# When the in-service scheduler fires `run --scheduled --apply`. Five fields -
-# minute hour day month weekday - in `timezone`. Bad values here fail the whole config load, unlike
-# [ui]: the scheduler and a scheduled run both read this block themselves. Normally set from
-# Settings, which also shows the next few fires before you save.
+# Set these in Settings. When scheduled runs fire: minute hour day month weekday, in `timezone`.
+# At most once an hour.
 # cron = "20 */6 * * *"
-# The IANA zone `cron` fires in. The code default is UTC. Set it explicitly to your own zone:
-# a wrong guess at the host's local time is worse than an unfamiliar but correct one.
+# Default UTC. Set your own zone.
 # timezone = "America/New_York"
-# Whether a *scheduled* run (`run --scheduled`) does anything. A hand run (`run`, `run --apply`,
-# the browser's plan review and apply, or a terminal) is never affected - this only ever stops
-# scheduled runs, including "Run now" on Status, which starts the same scheduled run.
-# On by default, but on a new install scheduled runs also wait for your first reviewed apply:
-# until a plan has been reviewed and applied by hand once, each scheduled run does nothing and
-# publishes `paused`, so nothing unattended ever applies a first plan nobody has read.
+# false pauses scheduled runs. Plans you review and apply yourself still run.
 # enabled = true
-# Why it's paused, shown on Status and in the health record/MQTT. One line, at most 200 characters.
+# Shown on Status while paused. Written by Settings.
 # paused_reason = ""
-# When it was paused. Written by the UI's pause action as a real TOML datetime; leave it out.
 # paused_at = 2026-01-05T18:00:00Z
 
 [prune]
-# Clean up is off by default. `true` adds it to the web UI's menu, and promote-save's Spotify
-# write-access box to Settings; the prune CLI commands run either way. Settings > Advanced sets it.
+# Turns on Clean up in the web UI (Settings > Advanced).
 # enabled = false
-# Where `prune-stage` moves the albums Clean up trashes, for the commands Clean up shows. Beside the
-# root folder, on the same filesystem, never inside it: the default is `_likearr-holding` in the
-# root folder's parent (/data/media/_likearr-holding here). Nothing in it is ever deleted by likearr.
+# Where Clean up moves albums: beside the root folder, on the same filesystem, never inside it.
+# Default: _likearr-holding in the root folder's parent.
 # holding_dir = "/data/media/_likearr-holding"

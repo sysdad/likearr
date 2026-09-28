@@ -1,5 +1,4 @@
-"""A `CHANGELOG.md` at the repo root, and the release-specific passages moved out of
-`docs/DEPLOY.md`.
+"""A `CHANGELOG.md` at the repo root.
 
 At publication, the detailed `Unreleased` entries are replaced by
 a short `## [0.5.0]` summary (8 to 10 bullets, no issue numbers), and `Unreleased` sits above it
@@ -15,7 +14,6 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CHANGELOG_PATH = REPO_ROOT / "CHANGELOG.md"
-DEPLOY_PATH = REPO_ROOT / "docs" / "DEPLOY.md"
 README_PATH = REPO_ROOT / "README.md"
 
 
@@ -75,10 +73,3 @@ def test_the_0_5_0_section_names_no_issue_person_or_host() -> None:
 
 def test_readme_links_to_the_changelog() -> None:
     assert "CHANGELOG.md" in README_PATH.read_text()
-
-
-def test_deploy_doc_has_no_release_relative_wording() -> None:
-    text = DEPLOY_PATH.read_text()
-    # Word-boundaried so "paused too" (unrelated, legitimate wording) does not false-positive on
-    # "used to" the way a plain substring grep would.
-    assert not re.search(r"\bthis release\b|\bcurrent release\b|\bbefore this release\b|\bused to\b", text)

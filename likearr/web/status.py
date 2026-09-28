@@ -457,11 +457,11 @@ def build_status(
 
 STALE_AFTER = timedelta(hours=13)
 """No run reaching Home Assistant for this long needs attention. Mirrors the example
-``binary_sensor.likearr_stale``, which fails closed at 13 hours (DEPLOY.md, "Home Assistant");
+``binary_sensor.likearr_stale``, which fails closed at 13 hours (docs/install.md, "MQTT");
 fixed rather than derived from `[schedule] cron`, so the page and the sensor always agree."""
 
 _HA_AMBER = frozenset({RunStatus.ERROR, RunStatus.STALE, RunStatus.GUARDED, RunStatus.DEGRADED})
-"""The statuses DEPLOY.md's Home Assistant problem flag lights on."""
+"""The statuses the Home Assistant problem flag in docs/install.md lights on."""
 
 
 def _n(count: int, one: str, many: str) -> str:

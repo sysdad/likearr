@@ -38,8 +38,8 @@ _SPOTIFY_ID = re.compile(r"[A-Za-z0-9]{1,64}")
 
 NOT_OWNED_REASON = "Spotify doesn't share this playlist's songs with a personal app"
 """Why a playlist the picker lists cannot be a source, in one fixed wording.
-The one place this sentence is written - the picker, `likearr playlists`, the README and
-`docs/dev/DESIGN.md` all say this, not their own paraphrase."""
+The one place this sentence is written - the picker and `likearr playlists` both render it,
+not their own paraphrase."""
 
 NOT_OWNED_WORKAROUND = "like the songs you want, or copy them into a playlist you own"
 """What to do instead, reused everywhere `NOT_OWNED_REASON` is."""
