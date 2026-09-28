@@ -26,6 +26,9 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
   was signed into.
 - **An account the Spotify app can't serve** (not on its User Management list) now gets a plain
   message and keeps the existing connection.
+- **An unmonitor batch that fails after Lidarr applied it no longer leaves likearr owning those
+  albums.** likearr reads the batch back and lets go of every album Lidarr shows unmonitored, so a
+  later hand monitor of one of them is left alone.
 
 ### Changed
 

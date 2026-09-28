@@ -1414,6 +1414,89 @@ def test_a_failed_monitor_batch_puts_back_an_ownership_row_that_was_already_ther
     assert owned == {before.key: before}
 
 
+def _monitor_then_unfollow(ctx: Context, source: FakeSource, diff_path: Path) -> None:
+    """Monitor both albums of `followed_world`, then unfollow the artist (one of 20, so no shrink
+    guard holds it back): the next apply unmonitors both in one batch."""
+    assert run_command(ctx, now=NOW, out=diff_path, do_apply=True, scheduled=True) == EXIT_OK
+    assert sorted(k.rg_mbid for k in ctx.state.owned_releases()) == ["rg-1", "rg-2"]
+    source.snapshot = snapshot(artists=[], counts={"followed_artists": 19})
+    ctx.state.record_source_counts({"followed_artists": 20})
+
+
+def test_an_unmonitor_batch_lidarr_applied_but_answered_with_an_error_lets_go_of_its_albums(
+    tmp_path: Path, sink: CapturingSink
+) -> None:
+    """The reply is lost after the change landed. A row left behind would undo a later hand monitor."""
+    source, lookup, lidarr = followed_world()
+    with make_context(tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink) as ctx:
+        _monitor_then_unfollow(ctx, source, tmp_path / "diff.json")
+        lidarr.fail_unmonitor_batch = 1
+        lidarr.fail_unmonitor_batch_applies = 2
+        code = run_command(ctx, now=NOW, out=tmp_path / "diff.json", do_apply=True, scheduled=True)
+        owned_after_crash = ctx.state.owned_releases()
+
+        assert code == EXIT_ERROR
+        assert owned_after_crash == {}
+        assert sink.last.counts["unmonitored"] == 2, "both albums were confirmed unmonitored"
+        assert "stopped part-way" not in sink.last.message
+
+        # Someone monitors one of them by hand. The next run leaves it alone.
+        lidarr.fail_unmonitor_batch = None
+        lidarr.set_albums_monitored([lidarr.album("artist-1", "rg-1").id], True)  # type: ignore[union-attr]
+        second = run_command(ctx, now=NOW, out=tmp_path / "diff.json", do_apply=True, scheduled=True)
+
+    assert second == EXIT_OK
+    assert lidarr.album("artist-1", "rg-1").monitored is True  # type: ignore[union-attr]
+    assert lidarr.unmonitor_batches == 1, "nothing was left for a second unmonitor"
+
+
+def test_an_unmonitor_batch_lidarr_applied_in_part_lets_go_of_only_the_applied_albums(
+    tmp_path: Path, sink: CapturingSink
+) -> None:
+    source, lookup, lidarr = followed_world()
+    with make_context(tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink) as ctx:
+        _monitor_then_unfollow(ctx, source, tmp_path / "diff.json")
+        lidarr.fail_unmonitor_batch = 1
+        lidarr.fail_unmonitor_batch_applies = 1
+        code = run_command(ctx, now=NOW, out=tmp_path / "diff.json", do_apply=True, scheduled=True)
+        owned_after_crash = ctx.state.owned_releases()
+
+        assert code == EXIT_ERROR
+        assert len(owned_after_crash) == 1
+        (kept,) = owned_after_crash
+        assert lidarr.album("artist-1", kept.rg_mbid).monitored is True  # type: ignore[union-attr]
+        assert sink.last.counts["unmonitored"] == 1, "only what Lidarr confirmed counts as made"
+
+        lidarr.fail_unmonitor_batch = None
+        second = run_command(ctx, now=NOW, out=tmp_path / "diff.json", do_apply=True, scheduled=True)
+        owned_after_retry = ctx.state.owned_releases()
+
+    assert second == EXIT_OK
+    assert owned_after_retry == {}
+    assert lidarr.album("artist-1", "rg-1").monitored is False  # type: ignore[union-attr]
+    assert lidarr.album("artist-1", "rg-2").monitored is False  # type: ignore[union-attr]
+
+
+def test_a_failed_unmonitor_batch_keeps_its_rows_when_lidarr_cannot_be_read_back(
+    tmp_path: Path, sink: CapturingSink
+) -> None:
+    """With no way to tell what landed, keep the rows so the next run retries the unmonitor."""
+    source, lookup, lidarr = followed_world()
+    with make_context(tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink) as ctx:
+        _monitor_then_unfollow(ctx, source, tmp_path / "diff.json")
+        lidarr.fail_unmonitor_batch = 1
+        lidarr.fail_unmonitor_batch_applies = 2
+        lidarr.down_after_unmonitor_failure = True
+        reads_before = lidarr.names().count("load_albums")
+        code = run_command(ctx, now=NOW, out=tmp_path / "diff.json", do_apply=True, scheduled=True)
+        owned_after_crash = ctx.state.owned_releases()
+
+    assert code == EXIT_ERROR
+    assert sorted(k.rg_mbid for k in owned_after_crash) == ["rg-1", "rg-2"]
+    assert lidarr.names().count("load_albums") == reads_before + 1, "the failed batch was read back once"
+    assert sink.last.counts["unmonitored"] == 0, "a batch that could not be read back is not counted as made"
+
+
 @pytest.mark.parametrize("monitored_before", [True, False], ids=["reason-update", "re-monitor"])
 def test_a_release_kept_by_hand_stays_kept_after_a_source_wants_it_and_lets_go(
     tmp_path: Path, sink: CapturingSink, monitored_before: bool
