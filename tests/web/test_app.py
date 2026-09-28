@@ -1318,6 +1318,55 @@ def test_last_change_says_what_the_last_apply_did_and_links_what_changed(client:
     assert f'<a href="/runs/{applied.id}#changes">What changed</a>' in card
 
 
+def test_last_change_skips_a_newer_apply_that_changed_nothing(client: TestClient, data_dir: Path) -> None:
+    with SqliteState(data_dir / "state.sqlite") as state:
+        older = next(r for r in state.run_history(limit=10) if not r.record.dry_run)
+        state.record_run(_record(ts=int(NOW.timestamp()) - 60, counts={"liked_tracks": 2500, "monitored": 0}), None)
+    _login(client)
+
+    card = _card(client.get("/").text, "last-change")
+
+    assert "Monitored 4 releases" in card
+    assert "Monitored 0 releases" not in card
+    assert f'<a href="/runs/{older.id}#changes">What changed</a>' in card
+
+
+def test_last_change_when_no_kept_apply_changed_anything(client: TestClient, data_dir: Path) -> None:
+    for path in data_dir.glob("state.sqlite*"):
+        path.unlink()
+    with SqliteState(data_dir / "state.sqlite") as state:
+        for minutes in (120, 60):
+            state.record_run(_record(ts=int(NOW.timestamp()) - minutes * 60, counts={"monitored": 0}), None)
+    _login(client)
+
+    card = _card(client.get("/").text, "last-change")
+
+    assert "None in the last 2 runs." in card
+    assert "What changed" not in card
+
+
+def test_last_change_shows_a_part_way_apply_with_its_headline(client: TestClient, data_dir: Path) -> None:
+    with SqliteState(data_dir / "state.sqlite") as state:
+        state.record_run(
+            _record(
+                ts=int(NOW.timestamp()) - 60,
+                status=RunStatus.ERROR,
+                exit_code=1,
+                counts={"monitored": 0},
+                changes_made=1,
+                changes_planned=9,
+                lidarr_changed=True,
+                message="the apply stopped part-way",
+            ),
+            None,
+        )
+    _login(client)
+
+    card = _card(client.get("/").text, "last-change")
+
+    assert "Stopped part-way: 1 of 9 changes made." in card
+
+
 def test_last_change_before_anything_was_applied(client: TestClient, data_dir: Path) -> None:
     for path in data_dir.glob("state.sqlite*"):
         path.unlink()

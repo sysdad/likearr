@@ -257,6 +257,20 @@ def _headline(record: HealthRecord) -> str:
     )
 
 
+def last_change(view: StatusView) -> RunSummary | None:
+    """The newest kept apply that changed something: counts above zero, or an apply that stopped
+    part-way or failed after touching Lidarr (kept for its headline). Most scheduled applies change
+    nothing, so the newest apply is often not it."""
+    for run in view.history:
+        if not run.applied:
+            continue
+        counts = run.record.counts
+        changed = sum(counts.get(k, 0) for k in ("monitored", "unmonitored", "added", "new_items_none"))
+        if changed or run.record.status not in _APPLIED:
+            return run
+    return None
+
+
 def change_summary(run: RunSummary) -> str:
     """The "Last change to Lidarr" card's line: what an apply did, or its headline when it did
     not finish cleanly."""

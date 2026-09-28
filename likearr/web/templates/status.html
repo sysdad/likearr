@@ -84,11 +84,11 @@
     </div>
     <div class="card stat" id="last-change">
       <span class="label">Last change to Lidarr</span>
-      {% if view.last_applied %}{% with run = view.last_applied %}
+      {% if last_change %}{% with run = last_change %}
       <span class="value">{{ run.ago }}</span>
-      <span class="sub">{{ last_change }}</span>
+      <span class="sub">{{ run | change_summary }}</span>
       {% if run.run_id %}<span class="sub"><a href="/runs/{{ run.run_id }}#changes">What changed</a></span>{% endif %}
-      {% endwith %}{% elif view.history and first_applied %}
+      {% endwith %}{% elif view.history and (first_applied or view.last_applied) %}
       <span class="sub">None in the last {{ view.history | length }} runs.</span>
       {% else %}
       <span class="sub">Nothing changed yet.</span>
