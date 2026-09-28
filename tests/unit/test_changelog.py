@@ -35,7 +35,9 @@ def test_version_headings_are_newest_first_and_the_newest_is_pyprojects_version(
 
     text = CHANGELOG_PATH.read_text()
     version = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())["project"]["version"]
-    assert re.findall(r"^##\s*\[\d[^\]]*\]", text, re.MULTILINE) == [f"## [{version}]", "## [0.5.0]"]
+    headings = re.findall(r"^##\s*\[(\d[^\]]*)\]", text, re.MULTILINE)
+    assert headings[0] == version
+    assert headings == sorted(headings, key=lambda v: tuple(int(p) for p in v.split(".")), reverse=True)
 
 
 def test_the_0_5_1_section_opens_with_its_breaking_changes() -> None:

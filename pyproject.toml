@@ -1,6 +1,6 @@
 [project]
 name = "likearr"
-version = "0.5.1"
+version = "0.5.2"
 description = "Mirror your Spotify follows, saved albums and Liked Songs into Lidarr - and nothing else."
 readme = "README.md"
 license = "MIT"
