@@ -6,7 +6,7 @@
 <section id="{{ group.code }}" class="unmatched-group">
   {% set c = cards[group.code] %}{% set shown = parts | sum(attribute="matched") %}
   <h2>{{ group.title }}: {{ c.items }} {{ counts.unit(c.items) }} <span class="note">· {{ counts.releases(c) }}{% if shown != c.releases + c.gaps %} · {{ shown }} match{{ "" if shown != 1 else "es" }} the filters{% endif %}</span></h2>
-  <p class="note">{{ group.guidance }}{% if group.code == "excluded" %} <a href="/settings">Settings</a>{% endif %}</p>
+  {% if group.guidance %}<p class="note">{{ group.guidance }}{% if group.code == "excluded" %} <a href="/settings">Settings</a>{% endif %}</p>{% endif %}
   {% for part in parts %}{% include "_unmatched_part.html" %}{% endfor %}
 </section>
 {% else %}

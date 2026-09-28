@@ -5,12 +5,12 @@
 <div id="export-status"{% if oob_export %} hx-swap-oob="true"{% endif %}>
   {% if export_stale %}
   <div class="banner tone-warn" role="status"><div class="text"><p class="title">Changed since export - export again.</p>
-    <p>The exported files were removed so the commands below can't read decisions that are out of date.</p></div></div>
+    <p>The old files were removed so no command reads out-of-date decisions.</p></div></div>
   {% endif %}
   {% if summary.undecided_trash %}
   <p class="warn">{{ summary.undecided_trash }} album{{ "" if summary.undecided_trash == 1 else "s" }} set to trash under artists you haven't decided. They are exported as you set them.</p>
   {% endif %}
   {% if exported and not export_stale %}
-  <p class="note">Exported. <a href="#finish">Finish the clean up</a> below: the page previews it, then gives the exact commands.</p>
+  <p class="note">Exported. <a href="#finish">Finish the clean up</a> below.</p>
   {% endif %}
 </div>

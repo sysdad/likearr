@@ -91,7 +91,9 @@ from likearr.web.status import (
     describe_run,
     first_run_checklist,
     health_glance,
+    last_change,
     lost_state_sentence,
+    pending_changes,
     reauth_banner_note,
     reauth_view,
 )
@@ -109,9 +111,6 @@ never a loopback literal. No ``::1``: `AllowedHostMiddleware` compares only what
 
 
 HISTORY_ROWS = 20
-RUN_CHANGES_CAP = 10
-"""Rows per section on Status's inline "What changed" before it says "show all" and points
-at the run's own `/runs/<id>` page, which shows every row."""
 
 MAX_QUERY = 200
 
@@ -123,18 +122,15 @@ _STATE_TEXT = {
     JobState.RUNNING: "Running.",
     JobState.DONE: "Finished.",
     JobState.GUARDED: "Finished, and guards held some changes back.",
-    JobState.STALE: "Nothing was applied: Spotify or Lidarr changed since the plan was made. Re-plan.",
-    JobState.BUSY: "A scheduled run held the lock, so nothing ran. Try again in a few minutes.",
+    JobState.STALE: "Nothing was applied: Spotify or Lidarr changed since the check. Check again.",
+    JobState.BUSY: "Another likearr command held the run lock, so nothing ran. Try again when it finishes.",
     JobState.FAILED: "Failed. The log below says why.",
     JobState.CANCELLED: "Cancelled.",
     JobState.INTERRUPTED: "Interrupted: likearr stopped or restarted while this was running.",
     JobState.SKIPPED: "Skipped: nothing ran. The log below says why.",
 }
 
-_ADOPTED_TEXT = (
-    "Still running from before likearr restarted. likearr is watching it and records how it ends; "
-    "it can't be stopped from here."
-)
+_ADOPTED_TEXT = "Still running from before likearr restarted. It can't be stopped from here; it ends on its own."
 
 
 # ---------------------------------------------------------------- health and login
@@ -223,8 +219,8 @@ async def logout(request: Request) -> Response:
 
 
 _RESOLVER_CHANGE_NOTE = (
-    "likearr's matching changed since the run before this one, so the two can't be compared: some "
-    "of these changes may come from that, not from anything you did on Spotify."
+    "likearr's matching changed since the run before this one, so some of these changes may come from "
+    "that, not from Spotify."
 )
 """Above the list, when the record's baseline says the resolver version changed: a plain
 answer to "did my Spotify change, or did likearr?", distinct from the terse `_BASELINE_NOTES` used
@@ -250,8 +246,8 @@ def _part_way_note(record: HealthRecord, diff: Diff) -> str:
         return ""
     if record.status is RunStatus.STALE:
         return (
-            "This run made no changes: the plan below is what it would have applied, not what happened - "
-            "the world had moved since it was planned, so it was refused."
+            "This run made no changes: Spotify or Lidarr changed since its check, so it was refused. The "
+            "list below is what it would have applied."
         )
     if record.status is RunStatus.GUARDED:
         blocked = sum(g.blocked_unmonitors for g in diff.guards)
@@ -271,7 +267,7 @@ def _part_way_note(record: HealthRecord, diff: Diff) -> str:
         planned = f" of {record.changes_planned}" if record.changes_planned is not None else ""
         return (
             f"This run stopped part-way: {record.changes_made}{planned} changes made. The list below is the "
-            "plan it was attempting - not everything in it reached Lidarr."
+            "plan it was attempting; not all of it reached Lidarr."
         )
     if record.lidarr_changed:
         return (
@@ -321,19 +317,6 @@ def _run_changes_from_found(
     }
 
 
-def _run_changes(web: _Web, config: Config, run_id: int, *, cap: int | None) -> dict[str, Any] | None:
-    """`_run_changes_from_found`, opening its own state database read and looking `run_id` up
-    first: `None` when there is no run with that id, in addition to the "no diff" case above.
-    """
-    if not config.state_db.is_file():
-        return None
-    with SqliteState(config.state_db) as state:
-        found = state.run_by_id(run_id)
-    if found is None:
-        return None
-    return _run_changes_from_found(web, config, found, cap=cap)
-
-
 _RUN_LINKED_KINDS = frozenset({"apply", SCHEDULED_KIND})
 """Job kinds that change Lidarr and so may have a run to link to."""
 
@@ -373,14 +356,12 @@ def status(request: Request) -> Response:
     published = None
     last_fire_at = None
     first_applied = False
-    job_run_ids: dict[str, int] = {}
     if not state_missing:  # never create it: see healthz
         with SqliteState(config.state_db) as state:
             rows = state.run_history(HISTORY_ROWS)
             published = state.last_published_run()
             last_fire_at = state.last_scheduled_fire()
             first_applied = state.first_apply_at() is not None
-            job_run_ids = {m.id: rid for m in jobs[:5] if (rid := _job_run_id(state, m)) is not None}
     names = web.playlist_names().names
     view = build_status(rows, now=now, tz=web.tz, playlist_names=names, lidarr_url=config.ui.lidarr_url)
     authorized_at = read_authorized_at(config.spotify.token_file)
@@ -405,18 +386,11 @@ def status(request: Request) -> Response:
     last_fire_reason = ""
     if last_fire_job is not None and last_fire_job.state is JobState.SKIPPED:
         last_fire_reason = web.runner.log_tail(last_fire_job.id, lines=1).strip()
-    run_changes = (
-        _run_changes(web, config, view.last_applied.run_id, cap=RUN_CHANGES_CAP)
-        if view.last_applied is not None and view.last_applied.run_id
-        else None
-    )
     return web.render(
         request,
         "status.html",
         {
             "view": view,
-            "run_changes": run_changes,
-            "job_run_ids": job_run_ids,
             "collision_actions": _collision_actions(web, config, view.collisions, last) if view.collisions else {},
             "glance": health_glance(published, now=now, tz=web.tz, collisions_shown=bool(view.collisions)),
             "checklist": checklist,
@@ -437,8 +411,16 @@ def status(request: Request) -> Response:
             "paused_reason": config.schedule.paused_reason,
             "last_fire_at": last_fire_at.astimezone(web.tz) if last_fire_at else None,
             "last_fire_job": last_fire_job,
+            "last_fire_failed": last_fire_job is not None and last_fire_job.state is JobState.FAILED,
+            "last_fire_ago": ago(now, last_fire_at) if last_fire_at else "",
+            "last_change": last_change(view),
+            "pending": pending_changes(
+                view,
+                schedule_on=config.schedule.enabled,
+                first_applied=first_applied,
+                unmonitor_cap=config.guards.max_unmonitors_scheduled,
+            ),
             "last_fire_reason": last_fire_reason,
-            "recent_jobs": jobs[:5],
             "ui_errors": config.ui.errors,
             "setup_needed": config.lidarr.setup_needed,
             "state_missing": state_missing,

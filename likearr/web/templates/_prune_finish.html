@@ -13,8 +13,8 @@
 <p class="error">config.toml does not load, so the steps can't be shown: {{ f.config_error }}</p>
 {% else %}
 <h2>Finish the clean up</h2>
-<p>The page previews what it can. The steps that change something are commands you run in a terminal on the likearr host, in this order. Nothing is ever deleted.</p>
-<p class="note">Each command starts with <code>{{ f.cli_command }}</code>, your <code>[ui] cli_command</code> in config.toml. It must run the <code>likearr-cli</code> service, the one with the library mounted, and pass the rest through as it is.</p>
+<p>Run the steps that change something in a terminal on the likearr host, in this order. Nothing is ever deleted.</p>
+<p class="note">Commands start with <code>{{ f.cli_command }}</code> (<code>[ui] cli_command</code>), which must run the <code>likearr-cli</code> service.</p>
 {% for e in f.prune_errors %}<p class="warn">{{ e }}</p>{% endfor %}
 <ol class="finish-steps">
   <li>
@@ -27,7 +27,7 @@
       {% for name, why in s.remove %}<li>Remove {{ name }}: {{ why }}</li>{% endfor %}
       {% for name, why in s.rescan %}<li>Rescan {{ name }}: {{ why }}</li>{% endfor %}
     </ul></details>{% endif %}
-    <p class="note">The mount isn't checked here: the web UI has no library mount. Step 3 checks it.</p>
+    <p class="note">Step 3 checks the library mount.</p>
     {% else %}{{ running_or_failed(f.steps.stage, "Previewing the move") }}{% endif %}
   </li>
   <li>
@@ -47,20 +47,20 @@
   <li>
     <h3>Preview in a terminal, with the mount check {{ changes("ok", "changes nothing") }}</h3>
     <pre>{{ f.commands.stage_preview }}</pre>
-    <p class="note">It should show the totals from step 1. If the library isn't mounted where Lidarr keeps it, or the holding folder isn't beside it on the same filesystem, it refuses and says what to mount (docs/install.md, "Clean up setup").</p>
+    <p class="note">It should show step 1's totals. If the library or holding folder isn't mounted right, it refuses and says what to fix (docs/install.md, "Clean up setup").</p>
   </li>
   <li>
     <h3>Move the files {{ changes("warn", "changes your library") }}</h3>
     <p>When step 2 shows an idle queue:</p>
     <pre>{{ f.commands.stage_apply }}</pre>
-    <p class="note">The files move into {{ f.holding }}, one folder per day, each move recorded as it happens. Then Lidarr removes and rescans the artists from step 1.</p>
+    <p class="note">Files move into {{ f.holding }}, one folder per day. Then Lidarr removes and rescans the artists from step 1.</p>
   </li>
   {% if f.asks_spotify %}
   <li>
     <h3>Preview the Spotify changes {{ changes("ok", "reads Spotify only") }}</h3>
-    {% if f.missing_scopes %}<p class="warn">The stored Spotify token can't follow or save: it's missing {{ f.missing_scopes | join(", ") }}. Authorize again with write access, then use Preview again:</p><pre>{{ f.commands.auth }}</pre>
+    {% if f.missing_scopes %}<p class="warn">Spotify isn't authorized to follow or save (missing {{ f.missing_scopes | join(", ") }}). Authorize write access, then use Preview again:</p><pre>{{ f.commands.auth }}</pre>
     {% if f.callback_mode %}<form method="post" action="/settings/spotify/connect" class="inline"><input type="hidden" name="promote_save" value="1"><button type="submit" class="small">Authorize write access on Spotify</button></form>{% endif %}
-    {% elif f.missing_scopes is none %}<p class="note">The Spotify token file can't be read here, so its permissions aren't known.</p>{% endif %}
+    {% elif f.missing_scopes is none %}<p class="note">Can't tell whether Spotify allows follow and save: the token file can't be read here.</p>{% endif %}
     {% if f.spotify %}{% set p = f.spotify %}
     <p>Follow {{ p.follow | length }} artist{{ "" if p.follow | length == 1 else "s" }}, save {{ p.save | length }} album{{ "" if p.save | length == 1 else "s" }}{% if p.already %}; {{ p.already }} already done{% endif %}.</p>
     {% if p.follow or p.save %}<details><summary>What would change</summary><ul>
@@ -87,7 +87,7 @@
   {% endif %}
   <li>
     <h3>Afterwards</h3>
-    <p>The moved files sit in {{ f.holding }}. Each day's folder records every move as it happens (moves.jsonl, and manifest.json once the stage ends), so anything can go back by hand, even after a stage that stopped part-way. Nothing is deleted until you empty that folder yourself: keep it a few weeks, until you're sure.</p>
+    <p>The moved files sit in {{ f.holding }}, with a record of every move, so anything can go back by hand. Nothing is deleted until you empty that folder yourself: keep it a few weeks, until you're sure.</p>
   </li>
 </ol>
 <form method="post" action="/prune/{{ f.job_id }}/preview" class="inline"><button type="submit">Preview again</button><span class="note">Runs steps 1, 2 and 5 again for this export.</span></form>

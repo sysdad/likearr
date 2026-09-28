@@ -6,7 +6,7 @@
 <p class="subtitle">Albums on disk that nothing on Spotify asks for. Decide what to keep, and what to trash.</p>
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
 <section class="card">
-  <p>For each artist with albums on disk that no like, follow or playlist backs, choose to keep it (optionally following or saving it on Spotify) or trash it. This page only exports your decisions: moving files and changing Spotify stay commands you run yourself (<a href="https://github.com/sysdad/likearr#optional-clean-up" target="_blank" rel="noopener">how</a>).</p>
+  <p>This page only exports your decisions: moving files and changing Spotify stay commands you run yourself (<a href="https://github.com/sysdad/likearr#optional-clean-up" target="_blank" rel="noopener">how</a>).</p>
   {% if latest %}
   <div class="actions">
     <a class="button primary" href="/prune/{{ latest.id }}">Continue the review from {{ latest.started_at | when }}</a>
@@ -14,7 +14,7 @@
   </div>
   {% else %}
   <form method="post" action="/prune"><div class="actions"><button type="submit" class="primary">Find unneeded albums</button>
-    <span class="note">It reads Spotify, MusicBrainz and Lidarr like a check does - a few minutes once the first check has run - and changes nothing.</span></div></form>
+    <span class="note">Takes a few minutes and changes nothing.</span></div></form>
   {% endif %}
 </section>
 {% if jobs %}

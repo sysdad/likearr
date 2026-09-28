@@ -108,7 +108,7 @@ def test_settings_shows_a_schedule_preview(client: TestClient) -> None:
 
     assert 'name="schedule.cron"' in page
     assert "20 */6 * * *" in page
-    assert "Next fires:" in page
+    assert "Next fire:" in page
 
 
 def test_settings_says_scheduled_runs_are_enabled_without_the_cli_flags(client: TestClient) -> None:
@@ -119,7 +119,7 @@ def test_settings_says_scheduled_runs_are_enabled_without_the_cli_flags(client: 
 
     page = client.get("/settings").text
 
-    assert "Scheduled runs are enabled." in page
+    assert "Scheduled runs are on." in page
     assert "run --scheduled" not in page
     assert "setup-profiles" not in page
     assert "before amber" not in page  # the old field label
@@ -200,7 +200,7 @@ def test_the_live_schedule_preview_shows_fires_in_the_typed_timezone(client: Tes
     )
 
     assert response.status_code == 200
-    assert "Next fires:" in response.text
+    assert "Next fire:" in response.text
     assert "Every day at 06:00" in response.text
     assert "error" not in response.text
 
@@ -253,7 +253,7 @@ def test_settings_says_scheduled_runs_start_after_the_first_reviewed_apply_until
     page = client.get("/settings").text
 
     assert FIRST_APPLY_LINE in page
-    assert "Scheduled runs are enabled." in page, "the schedule is on; it is waiting, not paused"
+    assert "Scheduled runs are on." in page, "the schedule is on; it is waiting, not paused"
 
 
 def test_settings_with_no_state_database_says_so_and_creates_none(client: TestClient, data_dir: Path) -> None:
@@ -471,7 +471,7 @@ def test_a_re_resolving_change_asks_first_then_saves(client: TestClient, data_di
     confirm = client.post("/settings", data=form)
     assert confirm.status_code == 200
     assert "Confirm this change" in confirm.text
-    assert "re-resolves" in confirm.text
+    assert "resolve" in confirm.text
     assert (data_dir / "config.toml").read_text() == CONFIG
 
     carried = _settings_form(confirm.text)
@@ -580,7 +580,7 @@ def test_the_picker_names_owned_playlists_and_flags_a_configured_one_that_is_gon
     assert "Road trip" in final.text
     assert 'value="pl-owned" checked' in final.text
     assert 'value="pl-other" >' in final.text or 'value="pl-other"' in final.text
-    assert "not among the playlists this account can see" in final.text
+    assert "not found on this account" in final.text
     # A fresh answer is reused rather than asked for again.
     assert "Road trip" in client.post("/settings/playlists").text
 
@@ -801,7 +801,7 @@ def test_with_no_cache_settings_shows_ids_and_asks_for_one_press(client: TestCli
     page = client.get("/settings").text
 
     assert "<code>pl-owned</code>" in page
-    assert "Press Refresh names from Spotify once" in page
+    assert "to show your playlists by name" in page
     assert "names as of" not in page
 
 
@@ -967,7 +967,7 @@ def test_switching_a_source_on_asks_first_through_the_real_form(client: TestClie
     confirm = client.post("/settings", data=form)
 
     assert "Confirm this change" in confirm.text
-    assert "with no cap - check for changes first (Review changes)" in confirm.text
+    assert "with no cap. Review changes first" in confirm.text
     assert "liked_tracks = false" in (data_dir / "config.toml").read_text()
     saved = client.post("/settings", data=_settings_form(confirm.text), follow_redirects=False)
     assert saved.status_code == 303
@@ -2264,9 +2264,8 @@ def test_the_clean_up_switch_sits_first_in_a_collapsed_advanced_section(client: 
     assert '<details class="panel advanced" id="advanced">' in page  # collapsed: no `open`
     advanced = _advanced(page)
     assert advanced.index("<legend>Clean up</legend>") < advanced.index("<form")
-    assert "likearr-cli" in advanced
-    assert "Lidarr's exact path" in advanced
-    assert "holding folder" in advanced
+    assert "holding folder outside the library" in advanced
+    assert "docs/install.md#clean-up-setup" in advanced
     assert "Clean up is off." in advanced
     assert page.index("<legend>Guards</legend>") < page.index('id="advanced"')  # Rules and Guards stay visible
 

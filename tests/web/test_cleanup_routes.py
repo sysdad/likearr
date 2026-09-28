@@ -47,7 +47,7 @@ def test_the_prune_page_builds_the_report_as_a_job_and_starts_nothing_by_itself(
     page = client.get("/prune").text
     assert '<button type="submit" class="primary">Find unneeded albums</button>' in page
     assert "<h1>Clean up your library</h1>" in page
-    assert "a few minutes once the first check has run" in page
+    assert "changes nothing" in page
     assert not (data_dir / "ui" / "jobs").exists() or not any((data_dir / "ui" / "jobs").iterdir())
 
     job_id = _build_prune(client)
@@ -1220,8 +1220,7 @@ def test_the_page_says_where_the_command_prefix_comes_from(
     body = _finished_previews(client, job_id)
 
     assert (
-        "Each command starts with <code>docker compose run --rm likearr-cli</code>, your <code>[ui] cli_command</code>"
-        in body
+        "Commands start with <code>docker compose run --rm likearr-cli</code> (<code>[ui] cli_command</code>)" in body
     )
 
 
@@ -1252,7 +1251,7 @@ def test_with_clean_up_off_the_prune_page_says_how_to_turn_it_on_and_starts_noth
     assert head.status_code == 200  # Starlette's HEAD for the GET route answers the same
     assert "<h1>Clean up is off</h1>" in page.text
     assert '<a href="/settings#advanced">Settings &gt; Advanced</a>' in page.text
-    assert "likearr-cli" in page.text
+    assert "holding folder outside the library" in page.text
     assert "Find unneeded albums" not in page.text
     assert started.status_code == 404
     assert "<h1>Clean up is off</h1>" in started.text

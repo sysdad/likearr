@@ -170,9 +170,8 @@ def lost_state_sentence(count: int, tag: str) -> str:
         return ""
     artists = "1 artist" if count == 1 else f"{count} artists"
     return (
-        f"This Lidarr has {artists} tagged {tag} that the state database has no record of. If you lost or "
-        "replaced the database, restore it from backup. Until you do, nothing likearr monitored before is "
-        "ever unmonitored."
+        f"Lidarr has {artists} tagged {tag} that likearr's state database doesn't know. If you lost the "
+        "database, restore it from backup. Until then, likearr never unmonitors anything it monitored before."
     )
 
 
@@ -256,6 +255,83 @@ def _headline(record: HealthRecord) -> str:
         f"Applied: {_count(monitored, 'release')} monitored, {unmonitored} unmonitored, "
         f"{_count(added, 'artist')} added{new_items}."
     )
+
+
+def last_change(view: StatusView) -> RunSummary | None:
+    """The newest kept apply that changed something: counts above zero, or an apply that stopped
+    part-way or failed after touching Lidarr (kept for its headline). Most scheduled applies change
+    nothing, so the newest apply is often not it."""
+    for run in view.history:
+        if not run.applied:
+            continue
+        counts = run.record.counts
+        changed = sum(counts.get(k, 0) for k in ("monitored", "unmonitored", "added", "new_items_none"))
+        if changed or run.record.status not in _APPLIED:
+            return run
+    return None
+
+
+def change_summary(run: RunSummary) -> str:
+    """The "Last change to Lidarr" card's line: what an apply did, or its headline when it did
+    not finish cleanly."""
+    record = run.record
+    if record.status not in _APPLIED:
+        return run.headline
+    counts = record.counts
+    monitored, unmonitored, added = counts.get("monitored", 0), counts.get("unmonitored", 0), counts.get("added", 0)
+    none_set = counts.get("new_items_none", 0)
+    new_items = f", set {_count(none_set, 'artist')} to {_NEW_ITEMS_NONE}" if none_set else ""
+    return (
+        f"Monitored {_count(monitored, 'release')}, unmonitored {unmonitored}, "
+        f"added {_count(added, 'artist')}{new_items}."
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class Pending:
+    """The "Pending changes" card: a check newer than the last apply that found something to do."""
+
+    run: RunSummary
+    found: str
+    """"8 to monitor, 2 to unmonitor, 2 artists to add"."""
+    next_run: str
+    """What the next automatic run does with them, in one line."""
+    held: bool
+    """Some of it will be held back: said in the warning style."""
+
+
+def pending_changes(view: StatusView, *, schedule_on: bool, first_applied: bool, unmonitor_cap: int) -> Pending | None:
+    """The newest run when it is a check that found changes, else ``None``. The note reads only
+    what the check recorded: its blocking guards, and its unmonitor count against the cap a
+    scheduled run applies (`max_unmonitors_scheduled`)."""
+    run = view.last_any
+    if run is None or not run.record.dry_run or run.record.status not in _APPLIED:
+        return None
+    counts = run.record.counts
+    monitored, unmonitored, added = counts.get("monitored", 0), counts.get("unmonitored", 0), counts.get("added", 0)
+    none_set = counts.get("new_items_none", 0)
+    parts = [f"{n} {what}" for n, what in ((monitored, "to monitor"), (unmonitored, "to unmonitor")) if n]
+    if added:
+        parts.append(f"{_count(added, 'artist')} to add")
+    if none_set:
+        parts.append(f"{_count(none_set, 'artist')} to set to {_NEW_ITEMS_NONE}")
+    if not parts:
+        return None
+    held = False
+    if not schedule_on:
+        note = "Automatic runs are paused: these apply only when you review them."
+    elif not first_applied:
+        note = "These apply only when you review them."
+    elif run.guards:
+        note, held = "The next automatic run applies these, but a guard holds some unmonitors back.", True
+    elif unmonitored > unmonitor_cap:
+        note, held = (
+            f"The next automatic run holds back all {unmonitored} unmonitors: over the cap of {unmonitor_cap}.",
+            True,
+        )
+    else:
+        note = "The next automatic run applies these."
+    return Pending(run=run, found=", ".join(parts), next_run=note, held=held)
 
 
 def _why_stopped(record: HealthRecord) -> str:
@@ -468,6 +544,10 @@ def _n(count: int, one: str, many: str) -> str:
     return f"{count} {one}" if count == 1 else f"{count} {many}"
 
 
+RUN_PAGE = "run"
+"""A problem's link target meaning "the run's own page" (`/runs/<id>`), resolved by `health_glance`."""
+
+
 def condition_sentence(
     condition: str, record: HealthRecord, collisions: Sequence[NameCollision] = ()
 ) -> tuple[str, str]:
@@ -505,29 +585,29 @@ def condition_sentence(
         return (
             f"Lidarr's metadata server failed most lookups this run{count}; the artists affected are tried again "
             "next run.",
-            "#last-applied",
+            RUN_PAGE,
         )
     if condition == "new-skipped-artist":
         n = max(record.skipped_artists_new, 1)
         return (
             f"{_n(n, 'artist was', 'artists were')} skipped because Lidarr couldn't look "
             f"{'it' if n == 1 else 'them'} up; likearr tries again next run.",
-            "#last-applied",
+            RUN_PAGE,
         )
     if condition == "new-catalogue-too-large":
         n = max(record.catalogue_too_large_new, 1)
         return (
             f"{_n(n, 'followed artist has', 'followed artists have')} more releases than MusicBrainz lets likearr "
             "read, so only part of their catalogue is wanted.",
-            "#last-applied",
+            RUN_PAGE,
         )
     if condition == "spotify-schema":
         return (
-            "Spotify answered without some details likearr relies on, or returned fewer items than it reported, so "
-            "this run held back every unmonitor to be safe. If it happens again, Spotify has changed something.",
-            "#last-applied",
+            "Spotify's answer was incomplete, so this run held back every unmonitor. If it keeps happening, "
+            "Spotify has changed something.",
+            RUN_PAGE,
         )
-    return CONDITION_TEXT.get(condition, condition), "#last-applied"
+    return CONDITION_TEXT.get(condition, condition), RUN_PAGE
 
 
 @dataclass(frozen=True, slots=True)
@@ -593,10 +673,10 @@ def health_glance(
     for condition in record.new_conditions:
         text, anchor = condition_sentence(condition, record, published.name_collisions)
         if condition == "new-name-collision" and not collisions_shown:
-            text, anchor = text.removesuffix(" - see below."), "#last-applied"
+            text, anchor = text.removesuffix(" - see below."), RUN_PAGE
         problems.append((text, anchor))
     blocked = dict(zip(published.guards, published.guard_blocked, strict=False))
-    problems.extend((guard, "#last-applied") for guard in published.guards if blocked.get(guard, 0) > 0)
+    problems.extend((guard, RUN_PAGE) for guard in published.guards if blocked.get(guard, 0) > 0)
     # An advisory name-collision guard is the collision card's to explain, not a second note.
     codes = dict(zip(published.guards, published.guard_codes, strict=False))
     notes = [g for g in published.guards if blocked.get(g, 0) <= 0 and codes.get(g) != "name-collision"]
@@ -605,11 +685,13 @@ def health_glance(
         # it keeps the HA dead-man from also lighting up while scheduled runs are stopped.
         notes.append(f"scheduled runs are paused ({run.headline.removeprefix('Paused: ')})")
     if record.status in _HA_AMBER and not problems:
-        problems.append((record.message or f"The last run's status is {record.status}.", "#last-applied"))
+        problems.append((record.message or f"The last run's status is {record.status}.", RUN_PAGE))
     if now - run.when > STALE_AFTER:
         problems.append(
             (f"No run for {ago(now, run.when).removesuffix(' ago')}: check the scheduler (Settings → Schedule).", "")
         )
+    run_page = f"/runs/{run.run_id}" if run.run_id else "#history"
+    problems = [(text, run_page if anchor == RUN_PAGE else anchor) for text, anchor in problems]
     return HealthGlance(healthy=not problems, run=run, problems=problems, notes=notes)
 
 

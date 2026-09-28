@@ -12,22 +12,22 @@
      still announces normally. #}
   <p class="when" aria-hidden="true">Started {{ meta.started_at | when }}; {{ "running for" if not meta.finished else "took" }} {{ elapsed }}.</p>
   {% if not meta.finished and stopping %}
-    <p class="warn">Stopping. It finishes anything it must not cut short first - a Spotify token save - then stops; at most two minutes.</p>
+    <p class="warn">Stopping. This takes at most two minutes.</p>
   {% elif not meta.finished %}
     <p>{{ phase }}...</p>
     {% if progress %}<p class="note">{{ progress }}</p>{% endif %}
     {% if first_check %}
-      <p class="note">A first check can take hours. Cancelling keeps what it has looked up so far.</p>
+      <p class="note">A first check can take hours. Cancelling keeps its progress.</p>
     {% endif %}
     {% if meta.drain %}
-      <p class="note">Applying changes is never cancelled halfway: stopping it would leave Lidarr partly changed.</p>
+      <p class="note">An apply can't be cancelled: stopping halfway would leave Lidarr partly changed.</p>
     {% elif meta.adopted %}
-      <p class="note">It isn't a child of this server any more, so there is no Cancel; it ends on its own.</p>
+      <p class="note">likearr restarted since this began, so it can't be cancelled here; it ends on its own.</p>
     {% else %}
       <form method="post" action="/jobs/{{ meta.id }}/cancel"><button type="submit">Cancel</button></form>
     {% endif %}
   {% endif %}
-  {% if cancel_refused %}<p class="error">An apply is not cancelled: stopping it halfway would leave Lidarr partly changed. It finishes on its own.</p>{% endif %}
+  {% if cancel_refused %}<p class="error">An apply can't be cancelled: stopping halfway would leave Lidarr partly changed.</p>{% endif %}
   {% if stale_message %}
     <div class="banner tone-warn"><div class="text"><p class="title">Nothing was applied.</p><p>{{ stale_message }}</p>
     {% if meta.kind == "apply" %}<p class="note">Status will show this as needing attention{% if has_mqtt %}, and Home Assistant as "stale",{% endif %} until the next scheduled run.</p>{% endif %}</div></div>
@@ -42,7 +42,7 @@
     <p><a href="/runs/{{ run_id }}">What changed</a></p>
   {% endif %}
   {% if report %}
-    <p class="note">The answer below comes from a check that started {{ meta.started_at | when }}.</p>
+    <p class="note">Checked {{ meta.started_at | when }}.</p>
     {% include "_explain_summary.html" %}
   {% elif meta.finished and output and not review and (meta.kind != "playlists" or meta.state != "done") %}
     <pre class="answer">{{ output }}</pre>

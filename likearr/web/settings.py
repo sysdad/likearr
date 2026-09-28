@@ -79,7 +79,7 @@ __all__ = [
     "write_config",
 ]
 
-SCHEDULE_PREVIEW_COUNT = 5
+SCHEDULE_PREVIEW_COUNT = 1
 """How many upcoming fires the Settings page's schedule preview shows."""
 
 PAUSED_REASON_LIMIT = 200
@@ -116,18 +116,16 @@ class Field:
 
 
 FIELDS: tuple[Field, ...] = (
-    Field("spotify", "followed_artists", "bool", "Followed artists", "Mirror the artists you follow."),
-    Field("spotify", "saved_albums", "bool", "Saved albums", "Mirror the albums in your library."),
-    Field("spotify", "liked_tracks", "bool", "Liked songs", "Mirror the albums your liked songs live on."),
-    Field(
-        "spotify", "playlists", "list", "Playlists", "Playlists you own or collaborate on whose songs count as liked."
-    ),
+    Field("spotify", "followed_artists", "bool", "Followed artists"),
+    Field("spotify", "saved_albums", "bool", "Saved albums"),
+    Field("spotify", "liked_tracks", "bool", "Liked songs"),
+    Field("spotify", "playlists", "list", "Playlists", "Their songs count as liked."),
     Field(
         "rules",
         "liked_track_scope",
         "choice",
         "Liked song resolves to",
-        "Which release a liked or playlist song resolves to.",
+        "",
         choices=tuple(sorted(LIKED_TRACK_SCOPES)),
         choice_labels={
             "album": "The studio album or EP the song is on",
@@ -140,8 +138,7 @@ FIELDS: tuple[Field, ...] = (
         "recent_release_days",
         "int",
         "Recent release window (days)",
-        "When a followed artist has a release this new that Lidarr doesn't list yet, likearr asks Lidarr to "
-        "refresh the artist. Older missing releases are only reported.",
+        "Ask Lidarr to refresh a followed artist with a release this new that Lidarr doesn't list yet.",
     ),
     Field("rules", "albums_only_tag", "str", "Albums-only tag", "Lidarr tag for a followed artist's albums only."),
     Field(
@@ -170,48 +167,43 @@ FIELDS: tuple[Field, ...] = (
         "deny_releases",
         "list",
         "Refused releases",
-        "Albums liked and playlist songs never resolve to, and followed artists' catalogues leave out, one "
-        "MusicBrainz id per line. A saved album still wins. Not this one adds to this list.",
+        "Releases likearr never picks, one MusicBrainz id per line. Not this one adds here; a saved album still wins.",
     ),
     Field(
         "guards",
         "max_unmonitors_scheduled",
         "int",
         "Max unmonitors per scheduled run",
-        "A scheduled run applies no unmonitors at all when there would be more than this many; run likearr by "
-        "hand to review and apply them. Hand runs have no cap.",
+        "A scheduled run unmonitors nothing if it would unmonitor more than this. Changes you review have no cap.",
     ),
     Field(
         "guards",
         "source_shrink_pct",
         "float",
         "Source shrink guard (%)",
-        "If a Spotify source's item count drops by more than this percent since the last run, its unmonitors "
-        "are held back until it recovers or you let the shrink through while reviewing a plan.",
+        "If a Spotify source shrinks by more than this since the last run, its unmonitors wait until it recovers "
+        "or you allow them in Review changes.",
     ),
     Field(
         "guards",
         "artist_shrink_pct",
         "float",
         "Artist shrink guard (%)",
-        "Same idea per followed artist: unmonitors are held back if their album and EP count drops by more "
-        "than this percent since the last run.",
+        "The same for each followed artist's albums and EPs.",
     ),
     Field(
         "guards",
         "unmapped_ratio_amber",
         "float",
         "Unmapped share before Status needs attention (0-1)",
-        "Status needs attention when more than this share of songs and albums newly fails to map, compared "
-        "with the last run. It blocks nothing.",
+        "Share of songs and albums that newly fail to match. Blocks nothing.",
     ),
     Field(
         "guards",
         "projected_wanted_max",
         "int",
         "Projected wanted warning",
-        "Warn when a run would leave more than this many releases monitored with no files yet, Lidarr's "
-        "wanted list as projected. It blocks nothing.",
+        "Warn when a run would leave more than this many releases monitored with no files. Blocks nothing.",
     ),
 )
 
@@ -231,10 +223,7 @@ changing one re-resolves every liked and playlist song and re-baselines the heal
 
 _SOURCES = frozenset({("spotify", "followed_artists"), ("spotify", "saved_albums"), ("spotify", "liked_tracks")})
 
-_SOURCE_WARNING = (
-    "the next scheduled run will monitor everything this resolves to, with no cap - check for changes first "
-    "(Review changes)"
-)
+_SOURCE_WARNING = "the next scheduled run monitors everything this resolves to, with no cap. Review changes first"
 """Why a new source asks first: monitors are not capped the way unmonitors are
 (`max_unmonitors_scheduled`), and `projected_wanted_max` only warns, so a source switched on or a
 playlist added is acted on in full by the next unattended run."""
@@ -514,9 +503,8 @@ def _confirmations(changes: Sequence[Change], playlist_names: Mapping[str, str])
     re_resolving = [c.key for c in changes if (c.section, c.key) in _RE_RESOLVE]
     if re_resolving:
         out.append(
-            f"Changing {', '.join(re_resolving)} re-resolves every liked and playlist song on the next run and "
-            "re-baselines the health comparison, so check for changes (Review changes) and review them before "
-            "the next scheduled run applies them."
+            f"Changing {', '.join(re_resolving)} changes what every liked and playlist song resolves to. "
+            "Review changes before the next scheduled run applies them."
         )
     switched_on = [c.key for c in changes if (c.section, c.key) in _SOURCES and c.new is True and c.old is False]
     if switched_on:
@@ -530,9 +518,8 @@ def _confirmations(changes: Sequence[Change], playlist_names: Mapping[str, str])
     for c in changes:
         if (c.section, c.key) == ("rules", "deny_releases"):
             out.append(
-                f"Changing deny_releases re-resolves {_deny_moves(c)} on the next run, so check for changes "
-                "(Review changes) and review what they resolve to instead before the next scheduled run "
-                "applies them."
+                f"Changing deny_releases changes what {_deny_moves(c)} resolve to. "
+                "Review changes before the next scheduled run applies them."
             )
     for c in changes:
         if (
@@ -769,10 +756,7 @@ def plan_schedule(text: str, cron: str, timezone: str, *, base_dir: Path, now: d
     if _fires_per_day(new_schedule.cron, new_schedule.timezone, now=now) > _fires_per_day(
         old.cron, old.timezone, now=now
     ):
-        check.confirm = [
-            "This schedule fires more often than the current one, so the next scheduled run applies whatever it "
-            "plans, unattended, sooner and more often than before."
-        ]
+        check.confirm = ["This schedule fires more often, so unattended applies happen sooner and more often."]
     return check
 
 

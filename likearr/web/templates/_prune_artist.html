@@ -16,8 +16,8 @@
     {% if a.followed %}<span class="pill tone-ok">Followed on Spotify</span>{% endif %}
     <span class="note">{{ a.candidates | length }} album{{ "" if a.candidates | length == 1 else "s" }} · {{ a.size | human_bytes }}{% if a.releases | length > a.candidates | length %} · {{ a.releases | length - a.candidates | length }} always kept{% endif %}{% if row.needs %} · {{ row.needs }} to decide{% endif %}</span>
   </div>
-  {% if row.past_artist %}<p class="note">Earlier, on {{ row.past_artist_on }}: {{ past_labels[row.past_artist.decision] }}. That is not asked of Spotify again unless you choose it here.</p>{% endif %}
-  {% if row.follow_done %}<p class="note">You chose to follow {{ a.name }}, and they are followed on Spotify now, so this is a keep with no change on Spotify.</p>{% endif %}
+  {% if row.past_artist %}<p class="note">Earlier, on {{ row.past_artist_on }}: {{ past_labels[row.past_artist.decision] }}. Not asked again unless you choose it here.</p>{% endif %}
+  {% if row.follow_done %}<p class="note">{{ a.name }} is followed on Spotify now, so this is a keep with no change on Spotify.</p>{% endif %}
   <fieldset class="choices">
     <legend class="visually-hidden">What to do with the albums of {{ a.name }} listed here</legend>
     {% for value, label in [("undecided", "Undecided"), ("keep", "Keep - no change on Spotify"), ("promote", "Keep and follow the artist on Spotify"), ("save", "Keep and save all their albums on Spotify"), ("trash", "Trash all listed albums")] %}

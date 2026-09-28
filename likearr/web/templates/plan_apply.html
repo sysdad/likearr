@@ -15,18 +15,18 @@
 <section>
   {% include "_plan_counts.html" %}
   {% if guards %}
-  <p>These guards stay in force; what they held back stays as it is:</p>
+  <p>These guards still hold back what they held back:</p>
   <ul>{% for g in guards %}<li>{{ g }}</li>{% endfor %}</ul>
   {% endif %}
-  <p class="note">It runs the command below. Before it changes anything it checks that Spotify, Lidarr and the settings still match this check, and stops if they don't. It can't be cancelled once started, so Lidarr is never left half changed.</p>
+  <p class="note">Before changing anything, it checks that Spotify, Lidarr and your settings still match this check, and stops if they don't. It can't be cancelled once started.</p>
   <details><summary>Show the command</summary><code>{{ command }}</code></details>
 </section>
 <form method="post" action="/plan/{{ meta.id }}/apply" class="plan">
   <input type="hidden" name="plan_token" value="{{ meta.plan_token }}">
   {% if accept_preset %}
   <div class="banner tone-warn" id="accept"><div class="text"><p class="title">Accept the name collision as known</p>
-    <p>Applying with the box under Advanced ticked accepts the skip as known: it {% if has_mqtt %}stops showing as needs attention here and stops lighting Home Assistant amber{% else %}stops showing as needs attention on Status{% endif %}. The artist stays skipped.</p>
-    <p>The box accepts everything the apply finds when it checks again just before changing anything - this collision, and any other name collision, skipped artist or oversized catalogue it reports, including ones that appeared after this check. Untick it to apply without accepting.</p></div></div>
+    <p>The ticked box under Advanced stops flagging the skip as a problem{% if has_mqtt %}, here and in Home Assistant{% endif %}. The artist stays skipped.</p>
+    <p>It also accepts any other name collision, skipped artist or oversized catalogue the apply reports, including ones that appeared after this check. Untick it to apply without accepting.</p></div></div>
   {% endif %}
   <div class="actions">
     <button type="submit" class="primary">{% if changes %}Apply these changes{% else %}Apply anyway{% endif %}</button>
@@ -34,7 +34,7 @@
   </div>
   <details{% if accept_preset %} open{% endif %}>
     <summary>Advanced (optional)</summary>
-    <label class="check"><input type="checkbox" name="accept_health"{% if accept_preset %} checked{% endif %}> Also stop flagging these as new problems. <span class="optional">The skipped artists, name collisions and oversized catalogues this run reports will stop showing as "needs attention" here{% if has_mqtt %} and in Home Assistant{% endif %}. You don't need this to apply.</span></label>
+    <label class="check"><input type="checkbox" name="accept_health"{% if accept_preset %} checked{% endif %}> Also stop flagging these as new problems. <span class="optional">Skipped artists, name collisions and oversized catalogues this run reports stop showing as needs attention{% if has_mqtt %}, here and in Home Assistant{% endif %}.</span></label>
   </details>
 </form>
 {% endif %}

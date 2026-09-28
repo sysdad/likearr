@@ -37,7 +37,7 @@ from likearr.web.helpers import _names_of, _needs_reauth_ids_of, _not_owned_ids_
 from likearr.web.jobs import JOB_PHASE_APPLY, JobMeta, JobRefused, JobRunner, JobState
 from likearr.web.plans import EXPIRE_AFTER, plan_token_of_file
 from likearr.web.schedule import SCHEDULED_KIND
-from likearr.web.status import ago, short_message
+from likearr.web.status import ago, change_summary, short_message
 
 log = logging.getLogger("likearr.web.app")
 """Under the app's own name, so log lines read as they did before the split."""
@@ -148,6 +148,7 @@ class _Web:
         self.templates.env.filters["human_bytes"] = prune.human_bytes
         self.templates.env.filters["oom_note"] = oom_note
         self.templates.env.filters["short_message"] = short_message
+        self.templates.env.filters["change_summary"] = change_summary
         self.templates.env.filters["job_title"] = lambda kind: _JOB_TITLES.get(kind, str(kind).capitalize())
         # The footer (base.html): version never changes without a restart, and neither does the
         # commit baked in at image build time, so both are resolved once here rather than per
@@ -412,10 +413,10 @@ def oom_note(meta: JobMeta) -> str:
         return ""
     if meta.kind == "apply" or (meta.kind == SCHEDULED_KIND and meta.phase == JOB_PHASE_APPLY):
         return (
-            "This ran out of memory and was stopped by the system (the container's memory limit) partway "
-            "through, so Lidarr may be partly changed. Check for changes again."
+            "This ran out of memory (the container's limit) and was stopped partway, so Lidarr may be "
+            "partly changed. Check for changes again."
         )
-    return "This ran out of memory and was stopped by the system (the container's memory limit). Nothing was changed."
+    return "This ran out of memory (the container's limit) and was stopped. Nothing was changed."
 
 
 _JOB_TITLES = {

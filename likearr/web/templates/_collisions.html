@@ -11,17 +11,17 @@
     <form method="get" action="/explain" class="inline">
       <input type="hidden" name="query" value="{{ card.name }}">
       <button type="submit">Look up {{ card.name }}</button>
-      <span class="note">First check likearr picked the right artist: Look up shows which of your Spotify likes and follows want it.</span>
+      <span class="note">Check likearr picked the right artist.</span>
     </form>
     <ul class="links">
       <li>Wanted: {{ card.wanted_label }}{% if card.wanted_musicbrainz %} - <a href="{{ card.wanted_musicbrainz }}" target="_blank" rel="noopener noreferrer">MusicBrainz</a>{% endif %}{% if card.add_in_lidarr %} - <a href="{{ card.add_in_lidarr }}" target="_blank" rel="noopener noreferrer">find it in Lidarr's add search</a>{% endif %}</li>
       <li>{{ "In Lidarr" if card.other_in_lidarr else "Also wanted" }}: {{ card.existing_label }}{% if card.existing_lidarr_id %} (Lidarr id {{ card.existing_lidarr_id }}){% endif %}{% if card.existing_in_lidarr %} - <a href="{{ card.existing_in_lidarr }}" target="_blank" rel="noopener noreferrer">open in Lidarr</a>{% endif %}{% if card.existing_musicbrainz %} - <a href="{{ card.existing_musicbrainz }}" target="_blank" rel="noopener noreferrer">MusicBrainz</a>{% endif %}</li>
     </ul>
-    <p class="note">Lidarr can't hold two artists with the same name: keep one, or hold both and import by hand (Lidarr's Manual Import, which may work); if the match looks wrong, Look up shows why. Lidarr takes an artist's name from MusicBrainz, so there is no adding it under another name.{% if not card.other_in_lidarr %} With both new, add the right one in Lidarr by hand: the next run keeps it and skips the other.{% endif %}</p>
+    <p class="note">Lidarr can't hold two artists with the same name, so keep one.{% if not card.other_in_lidarr %} Add the one you want in Lidarr: the next run keeps it and skips the other.{% endif %}</p>
     {% set act = collision_actions.get(card.wanted_mbid) if collision_actions else none %}
     {% if act %}
     {% if act.releases %}
-    <p>What likearr wanted from {{ card.wanted_label }}. If a match is wrong, refuse it: likearr stops choosing it, and the skip goes once nothing of theirs is wanted.</p>
+    <p>What likearr wanted from {{ card.wanted_label }}. Refuse a wrong match:</p>
     <ul class="links">
       {% for rg, title in act.releases %}<li>{{ title }} <form method="post" action="/explain/deny" class="inline"><input type="hidden" name="release" value="{{ rg }}"><input type="hidden" name="query" value="{{ card.name }}"><button type="submit" class="small" title="Never monitor this release: add it to [rules] deny_releases (you confirm first)">Not this one</button></form></li>{% endfor %}
     </ul>
@@ -30,7 +30,7 @@
       <form method="post" action="/plan" class="inline"><button type="submit" class="small" title="Run a check now: this card goes when the check no longer reports the collision">Check again</button></form>
       {% if act.accept %}<a class="button small" href="{{ act.accept }}">Accept as known</a>{% endif %}
     </div>
-    <p class="note">{% if act.accept %}Accept as known applies the latest check with "stop flagging these as new problems" ticked: the skip is accepted as known{% if has_mqtt %} and stops lighting Home Assistant amber{% else %} and stops showing as needs attention on Status{% endif %}. The artist stays skipped.{% else %}To accept it as known, check again first: the check's apply page offers it.{% endif %}</p>
+    <p class="note">{% if act.accept %}Accept as known stops flagging this as a problem. The artist stays skipped.{% else %}To accept it as known, check again first.{% endif %}</p>
     {% endif %}
   </div>
   {% endfor %}

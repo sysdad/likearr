@@ -2,9 +2,9 @@
 {% block title %}Clean up is off - likearr{% endblock %}
 {% block content %}
 <h1>Clean up is off</h1>
-<p class="subtitle">An optional review of albums on disk that nothing on Spotify asks for.</p>
+<p class="subtitle">Albums on disk that nothing on Spotify asks for.</p>
 <section class="card">
-  <p>Clean up finds every album with files that no Spotify like, follow or playlist backs, and lets you decide, artist by artist, what to keep and what to trash. The page only exports your decisions: moving files (<code>prune-stage</code>) and anything on Spotify (<code>promote-save</code>) stay commands you run yourself, and trash goes to a holding folder that likearr never empties.</p>
-  <p>Carrying out a Clean up needs the library mounted at Lidarr's exact path in the <code>likearr-cli</code> container, and a holding folder on the same filesystem, outside the library. Turn it on in <a href="/settings#advanced">Settings &gt; Advanced</a>.</p>
+  <p>Decide what to keep and what to trash. Trash goes to a holding folder outside the library that likearr never empties (<a href="https://github.com/sysdad/likearr/blob/main/docs/install.md#clean-up-setup" target="_blank" rel="noopener">setup</a>).</p>
+  <p>Turn it on in <a href="/settings#advanced">Settings &gt; Advanced</a>.</p>
 </section>
 {% endblock %}

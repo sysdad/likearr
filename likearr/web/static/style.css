@@ -112,6 +112,7 @@ textarea { width: 100%; font-family: ui-monospace, Menlo, monospace; font-size: 
 .stat .value { font-size: var(--t-xl); font-weight: 650; line-height: 1.2; }
 .stat .value.tone-ok { color: var(--ok); } .stat .value.tone-warn { color: var(--warn); } .stat .value.tone-bad { color: var(--bad); }
 .stat .sub { color: var(--muted); font-size: var(--t-sm); }
+.stat .sub.tone-warn { color: var(--warn); }
 /* A native <progress>, not a styled div: the CSP (default-src 'self') refuses inline style attributes. */
 progress.meter { appearance: none; -webkit-appearance: none; width: 100%; height: .4rem; border: 0; border-radius: 999px; background: var(--line); overflow: hidden; margin: var(--s1) 0; color: var(--ok); }
 progress.meter::-webkit-progress-bar { background: var(--line); border-radius: 999px; }

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -64,6 +65,14 @@ def _row(**overrides: object) -> RunRow:
 
 
 # ---------------------------------------------------------------- one run
+
+
+def test_a_problem_about_the_run_links_to_that_run_s_page() -> None:
+    row = dataclasses.replace(_row(guards=("source-shrink: liked_tracks fell by 40%",), guard_blocked=(12,)), id=42)
+
+    glance = health_glance(row, now=NOW, tz=NY)
+
+    assert ("source-shrink: liked_tracks fell by 40%", "/runs/42") in glance.problems
 
 
 def test_an_apply_is_described_by_what_it_did() -> None:
@@ -206,11 +215,10 @@ def test_the_lost_state_count_comes_from_the_newest_run_that_planned() -> None:
 def test_the_lost_state_sentence() -> None:
     assert lost_state_sentence(0, "likearr") == ""
     assert lost_state_sentence(3, "likearr") == (
-        "This Lidarr has 3 artists tagged likearr that the state database has no record of. If you lost or "
-        "replaced the database, restore it from backup. Until you do, nothing likearr monitored before is "
-        "ever unmonitored."
+        "Lidarr has 3 artists tagged likearr that likearr's state database doesn't know. If you lost the "
+        "database, restore it from backup. Until then, likearr never unmonitors anything it monitored before."
     )
-    assert lost_state_sentence(1, "mine").startswith("This Lidarr has 1 artist tagged mine that ")
+    assert lost_state_sentence(1, "mine").startswith("Lidarr has 1 artist tagged mine that ")
 
 
 def test_projected_wanted_comes_from_the_newest_run_with_a_diff() -> None:
@@ -446,7 +454,7 @@ def test_health_names_what_home_assistant_would_show_amber_for() -> None:
         "likearr skipped 1 artist: a different artist with the same name is already in Lidarr - see below.",
         "#collisions",
     ) in glance.problems
-    assert ("source-shrink: liked_tracks fell by 40%", "#last-applied") in glance.problems
+    assert ("source-shrink: liked_tracks fell by 40%", "#history") in glance.problems  # no run id: the table
 
 
 def test_an_advisory_guard_is_a_note_not_a_problem() -> None:
@@ -514,7 +522,7 @@ def test_a_new_collision_links_to_the_cards_only_when_they_are_shown() -> None:
     glance = health_glance(row, now=NOW, tz=NY, collisions_shown=False)
 
     assert glance.problems == [
-        ("likearr skipped 1 artist: a different artist with the same name is already in Lidarr", "#last-applied")
+        ("likearr skipped 1 artist: a different artist with the same name is already in Lidarr", "#history")
     ]
 
 
@@ -721,14 +729,14 @@ SKIPPED_JUNGLE = NameCollision(name="Jungle", wanted_mbid="w", existing_lidarr_i
             (),
             "Lidarr's metadata server failed most lookups this run (40 failed); the artists affected are tried "
             "again next run.",
-            "#last-applied",
+            "run",
         ),
         (
             "new-skipped-artist",
             {"skipped_artists_new": 2},
             (),
             "2 artists were skipped because Lidarr couldn't look them up; likearr tries again next run.",
-            "#last-applied",
+            "run",
         ),
         (
             "new-catalogue-too-large",
@@ -736,15 +744,15 @@ SKIPPED_JUNGLE = NameCollision(name="Jungle", wanted_mbid="w", existing_lidarr_i
             (),
             "1 followed artist has more releases than MusicBrainz lets likearr read, so only part of their "
             "catalogue is wanted.",
-            "#last-applied",
+            "run",
         ),
         (
             "spotify-schema",
             {},
             (),
-            "Spotify answered without some details likearr relies on, or returned fewer items than it reported, so "
-            "this run held back every unmonitor to be safe. If it happens again, Spotify has changed something.",
-            "#last-applied",
+            "Spotify's answer was incomplete, so this run held back every unmonitor. If it keeps happening, "
+            "Spotify has changed something.",
+            "run",
         ),
     ],
 )
@@ -753,7 +761,7 @@ def test_each_new_condition_reads_as_one_plain_sentence(condition, fields, colli
 
 
 def test_an_unknown_condition_falls_back_to_the_clis_words() -> None:
-    assert condition_sentence("something-new", _record()) == ("something-new", "#last-applied")
+    assert condition_sentence("something-new", _record()) == ("something-new", "run")
 
 
 def test_the_banner_uses_the_sentences_and_names_the_collision() -> None:
@@ -774,7 +782,7 @@ def test_the_banner_uses_the_sentences_and_names_the_collision() -> None:
         )
     ]
     assert hidden.problems == [
-        ("likearr skipped Jungle: a different artist with the same name is already in Lidarr", "#last-applied")
+        ("likearr skipped Jungle: a different artist with the same name is already in Lidarr", "#history")
     ]
 
 

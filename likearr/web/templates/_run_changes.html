@@ -10,7 +10,7 @@
 {% for ctx in run_changes.sections %}
 <section class="plan-section">
   <h3>{{ ctx.section.title }} <span class="note">({{ ctx.total }})</span></h3>
-  <p class="note">{{ ctx.section.lead }}</p>
+  {% if ctx.section.lead %}<p class="note">{{ ctx.section.lead }}</p>{% endif %}
   <div class="table-wrap"><table class="plan-rows">
     <thead><tr>{% for c in ctx.columns %}<th>{{ c }}</th>{% endfor %}</tr></thead>
     <tbody>

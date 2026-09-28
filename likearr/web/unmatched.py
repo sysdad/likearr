@@ -88,30 +88,29 @@ GROUPS: tuple[Group, ...] = (
     Group(
         "unmatched",
         "Couldn't be matched",
-        "likearr has nothing it can monitor for these. What helps depends on why - each part says.",
+        "",
     ),
     Group(
         "ambiguous",
         "Two artists share the name",
-        "Two different MusicBrainz artists share this name and album title, so likearr didn't guess. "
-        "Look up shows what it saw.",
+        "likearr didn't guess. Look up shows what it saw.",
     ),
     Group(
         "excluded",
         "Left out by your settings",
-        "Their only release is one your settings leave out. Change the setting if you want them.",
+        "Change the setting if you want them.",
         tone="quiet",
     ),
     Group(
         "pending",
         "Waiting for an album",
-        "Liked singles: likearr waits for the album before monitoring anything. Nothing to do.",
+        "likearr monitors the album once it's out. Nothing to do.",
         tone="quiet",
     ),
     Group(
         "failed",
         "Lookup failed this run",
-        "Looking these up failed this time. likearr tries again at the next run; nothing to do yet.",
+        "likearr tries again next run. Nothing to do.",
         tone="bad",
     ),
 )
