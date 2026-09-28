@@ -240,9 +240,7 @@ async def settings_save(request: Request) -> Response:
         return web.render(request, "settings.html", _broken_settings(web, exc), 409)
 
     if posted.get("file_hash", [""])[0] != cfg.file_hash(text):
-        changed = {
-            "": "config.toml changed since you opened this page. Nothing was saved; these are the values now."
-        }
+        changed = {"": "config.toml changed since you opened this page. Nothing was saved; these are the values now."}
         return web.render(request, "settings.html", _settings_context(web, text, config, errors=changed), 409)
 
     values, errors = cfg.parse_form(posted)
@@ -344,9 +342,7 @@ async def settings_pause(request: Request) -> Response:
         return web.render(request, "settings.html", _broken_settings(web, exc), 409)
 
     if posted.get("file_hash", [""])[0] != cfg.file_hash(text):
-        changed = {
-            "": "config.toml changed since you opened this page. Nothing was saved; these are the values now."
-        }
+        changed = {"": "config.toml changed since you opened this page. Nothing was saved; these are the values now."}
         return web.render(request, "settings.html", _settings_context(web, text, config, errors=changed), 409)
 
     reason = posted.get("reason", [""])[0]
@@ -376,9 +372,7 @@ async def settings_resume(request: Request) -> Response:
         return web.render(request, "settings.html", _broken_settings(web, exc), 409)
 
     if posted.get("file_hash", [""])[0] != cfg.file_hash(text):
-        changed = {
-            "": "config.toml changed since you opened this page. Nothing was saved; these are the values now."
-        }
+        changed = {"": "config.toml changed since you opened this page. Nothing was saved; these are the values now."}
         return web.render(request, "settings.html", _settings_context(web, text, config, errors=changed), 409)
 
     check = cfg.plan_resume(text.decode("utf-8"), base_dir=web.config_path.parent)
@@ -422,9 +416,7 @@ async def settings_cleanup(request: Request) -> Response:
         return web.render(request, "settings.html", _broken_settings(web, exc), 409)
 
     if posted.get("file_hash", [""])[0] != cfg.file_hash(text):
-        changed = {
-            "": "config.toml changed since you opened this page. Nothing was saved; these are the values now."
-        }
+        changed = {"": "config.toml changed since you opened this page. Nothing was saved; these are the values now."}
         return web.render(request, "settings.html", _settings_context(web, text, config, errors=changed), 409)
 
     enabled = posted.get("enabled", [""])[0] == "1"
@@ -471,9 +463,7 @@ async def settings_schedule(request: Request) -> Response:
         return web.render(request, "settings.html", _broken_settings(web, exc), 409)
 
     if posted.get("file_hash", [""])[0] != cfg.file_hash(text):
-        changed = {
-            "": "config.toml changed since you opened this page. Nothing was saved; these are the values now."
-        }
+        changed = {"": "config.toml changed since you opened this page. Nothing was saved; these are the values now."}
         return web.render(request, "settings.html", _settings_context(web, text, config, errors=changed), 409)
 
     cron = posted.get("schedule.cron", [""])[0]

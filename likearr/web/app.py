@@ -131,9 +131,7 @@ _STATE_TEXT = {
     JobState.SKIPPED: "Skipped: nothing ran. The log below says why.",
 }
 
-_ADOPTED_TEXT = (
-    "Still running from before likearr restarted. It can't be stopped from here; it ends on its own."
-)
+_ADOPTED_TEXT = "Still running from before likearr restarted. It can't be stopped from here; it ends on its own."
 
 
 # ---------------------------------------------------------------- health and login

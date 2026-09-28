@@ -225,9 +225,7 @@ changing one re-resolves every liked and playlist song and re-baselines the heal
 
 _SOURCES = frozenset({("spotify", "followed_artists"), ("spotify", "saved_albums"), ("spotify", "liked_tracks")})
 
-_SOURCE_WARNING = (
-    "the next scheduled run monitors everything this resolves to, with no cap. Review changes first"
-)
+_SOURCE_WARNING = "the next scheduled run monitors everything this resolves to, with no cap. Review changes first"
 """Why a new source asks first: monitors are not capped the way unmonitors are
 (`max_unmonitors_scheduled`), and `projected_wanted_max` only warns, so a source switched on or a
 playlist added is acted on in full by the next unattended run."""
@@ -760,9 +758,7 @@ def plan_schedule(text: str, cron: str, timezone: str, *, base_dir: Path, now: d
     if _fires_per_day(new_schedule.cron, new_schedule.timezone, now=now) > _fires_per_day(
         old.cron, old.timezone, now=now
     ):
-        check.confirm = [
-            "This schedule fires more often, so unattended applies happen sooner and more often."
-        ]
+        check.confirm = ["This schedule fires more often, so unattended applies happen sooner and more often."]
     return check
 
 

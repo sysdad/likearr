@@ -1220,8 +1220,7 @@ def test_the_page_says_where_the_command_prefix_comes_from(
     body = _finished_previews(client, job_id)
 
     assert (
-        "Commands start with <code>docker compose run --rm likearr-cli</code> (<code>[ui] cli_command</code>)"
-        in body
+        "Commands start with <code>docker compose run --rm likearr-cli</code> (<code>[ui] cli_command</code>)" in body
     )
 
 

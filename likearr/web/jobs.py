@@ -830,8 +830,9 @@ class JobRunner:
 
         A child that finds the lock taken publishes a run-level error, which an apply sends to
         retained MQTT. Checking here instead means a lock held elsewhere (a command started in a
-        shell, say) costs a retry and nothing else. The window between this release and the child's own take is milliseconds;
-        a cron fire that lands in it is reported by the child as the collision it really was.
+        shell, say) costs a retry and nothing else. The window between this release and the
+        child's own take is milliseconds; a cron fire that lands in it is reported by the child as
+        the collision it really was.
         """
         try:
             with run_lock(self._lock_path):
