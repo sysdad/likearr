@@ -11,6 +11,8 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
 
 ## [Unreleased]
 
+## [0.5.2]
+
 ### Added
 
 - **Settings shows which Spotify account likearr is connected as**, what access it has and until
@@ -29,9 +31,22 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
 - **An unmonitor batch that fails after Lidarr applied it no longer leaves likearr owning those
   albums.** likearr reads the batch back and lets go of every album Lidarr shows unmonitored, so a
   later hand monitor of one of them is left alone.
+- **A Spotify read that never reaches its last page now stops with an error** instead of using up
+  the day's quota.
+- **A Lidarr command left orphaned by a Lidarr restart** now ends the wait instead of running to the
+  refresh timeout.
+- **An expired Spotify sign-in says so**, with the fix: connect Spotify again in Settings, or run
+  `likearr auth`.
+- `likearr auth` no longer accepts an `[::1]` redirect URI, which its callback server couldn't
+  serve. `doctor` shows the config file it loaded, and a `prune-stage` that stops part-way prints
+  `stopped:`.
 
 ### Changed
 
+- **The Status page is reorganised** around three cards: Automatic runs, Last change to Lidarr and
+  Pending changes. The runs table says "check" and "applied". Copy across the web UI is shorter.
+- **Runs refuse a Lidarr version likearr doesn't support** (anything but 2.x and 3.x), as `doctor`
+  already did.
 - The Spotify box in Settings and Clean up's intro are shorter; the detail is in
   `docs/spotify.md` and the README.
 - The docs are rewritten around installing, using and troubleshooting likearr: `docs/install.md`,
