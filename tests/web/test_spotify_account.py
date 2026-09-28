@@ -1,4 +1,4 @@
-"""#40: who Spotify is connected as, always going to Spotify's page, and guarding an account switch."""
+"""Who Spotify is connected as, always going to Spotify's page, and guarding an account switch."""
 
 from __future__ import annotations
 
@@ -270,7 +270,7 @@ def test_a_revoked_token_is_the_reason_to_re_authorize(web: TestClient, data_dir
 
 
 BOX_BUDGET = 320
-"""Characters of visible text the Spotify box may hold around its button (#40, item 6)."""
+"""Characters of visible text the Spotify box may hold around its button."""
 
 
 @pytest.mark.parametrize("public_url", [False, True], ids=["paste-back", "callback"])

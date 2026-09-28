@@ -1141,7 +1141,7 @@ def test_connect_spotify_shows_the_authorize_link_and_paste_back_form(
 def test_the_redirect_uri_to_register_is_named_while_connecting_in_paste_back_mode(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """#40: the redirect URI is shown once a connect is under way, where Spotify's "invalid
+    """The redirect URI is shown once a connect is under way, where Spotify's "invalid
     redirect URI" is seen, not on the Settings page itself. `data_dir`'s CONFIG doesn't set
     `[spotify] redirect_uri`, so this is the config default."""
     monkeypatch.setenv("LIKEARR_SPOTIFY_CLIENT_ID", SPOTIFY_CLIENT_ID)

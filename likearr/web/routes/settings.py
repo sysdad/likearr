@@ -544,7 +544,7 @@ def _refused_on_last_run(config: Config, authorized_at: datetime | None) -> bool
 
 
 def _reauth_reason(reauth: ReauthView, *, has_token: bool, revoked: bool, needs_collaborative: bool) -> str:
-    """Which one reason to re-authorize the Spotify box gives (#40), most urgent first; the
+    """Which one reason to re-authorize the Spotify box gives, most urgent first; the
     template turns the key into its sentence. "switch-only" is the answer when nothing is wrong."""
     if not has_token:
         return "never"
@@ -576,7 +576,7 @@ def spotify_status(config: Config, *, now: datetime) -> dict[str, Any]:
     reauth = reauth_view(authorized_at, reauth_due(authorized_at) if authorized_at else None, now=now)
     granted = read_granted_scopes(config.spotify.token_file)
     has_token = authorized_at is not None or granted is not None
-    # A token granted before likearr asked for playlist-read-collaborative (#103, item 3):
+    # A token granted before likearr asked for playlist-read-collaborative:
     # everything it did before still works; only playlists you collaborate on need a re-auth.
     needs_collaborative = lacks_collaborative(granted)
     revoked = has_token and _refused_on_last_run(config, authorized_at)
@@ -676,8 +676,8 @@ async def _finish_spotify_auth(
     authorization here; there is no session binding to check on top of it (see
     `web.spotify_connect`'s docstring for why).
 
-    Saves the new token when it belongs to the recorded Spotify account, or none is recorded yet
-    (#40). Another account's token is held instead, and returned for the caller to ask the user
+    Saves the new token when it belongs to the recorded Spotify account, or none is recorded yet.
+    Another account's token is held instead, and returned for the caller to ask the user
     about (`spotify_switch` saves it). Otherwise returns a message to show; never raises, and never
     includes the code, the verifier or a token in what it returns."""
     pending = web.spotify_pending.consume(returned_state) if returned_state else None
@@ -761,7 +761,7 @@ def _finished(web: _Web, request: Request, result: str | spotify_connect.Pending
 
 
 async def spotify_switch(request: Request) -> Response:
-    """POST /settings/spotify/switch: the confirm for a token of another Spotify account (#40).
+    """POST /settings/spotify/switch: the confirm for a token of another Spotify account.
     Behind the login gate, unlike the callback that held it. ``confirmed=yes`` saves it; anything
     else drops it."""
     web = _web(request)

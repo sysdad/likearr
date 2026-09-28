@@ -1,4 +1,4 @@
-"""Which Spotify account the token file belongs to (#40): recorded on connect, kept on refresh."""
+"""Which Spotify account the token file belongs to: recorded on connect, kept on refresh."""
 
 from __future__ import annotations
 

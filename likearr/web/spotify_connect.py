@@ -39,7 +39,7 @@ carries can change what was asked for. Spotify grants scopes at the consent scre
 the token ends up with are whatever the user approved there; `include_write` only decides what
 likearr says about them afterwards.
 
-**Whose account it is** (#40): the callback exchanges the code, then asks ``GET /me`` with the new
+**Whose account it is**: the callback exchanges the code, then asks ``GET /me`` with the new
 token before anything is saved. The account recorded with the stored token, or none recorded yet,
 saves at once. Another account is held here (`PendingSwitchStore`), in memory only, until the user
 confirms the switch from Settings behind the login gate.

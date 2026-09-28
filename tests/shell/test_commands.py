@@ -841,7 +841,7 @@ def test_auth_names_the_account_get_me_returns(
 def test_auth_records_the_account_in_the_token_file(
     tmp_path: Path, sink: CapturingSink, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """#40: Settings reads "Connected as" from the token file."""
+    """Settings reads "Connected as" from the token file."""
     spotify = FakeSpotify({"/v1/me": httpx.Response(200, json={"display_name": "Test User", "id": "fake-other"})})
     with make_context(tmp_path, sink=sink) as ctx:
         auth_against(ctx, spotify, monkeypatch)
