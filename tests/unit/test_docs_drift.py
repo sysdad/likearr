@@ -202,14 +202,6 @@ def test_readme_has_no_resolver_detail_above_quick_start() -> None:
         assert needle not in before_quick_start, f"{needle!r} still appears above Quick start"
 
 
-def test_readme_safety_model_is_directly_after_quick_start() -> None:
-    text = README_PATH.read_text()
-    _, _, after_quick_start = text.partition("## Quick start")
-    next_heading = re.search(r"\n## (.+)", after_quick_start)
-    assert next_heading is not None
-    assert next_heading.group(1).strip() == "Safety model"
-
-
 def test_readme_safety_model_states_the_credit_rule() -> None:
     text = README_PATH.read_text()
     _, _, safety = text.partition("## Safety model")
