@@ -30,7 +30,19 @@ from tests.shell.commands_shared import (
     token_file_data,
 )
 from tests.shell.conftest import NOW, CapturingSink, FakeLibrary, FakeLidarr, FakeSource, make_config, make_context
-from tests.unit.fakes import FakeLookup, artist_intent, lidarr_album, lidarr_artist, owned, reason, rg, snapshot
+from tests.unit.fakes import (
+    FakeLookup,
+    album_intent,
+    artist_intent,
+    lidarr_album,
+    lidarr_artist,
+    owned,
+    reason,
+    rg,
+    snapshot,
+    spotify_album,
+    track_intent,
+)
 
 # --------------------------------------------------------------------------- adopt
 
@@ -439,6 +451,113 @@ def test_adopt_does_not_warn_when_the_resolve_was_healthy(
         commands.adopt_command(ctx, out=tmp_path / "adopt.json", now=NOW)
 
     assert "WARNING" not in capsys.readouterr().out
+
+
+class _FailingTitles(FakeLookup):
+    """A lookup whose release-group searches for some album titles raise `MetadataError`."""
+
+    def __init__(self, *titles: str) -> None:
+        super().__init__()
+        self._failing_titles = set(titles)
+
+    def search_release_group_candidates(self, artist: str, title: str) -> Sequence[ReleaseGroup]:
+        if title in self._failing_titles:
+            self._count("search_release_group_candidates")
+            raise MetadataError("musicbrainz answered 503")
+        return super().search_release_group_candidates(artist, title)
+
+
+LIKED_RECORD = rg("rg-l", "Liked Record", artist_mbid="artist-3", artist_name="Hand Band")
+SAVED_RECORD = rg("rg-s", "Saved Record", artist_mbid="artist-3", artist_name="Hand Band")
+CONTROL_RECORD = rg("rg-c", "Control Record", artist_mbid="artist-3", artist_name="Hand Band")
+UNWANTED_RECORD = rg("rg-u", "Nobody Wants", artist_mbid="artist-3", artist_name="Hand Band")
+
+
+def _failed_lookup_world(tmp_path: Path, *, sink: CapturingSink) -> tuple[Any, FakeLidarr]:
+    """Artist-3, "Hand Band", not followed, with four albums monitored by hand: a liked song on
+    "Liked Record" and the saved "Saved Record" whose lookups raise, a liked song on "Control
+    Record" whose lookup succeeds, and "Nobody Wants", which no source points at."""
+    lookup = _FailingTitles("Liked Record", "Saved Record").add(
+        LIKED_RECORD, SAVED_RECORD, CONTROL_RECORD, UNWANTED_RECORD
+    )
+    source = FakeSource(
+        snapshot(
+            albums=[album_intent(spotify_album("Saved Record", spotify_id="sp-saved", artists=("Hand Band",)))],
+            tracks=[
+                track_intent(
+                    "A Song",
+                    spotify_album("Liked Record", spotify_id="sp-liked", artists=("Hand Band",)),
+                    spotify_id="sp-t1",
+                    artists=("Hand Band",),
+                ),
+                track_intent(
+                    "Another Song",
+                    spotify_album("Control Record", spotify_id="sp-control", artists=("Hand Band",)),
+                    spotify_id="sp-t2",
+                    artists=("Hand Band",),
+                ),
+            ],
+        )
+    )
+    lidarr = FakeLidarr()
+    lidarr.seed(
+        lidarr_artist("artist-3", id=3, name="Hand Band"),
+        *(
+            lidarr_album(g, id=301 + i, artist_id=3, monitored=True)
+            for i, g in enumerate((LIKED_RECORD, SAVED_RECORD, CONTROL_RECORD, UNWANTED_RECORD))
+        ),
+    )
+    return make_context(tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink), lidarr
+
+
+def test_adopt_holds_back_an_album_whose_own_source_lookup_failed(
+    tmp_path: Path, sink: CapturingSink, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A liked song and a saved album whose lookups raised never reached the desired set, so their
+    hand-monitored albums looked unwanted. They are held instead, with the reason; the control
+    whose lookup succeeded is claimed and the album no source points at is still unmonitored."""
+    ctx, lidarr = _failed_lookup_world(tmp_path, sink=sink)
+    plan_path = tmp_path / "adopt.json"
+    with ctx:
+        code = commands.adopt_command(ctx, out=plan_path, now=NOW)
+        out = capsys.readouterr().out
+        payload = json.loads(plan_path.read_text())
+        applied = commands.adopt_command(ctx, apply_path=plan_path, now=NOW)
+        owned = ctx.state.owned_releases()
+
+    assert code == EXIT_OK
+    assert [c["key"]["rg_mbid"] for c in payload["claim"]] == ["rg-c"]
+    assert [u["key"]["rg_mbid"] for u in payload["unmonitor"]] == ["rg-u"]
+    assert [(h["key"]["rg_mbid"], h["step"]) for h in payload["held"]] == [
+        ("rg-l", "error:metadata"),
+        ("rg-s", "error:metadata"),
+    ]
+    assert all("could not be looked up" in h["reason"] for h in payload["held"])
+    assert "2 held back" in out
+    held_line = next(line for line in out.splitlines() if line.strip().startswith("Hand Band (2 albums):"))
+    assert "could not be looked up" in held_line
+    assert sum(line.startswith("held ") for line in out.splitlines()) == 2
+
+    assert applied == EXIT_OK
+    assert lidarr.album("artist-3", "rg-l").monitored  # type: ignore[union-attr]
+    assert lidarr.album("artist-3", "rg-s").monitored  # type: ignore[union-attr]
+    assert not lidarr.album("artist-3", "rg-u").monitored  # type: ignore[union-attr]
+    assert ReleaseKey("artist-3", "rg-c") in owned
+    assert ReleaseKey("artist-3", "rg-l") not in owned, "held means not claimed either"
+    assert ReleaseKey("artist-3", "rg-s") not in owned
+
+
+def test_an_adopt_plan_file_reads_back_why_an_album_was_held(tmp_path: Path, sink: CapturingSink) -> None:
+    from likearr.shell.adopt_io import read_adopt_plan
+
+    ctx, _lidarr = _failed_lookup_world(tmp_path, sink=sink)
+    plan_path = tmp_path / "adopt.json"
+    with ctx:
+        commands.adopt_command(ctx, out=plan_path, now=NOW)
+
+    held = read_adopt_plan(plan_path).adoption.held
+    assert [h.key.rg_mbid for h in held] == ["rg-l", "rg-s"]
+    assert all("could not be looked up" in h.reason for h in held)
 
 
 def test_an_adopt_plan_file_without_held_releases_still_reads(tmp_path: Path) -> None:

@@ -26,6 +26,9 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
   was signed into.
 - **An account the Spotify app can't serve** (not on its User Management list) now gets a plain
   message and keeps the existing connection.
+- **`adopt` holds back an album whose saved album or liked song failed its MusicBrainz lookup**
+  instead of planning it for unmonitor. The album is matched by title and artist and listed as
+  held with the reason.
 
 ### Changed
 

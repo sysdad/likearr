@@ -80,7 +80,14 @@ def adopt_plan_to_dict(plan: AdoptPlanFile) -> dict[str, Any]:
         "keep_as_manual": [_owned_to_dict(r) for r in adoption.keep_as_manual],
         "unmonitor": [{"key": _key_to_dict(u.key), "title": u.title} for u in adoption.unmonitor],
         "held": [
-            {"key": _key_to_dict(h.key), "title": h.title, "step": h.step, "reason": h.reason} for h in adoption.held
+            {
+                "key": _key_to_dict(h.key),
+                "title": h.title,
+                "step": h.step,
+                "own_lookup": h.own_lookup,
+                "reason": h.reason,
+            }
+            for h in adoption.held
         ],
     }
 
@@ -112,7 +119,10 @@ def adopt_plan_from_dict(raw: Mapping[str, Any]) -> AdoptPlanFile:
                 ],
                 held=[
                     HeldRelease(
-                        key=_key_from_dict(h["key"]), title=str(h.get("title") or ""), step=str(h.get("step") or "")
+                        key=_key_from_dict(h["key"]),
+                        title=str(h.get("title") or ""),
+                        step=str(h.get("step") or ""),
+                        own_lookup=h.get("own_lookup") is True,
                     )
                     for h in _items(raw, "held")
                 ],

@@ -406,12 +406,12 @@ def _adopt_plan(ctx: Context, *, keep_file: Path | None, out: Path, now: datetim
     keep = read_keep_file(keep_file)
     owned = ctx.state.owned_releases()
     view = _view_of_everything(ctx)
-    adoption = plan_adoption(result.desired, view, owned, keep, now=now)
+    adoption = plan_adoption(result.desired, view, owned, keep, now=now, snapshot=result.snapshot)
 
     if not result.mb_ok:
-        # First, before the table: a degraded resolve can leave out more than the catalogues held
-        # below (a saved album whose lookup failed looks unwanted too), and the reader must know
-        # before reading a single row.
+        # First, before the table: a degraded resolve can leave out more than the albums held
+        # below (a failed item that cannot be tied to a Lidarr album by name looks unwanted), and
+        # the reader must know before reading a single row.
         emit("WARNING: MusicBrainz failed during this plan, so what the sources want is incomplete.")
         emit("WARNING: releases it could not look up may be planned for unmonitor although a source wants them.")
         emit("WARNING: re-run `likearr adopt` later, once MusicBrainz answers, and review that plan instead.")
@@ -451,15 +451,17 @@ def _adopt_plan(ctx: Context, *, keep_file: Path | None, out: Path, now: datetim
     )
     if adoption.held:
         emit(
-            f"{len(adoption.held)} held back, neither claimed nor unmonitored, because their artist's "
-            "catalogue was not read; a later adopt sorts them:"
+            f"{len(adoption.held)} held back, neither claimed nor unmonitored, because MusicBrainz could not "
+            "say whether a source wants them; a later adopt sorts them:"
         )
-        by_artist: dict[str, list[HeldRelease]] = {}
+        by_artist: dict[tuple[str, str], list[HeldRelease]] = {}
         for item in adoption.held:
-            by_artist.setdefault(item.key.artist_mbid, []).append(item)
-        for mbid, items in sorted(by_artist.items(), key=lambda kv: _artist_label(view, kv[0]).casefold()):
+            by_artist.setdefault((item.key.artist_mbid, item.reason), []).append(item)
+        for (mbid, reason), items in sorted(
+            by_artist.items(), key=lambda kv: (_artist_label(view, kv[0][0]).casefold(), kv[0][1])
+        ):
             count = f"{len(items)} album{'' if len(items) == 1 else 's'}"
-            emit(f"  {_artist_label(view, mbid)} ({count}): {items[0].reason}")
+            emit(f"  {_artist_label(view, mbid)} ({count}): {reason}")
     # Adopt only records ownership. The next `likearr run` then sets "Monitor New Albums" to None on
     # every artist holding a claimed or kept release, so the write is stated here, where the
     # decision is made.
