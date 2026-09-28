@@ -54,7 +54,22 @@ def _network_guard_per_test(request: pytest.FixtureRequest) -> Iterator[None]:
 
 
 @pytest.fixture(autouse=True)
-def _deployment_env(monkeypatch: pytest.MonkeyPatch) -> None:
+def _clear_likearr_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Clears every `LIKEARR_*` environment variable except `LIKEARR_TEST_*` (the ones the
+    integration tests use), so no test reads the developer's shell - `LIKEARR_CONFIG` in
+    particular, which a CLI test with no `-c` would otherwise fall back to (issue #23).
+
+    Runs before `_deployment_env` (taken as a parameter, not just declared above it, so the order
+    holds regardless of fixture registration order): that fixture's own defaults are set on the
+    slate this clears, not wiped out by it.
+    """
+    for name in list(os.environ):
+        if name.startswith("LIKEARR_") and not name.startswith("LIKEARR_TEST_"):
+            monkeypatch.delenv(name, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _deployment_env(monkeypatch: pytest.MonkeyPatch, _clear_likearr_env: None) -> None:
     """The env-only deployment settings (#3), the same for every test whatever the shell running
     the suite has set: a Lidarr URL the fixtures' fakes answer for, and no allowed hosts or
     MusicBrainz contact, so each test that cares sets its own."""
@@ -63,7 +78,7 @@ def _deployment_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("LIKEARR_MUSICBRAINZ_CONTACT", raising=False)
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def preserve_root_logging() -> Iterator[None]:
     """Saves the root logger's handlers and level, and restores them after the test.
 

@@ -8,6 +8,7 @@ one line and exit 1 - not what the run then does.
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -233,6 +234,22 @@ def test_doctor_on_a_wrongly_typed_guard_names_the_key_not_an_unexpected_error(
     assert out.splitlines() == [
         "config error: [guards] max_unmonitors_scheduled must be a whole number >= 0, got 'lots'"
     ]
+
+
+def test_no_root_handler_survives_the_previous_capsys_bound_cli_test() -> None:
+    """Regression for issue #39. The test above runs the real `build_context`, which calls
+    `setup_logging` and binds a root `StreamHandler` to `sys.stderr` as `capsys` has replaced it
+    for that test - a stream `capsys` closes as soon as that test ends.
+
+    `preserve_root_logging` (`tests/conftest.py`) is autouse, so by the time this test starts the
+    root logger has been restored to whatever it held before that test ran: no handler here should
+    be bound to a stream that is already closed.
+    """
+    root = logging.getLogger()
+    for handler in root.handlers:
+        stream = getattr(handler, "stream", None)
+        if stream is not None:
+            assert not stream.closed, f"{handler!r} is bound to a closed stream"
 
 
 def test_a_lidarr_error_is_one_line_and_exit_1(
