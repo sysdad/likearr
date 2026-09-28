@@ -132,6 +132,10 @@ details.panel[open] > summary { margin-bottom: var(--s3); }
 .run.tone-bad { border-left-color: var(--bad); }
 .run.tone-quiet { border-left-color: var(--line); }
 .run .headline { font-weight: 600; margin: var(--s1) 0; }
+.run-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s3); margin: 0 0 var(--s4); }
+.run-pair .run { margin: 0; }
+.run .label { color: var(--muted); font-size: var(--t-xs); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+.run .when { margin: 0 0 var(--s1); }
 .run ul { margin: var(--s1) 0 var(--s2); }
 .collision ul.links { padding-left: var(--s5); margin: var(--s2) 0; }
 
@@ -216,6 +220,7 @@ table.plan-rows td { font-size: var(--t-sm); }
   table.history th:nth-child(n+4), table.history td:nth-child(n+4) { display: none; }
   table.counts { min-width: 0; width: 100%; }
   .stats { grid-template-columns: 1fr; }
+  .run-pair { grid-template-columns: 1fr; }
   .lookup dl.facts { gap: 0; }
 }
 

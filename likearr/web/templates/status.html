@@ -103,6 +103,26 @@
 
 {% if view.collisions %}{% with collisions = view.collisions %}{% include "_collisions.html" %}{% endwith %}{% endif %}
 
+{% if view.last_any %}
+<section class="run-pair" aria-label="Runs">
+  {% if view.last_applied %}{% with run = view.last_applied %}
+  <div class="run tone-{{ run.tone }}" id="last-applied">
+    <span class="label">Last applied run</span>
+    <p class="headline">{{ run.headline }}</p>
+    <p class="when">{{ run.when | when }}</p>
+    {% if run.run_id %}<a href="/runs/{{ run.run_id }}#changes">What changed</a>{% endif %}
+  </div>
+  {% endwith %}{% endif %}
+  {% if view.last_any is not sameas view.last_applied %}{% with run = view.last_any %}
+  <div class="run tone-{{ run.tone }}" id="most-recent">
+    <span class="label">Most recent run</span>
+    <p class="headline">{{ run.headline }}</p>
+    <p class="when">{{ run.when | when }}</p>
+  </div>
+  {% endwith %}{% endif %}
+</section>
+{% endif %}
+
 <details class="panel" id="details">
   <summary>Details: what you like, what Lidarr has, Spotify sources</summary>
   {% if coverage %}{% with c = coverage %}
@@ -166,7 +186,7 @@
       <tr class="tone-{{ run.tone }}">
         <td class="nowrap">{% if run.run_id %}<a href="/runs/{{ run.run_id }}">{{ run.when.strftime("%a %d %b %H:%M") }}</a>{% else %}{{ run.when.strftime("%a %d %b %H:%M") }}{% endif %}</td>
         <td><span class="pill tone-{{ run.tone }}">{{ run.record.status }}</span></td>
-        <td>{{ "dry run" if run.record.dry_run else "apply" }}{% if run.run_id and view.last_applied and run.run_id == view.last_applied.run_id %} &middot; <a href="/runs/{{ run.run_id }}#changes">What changed</a>{% endif %}</td>
+        <td>{{ "dry run" if run.record.dry_run else "apply" }}</td>
         <td class="num">{{ run.record.counts.get("monitored", "") }}</td>
         <td class="num">{{ run.record.counts.get("unmonitored", "") }}</td>
         <td class="num">{{ run.record.counts.get("added", "") }}</td>

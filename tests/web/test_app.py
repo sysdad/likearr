@@ -386,21 +386,34 @@ def test_the_status_page_has_its_own_tab_title(client: TestClient) -> None:
     assert "<title>Status - likearr</title>" in page
 
 
-def test_status_shows_the_last_run_in_its_card_and_links_what_the_last_apply_changed(
-    client: TestClient, data_dir: Path
-) -> None:
+def test_status_shows_one_run_card_when_the_newest_run_is_the_last_apply(client: TestClient, data_dir: Path) -> None:
+    with SqliteState(data_dir / "state.sqlite") as state:
+        state.record_run(_record(ts=int(NOW.timestamp()) - 60), None)
+    _login(client)
+
+    page = client.get("/").text
+
+    assert 'id="last-applied"' in page
+    assert 'id="most-recent"' not in page
+
+
+def test_status_shows_the_last_applied_and_most_recent_runs_side_by_side(client: TestClient, data_dir: Path) -> None:
     with SqliteState(data_dir / "state.sqlite") as state:
         applied = next(r for r in state.run_history(limit=10) if not r.record.dry_run)
     _login(client)
 
     page = client.get("/").text
 
-    assert "Most recent run" not in page and "Last applied run" not in page
-    glance = page[page.index("At a glance") : page.index('id="history"')]
-    assert "Dry run: would monitor 4 releases" in glance
+    pair = page[
+        page.index('<section class="run-pair"') : page.index("</section>", page.index('<section class="run-pair"'))
+    ]
+    last_applied = pair[pair.index('id="last-applied"') : pair.index('id="most-recent"')]
+    assert "Last applied run" in last_applied and "Applied: 4 releases monitored" in last_applied
+    assert f'<a href="/runs/{applied.id}#changes">What changed</a>' in last_applied
+    assert "Most recent run" in pair and "Dry run: would monitor 4 releases" in pair
+    assert page.index('class="run-pair"') < page.index('id="details"')
     history = page[page.index('id="history"') :]
-    assert history.count(">What changed</a>") == 1
-    assert f'<a href="/runs/{applied.id}#changes">What changed</a>' in history
+    assert "What changed" not in history  # the Last applied run card carries it
     assert "Playlist pl-owned" in page  # Details still lists the Spotify sources
 
 
