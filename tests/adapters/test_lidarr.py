@@ -595,7 +595,7 @@ def test_refresh_artist_raises_on_failure_with_the_message(lidarr: LidarrClient)
 
 
 @respx.mock
-@pytest.mark.parametrize("state", ["aborted", "cancelled"])
+@pytest.mark.parametrize("state", ["aborted", "cancelled", "orphaned"])
 def test_refresh_artist_raises_on_other_terminal_states(lidarr: LidarrClient, state: str) -> None:
     respx.post(f"{V1}/command").mock(return_value=httpx.Response(201, json={"id": 99}))
     respx.get(f"{V1}/command/99").mock(return_value=httpx.Response(200, json={"id": 99, "status": state}))

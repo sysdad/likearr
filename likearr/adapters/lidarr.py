@@ -59,7 +59,7 @@ LIDARR_TIMEOUT = httpx.Timeout(connect=10.0, read=300.0, write=30.0, pool=10.0)
 """Lidarr writes can be slow on a large library; give them five minutes rather than one."""
 
 _COMMAND_POLL_S = 2.0
-_TERMINAL_COMMAND_STATES = {"completed", "failed", "aborted", "cancelled"}
+_TERMINAL_COMMAND_STATES = {"completed", "failed", "aborted", "cancelled", "orphaned"}
 
 _LEAN_PRIMARY = frozenset({"Album", "EP"})
 _FULL_PRIMARY = frozenset({"Album", "EP", "Single"})

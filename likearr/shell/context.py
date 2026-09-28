@@ -109,6 +109,7 @@ class Context:
     """
 
     config: Config
+    config_path: Path
     state: SqliteState
     lidarr: LidarrShell
     lookup: MetadataLookup
@@ -177,6 +178,7 @@ def build_context(
             without (the Lidarr API key, the state database) is unusable.
     """
     setup_logging(verbose)
+    resolved_config_path = Path(config_path).resolve()
     config = load_config(config_path)
     closeables: list[Any] = []
 
@@ -243,6 +245,7 @@ def build_context(
 
     return Context(
         config=config,
+        config_path=resolved_config_path,
         state=state,
         lidarr=lidarr,
         lookup=composite,

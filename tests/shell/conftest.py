@@ -697,6 +697,7 @@ def make_context(
         state.record_first_apply(NOW)
     return Context(
         config=config,
+        config_path=config.state_db.parent / "config.toml",
         state=state,
         lidarr=lidarr or FakeLidarr(),
         lookup=lookup or FakeLookup(),

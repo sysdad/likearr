@@ -66,7 +66,7 @@ def doctor_command(ctx: Context, *, no_spotify: bool = False, as_json: bool = Fa
     """
     checks: list[Check] = []
     checks.append(Check("PASS", "version", f"likearr {__version__}, commit {commit() or 'unknown'}"))
-    checks.append(Check("PASS", "config", f"loaded from {ctx.config.state_db.parent}"))
+    checks.append(Check("PASS", "config", f"loaded from {ctx.config_path}"))
     if ctx.config.musicbrainz.contact.strip().lower() == PLACEHOLDER_CONTACT:
         # Loads so a first `doctor` still runs, but it identifies nobody.
         checks.append(
