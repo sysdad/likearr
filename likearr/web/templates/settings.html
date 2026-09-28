@@ -156,7 +156,7 @@
   <summary>Advanced</summary>
   <fieldset class="cleanup" id="cleanup">
     <legend>Clean up</legend>
-    <p class="note">Review the albums on disk that nothing on Spotify asks for, and decide what to keep or trash. Trash moves to a holding folder outside the library, never deleted (<a href="https://github.com/sysdad/likearr#optional-clean-up" target="_blank" rel="noopener">setup</a>). Turning it off keeps your decisions.</p>
+    <p class="note">Review the albums on disk that nothing on Spotify asks for, and decide what to keep or trash. Trash moves to a holding folder outside the library, never deleted (<a href="https://github.com/sysdad/likearr#optional-clean-up" target="_blank" rel="noopener">setup</a>). Turning it on also offers promote-save's write access above; turning it off keeps your decisions.</p>
     {% for e in cleanup.errors %}<p class="warn">{{ e }}</p>{% endfor %}
     <form method="post" action="/settings/cleanup">
       <input type="hidden" name="file_hash" value="{{ file_hash }}">

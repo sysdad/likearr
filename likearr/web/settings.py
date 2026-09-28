@@ -169,7 +169,7 @@ FIELDS: tuple[Field, ...] = (
         "deny_releases",
         "list",
         "Refused releases",
-        "Releases likearr never picks, one MusicBrainz id per line. A saved album still wins.",
+        "Releases likearr never picks, one MusicBrainz id per line. Not this one adds here; a saved album still wins.",
     ),
     Field(
         "guards",

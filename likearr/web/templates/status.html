@@ -147,7 +147,7 @@
     {% if c.dry %}
     <tr><td>Not monitored yet{% if c.would_monitor %} (the plan would monitor {{ c.would_monitor }}){% endif %}</td><td class="num">{{ c.not_monitored }}</td></tr>
     {% else %}
-    <tr><td>Not monitored: a name collision, a failed lookup, or not in Lidarr yet</td><td class="num">{{ c.not_monitored }}</td></tr>
+    <tr><td>Not monitored: a name collision, an artist Lidarr couldn't look up, or not in Lidarr yet</td><td class="num">{{ c.not_monitored }}</td></tr>
     {% endif %}
   </table></div>
   <p class="note">likearr doesn't search. Older albums need a search in Lidarr{% if view.wanted_missing_url %}, from <a href="{{ view.wanted_missing_url }}">Wanted &gt; Missing</a>{% endif %}.</p>
