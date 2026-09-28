@@ -58,8 +58,7 @@ every artist Clean up removes.
 
 No clone needed. Paste this as `compose.yaml` (or into an existing stack) and fill in the values.
 To keep secrets out of `compose.yaml`, replace the `environment:` block with `env_file: [.env]` and
-fill in [`deploy/env.example`](deploy/env.example) as `.env` beside it. Either way, the file holds
-secrets: `chmod 600` it.
+fill in [`deploy/env.example`](deploy/env.example) as `.env` beside it.
 
 ```yaml
 services:
