@@ -386,17 +386,29 @@ def test_the_status_page_has_its_own_tab_title(client: TestClient) -> None:
     assert "<title>Status - likearr</title>" in page
 
 
-def test_status_separates_the_last_apply_from_the_last_run(client: TestClient) -> None:
+def test_status_shows_the_last_run_in_its_card_and_links_what_the_last_apply_changed(
+    client: TestClient, data_dir: Path
+) -> None:
+    with SqliteState(data_dir / "state.sqlite") as state:
+        applied = next(r for r in state.run_history(limit=10) if not r.record.dry_run)
     _login(client)
 
     page = client.get("/").text
 
-    assert "Last applied run" in page
-    assert "Applied: 4 releases monitored" in page
-    assert "Most recent run" in page
-    assert "Dry run: would monitor 4 releases" in page
-    assert "Playlist pl-owned" in page
-    assert "Liked songs" in page
+    assert "Most recent run" not in page and "Last applied run" not in page
+    glance = page[page.index("At a glance") : page.index('id="history"')]
+    assert "Dry run: would monitor 4 releases" in glance
+    history = page[page.index('id="history"') :]
+    assert history.count(">What changed</a>") == 1
+    assert f'<a href="/runs/{applied.id}#changes">What changed</a>' in history
+    assert "Playlist pl-owned" in page  # Details still lists the Spotify sources
+
+
+def _newest_run_page(client: TestClient, data_dir: Path) -> str:
+    """The `/runs/<id>` page of the newest recorded run: where "What changed" lives."""
+    with SqliteState(data_dir / "state.sqlite") as state:
+        (row,) = state.run_history(limit=1)
+    return client.get(f"/runs/{row.id}").text
 
 
 LOST_STATE_TEXT = "2 artists tagged likearr that likearr&#39;s state database doesn&#39;t know"
@@ -454,7 +466,6 @@ def test_history_rows_link_to_their_run_page(client: TestClient, data_dir: Path)
     page = client.get("/").text
     history = page[page.index('id="history"') : page.index("</section>", page.index('id="history"'))]
 
-    assert history.count('<a href="/runs/') == len(rows)
     for row in rows:
         assert f'<a href="/runs/{row.id}"' in history
 
@@ -668,15 +679,14 @@ def _run76_diff() -> Any:
     return diff
 
 
-def test_status_shows_what_changed_collapsed_with_named_rows(client: TestClient, data_dir: Path) -> None:
+def test_the_run_page_shows_what_changed_with_named_rows(client: TestClient, data_dir: Path) -> None:
     with SqliteState(data_dir / "state.sqlite") as state:
         state.record_run(_record(ts=int(NOW.timestamp()) - 60), _run76_diff())
     _login(client)
 
-    page = client.get("/").text
+    page = _newest_run_page(client, data_dir)
 
-    assert "<summary>What changed</summary>" in page
-    assert "<details" in page.split("What changed</summary>")[0].splitlines()[-1] or "<details" in page
+    assert "<h2>What changed</h2>" in page
     assert "David Bromberg Band" in page or "Artist" in page  # the base fixture's add_artists name
     assert "The Clifford Brown-Max Roach Quintet" in page
     assert "Daisy Jones &amp; the Six" in page or "Daisy Jones" in page
@@ -686,12 +696,12 @@ def test_status_shows_what_changed_collapsed_with_named_rows(client: TestClient,
     assert "no longer counts among the studio albums and EPs of an artist you follow" in page
 
 
-def test_status_shows_the_resolver_change_note(client: TestClient, data_dir: Path) -> None:
+def test_the_run_page_shows_the_resolver_change_note(client: TestClient, data_dir: Path) -> None:
     with SqliteState(data_dir / "state.sqlite") as state:
         state.record_run(_record(ts=int(NOW.timestamp()) - 60, baseline="resolver-version-changed"), _run76_diff())
     _login(client)
 
-    page = client.get("/").text
+    page = _newest_run_page(client, data_dir)
 
     # It says the run couldn't be compared, not that matching caused every change (the live 12:20
     # run mixed matching, Spotify edits and a MusicBrainz reclassification).
@@ -699,7 +709,7 @@ def test_status_shows_the_resolver_change_note(client: TestClient, data_dir: Pat
     assert "not from your Spotify." not in page
 
 
-def test_status_labels_a_part_way_apply_as_the_plan_it_was_attempting(client: TestClient, data_dir: Path) -> None:
+def test_the_run_page_labels_a_part_way_apply_as_the_plan_it_was_attempting(client: TestClient, data_dir: Path) -> None:
     with SqliteState(data_dir / "state.sqlite") as state:
         state.record_run(
             _record(
@@ -715,14 +725,14 @@ def test_status_labels_a_part_way_apply_as_the_plan_it_was_attempting(client: Te
         )
     _login(client)
 
-    page = client.get("/").text
+    page = _newest_run_page(client, data_dir)
 
     assert "stopped part-way" in page
     assert "1 of 9 changes made" in page
     assert "not all of it reached Lidarr" in page
 
 
-def test_status_does_not_call_a_fully_landed_apply_part_way(client: TestClient, data_dir: Path) -> None:
+def test_the_run_page_does_not_call_a_fully_landed_apply_part_way(client: TestClient, data_dir: Path) -> None:
     """Every planned change reached Lidarr and only confirming it failed - the run page must
     not say "stopped part-way: 3 of 3" or "not all of it reached Lidarr"."""
     with SqliteState(data_dir / "state.sqlite") as state:
@@ -740,14 +750,14 @@ def test_status_does_not_call_a_fully_landed_apply_part_way(client: TestClient, 
         )
     _login(client)
 
-    page = client.get("/").text
+    page = _newest_run_page(client, data_dir)
 
     assert "made all 3 of its planned changes" in page
     assert "stopped part-way" not in page
     assert "not all of it reached Lidarr" not in page
 
 
-def test_status_names_the_artists_set_to_none_in_what_changed(client: TestClient, data_dir: Path) -> None:
+def test_the_run_page_names_the_artists_set_to_none_in_what_changed(client: TestClient, data_dir: Path) -> None:
     """An applied run's "Monitor New Albums" write is shown by name, like every other change."""
     from likearr.models import PrimaryType, ReleaseGroup, Resolution, ResolutionStatus
     from tests.adapters.test_state_sqlite import _diff
@@ -761,14 +771,14 @@ def test_status_names_the_artists_set_to_none_in_what_changed(client: TestClient
         state.cache_resolution(Resolution(intent_key="liked:t0", status=ResolutionStatus.RESOLVED, release_group=rg))
     _login(client)
 
-    page = client.get("/").text
-    changed = page.split("What changed</summary>")[1].split("</details>")[0]
+    page = _newest_run_page(client, data_dir)
+    changed = page.split('<section id="changes">')[1]
 
     section = changed[changed.index("Artists to stop auto-monitoring") :].split("</section>")[0]
     assert "Fake Band" in section
 
 
-def test_status_hides_empty_sections_in_what_changed(client: TestClient, data_dir: Path) -> None:
+def test_the_run_page_hides_empty_sections_in_what_changed(client: TestClient, data_dir: Path) -> None:
     from tests.adapters.test_state_sqlite import _diff
 
     with SqliteState(data_dir / "state.sqlite") as state:
@@ -777,34 +787,10 @@ def test_status_hides_empty_sections_in_what_changed(client: TestClient, data_di
         state.record_run(_record(ts=int(NOW.timestamp()) - 60), diff)
     _login(client)
 
-    page = client.get("/").text
-    changed = page.split("What changed</summary>")[1].split("</details>")[0]
+    page = _newest_run_page(client, data_dir)
+    changed = page.split('<section id="changes">')[1]
 
     assert "Profiles to widen" not in changed
-
-
-def test_status_caps_a_long_section_and_links_the_run_page(client: TestClient, data_dir: Path) -> None:
-    from likearr.models import MonitorRelease, Reason, ReasonKind, ReleaseKey
-
-    with SqliteState(data_dir / "state.sqlite") as state:
-        diff = _run76_diff()
-        for i in range(20):
-            diff.monitor.append(
-                MonitorRelease(
-                    key=ReleaseKey("a1", f"cap-{i}"),
-                    title=f"Cap {i}",
-                    reasons=frozenset({Reason(ReasonKind.LIKED, f"cap-t{i}")}),
-                    step="",
-                )
-            )
-        state.record_run(_record(ts=int(NOW.timestamp()) - 60), diff)
-        (row,) = state.run_history(limit=1)
-    _login(client)
-
-    page = client.get("/").text
-
-    assert "Show all" in page
-    assert f'href="/runs/{row.id}"' in page
 
 
 def test_run_page_shows_every_row_and_needs_no_login_redirect_for_htmx(client: TestClient, data_dir: Path) -> None:
@@ -1232,7 +1218,7 @@ def test_run_page_labels_a_stale_refusal_as_no_changes_made(client: TestClient, 
     assert "Track 2" in page  # the plan it would have applied is still shown, by name
 
 
-def test_status_labels_a_guarded_run_s_blocked_unmonitors(client: TestClient, data_dir: Path) -> None:
+def test_the_run_page_labels_a_guarded_run_s_blocked_unmonitors(client: TestClient, data_dir: Path) -> None:
     """A guard holds back *every* unmonitor for a guarded run (`allow_unmonitors=not guarded` in
     `shell.run._execute`), but the stored diff still lists them - the plan it was attempting, not
     what changed in Lidarr. `RunStatus.GUARDED` is in `status._APPLIED`, so this reaches Status's
@@ -1241,7 +1227,7 @@ def test_status_labels_a_guarded_run_s_blocked_unmonitors(client: TestClient, da
         state.record_run(_record(ts=int(NOW.timestamp()) - 60, status=RunStatus.GUARDED), _run76_diff())
     _login(client)
 
-    page = client.get("/").text
+    page = _newest_run_page(client, data_dir)
 
     assert "A guard held back 2 unmonitors this run" in page
     assert "not what changed in Lidarr" in page
@@ -1311,7 +1297,7 @@ def test_the_all_good_banner_notes_a_failed_scheduled_fire(client: TestClient, d
 
     page = client.get("/").text
 
-    glance = page[page.index("At a glance") : page.index("Last applied run")]
+    glance = page[page.index("At a glance") : page.index('id="history"')]
     assert "All good." in glance
     assert "nothing needs you" not in glance
     assert f'The last scheduled run failed: <a href="/jobs/{job_id}">' in glance
@@ -1324,8 +1310,7 @@ def test_status_labels_run_now_as_run_and_apply_with_a_review_first_note(client:
 
     assert "Run and apply now" in page
     assert "Run now</button>" not in page
-    assert "Checks and applies in one go" in page
-    assert '<a href="/plan">Review changes</a>' in page
+    assert "Checks and applies in one go" not in page  # the button says what it does
 
 
 def test_status_paused_drops_the_run_now_form(client: TestClient, data_dir: Path) -> None:
@@ -2107,8 +2092,8 @@ def test_status_leads_with_health_last_run_and_next_run(client: TestClient) -> N
 
     page = client.get("/").text
 
-    assert page.index("At a glance") < page.index("Last applied run")
-    glance = page[page.index("At a glance") : page.index("Last applied run")]
+    assert page.index("At a glance") < page.index('id="history"')
+    glance = page[page.index("At a glance") : page.index('id="history"')]
     assert "All good." in glance
     assert "The last run went fine, and nothing needs you." in glance
     assert "Home Assistant" not in glance
@@ -2763,7 +2748,7 @@ def test_status_leads_with_a_health_banner_and_stat_cards(client: TestClient, da
 
     page = client.get("/").text
 
-    top = page[: page.index('<section id="last-applied">')]
+    top = page[: page.index('<section id="history">')]
     assert '<div class="banner tone-ok" role="status">' in top
     assert "All good." in top
     for label in ("Last run", "Next scheduled run", "In Lidarr", "Couldn't be added"):
@@ -2928,8 +2913,8 @@ def test_a_job_the_system_killed_says_it_ran_out_of_memory(client: TestClient, m
 
     assert OOM_TEXT in final
     assert "(exit -9)" not in final
-    status = client.get("/").text
-    assert '<span class="pill tone-bad">out of memory</span>' in status and OOM_TEXT in status
+    jobs = client.get("/jobs").text
+    assert '<span class="pill tone-bad">out of memory</span>' in jobs and OOM_TEXT in jobs
     assert OOM_TEXT in client.get("/explain").text
 
 

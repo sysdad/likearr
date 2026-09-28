@@ -110,10 +110,17 @@ def test_the_allowlist_is_exactly_the_approved_keys() -> None:
     }
 
 
-def test_every_field_has_a_non_empty_help_line() -> None:
-    """A guard used to render with no help at all; every field must say what it does."""
+def test_every_guard_and_rule_says_what_it_does() -> None:
+    """Only a field whose label already says it all goes without help: the sources, and the
+    liked-song scope, whose options are sentences."""
+    self_explanatory = {
+        "spotify.followed_artists",
+        "spotify.saved_albums",
+        "spotify.liked_tracks",
+        "rules.liked_track_scope",
+    }
     for f in FIELDS:
-        assert f.help.strip(), f"{f.name} has no help"
+        assert bool(f.help.strip()) is (f.name not in self_explanatory), f.name
 
 
 def test_liked_track_scope_choice_labels_are_sentences_but_the_values_stay_the_stored_ones() -> None:

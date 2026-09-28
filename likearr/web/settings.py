@@ -79,7 +79,7 @@ __all__ = [
     "write_config",
 ]
 
-SCHEDULE_PREVIEW_COUNT = 5
+SCHEDULE_PREVIEW_COUNT = 1
 """How many upcoming fires the Settings page's schedule preview shows."""
 
 PAUSED_REASON_LIMIT = 200
@@ -116,18 +116,16 @@ class Field:
 
 
 FIELDS: tuple[Field, ...] = (
-    Field("spotify", "followed_artists", "bool", "Followed artists", "Mirror the artists you follow."),
-    Field("spotify", "saved_albums", "bool", "Saved albums", "Mirror the albums in your library."),
-    Field("spotify", "liked_tracks", "bool", "Liked songs", "Mirror the albums your liked songs live on."),
-    Field(
-        "spotify", "playlists", "list", "Playlists", "Playlists you own or collaborate on whose songs count as liked."
-    ),
+    Field("spotify", "followed_artists", "bool", "Followed artists"),
+    Field("spotify", "saved_albums", "bool", "Saved albums"),
+    Field("spotify", "liked_tracks", "bool", "Liked songs"),
+    Field("spotify", "playlists", "list", "Playlists", "Their songs count as liked."),
     Field(
         "rules",
         "liked_track_scope",
         "choice",
         "Liked song resolves to",
-        "Which release a liked or playlist song resolves to.",
+        "",
         choices=tuple(sorted(LIKED_TRACK_SCOPES)),
         choice_labels={
             "album": "The studio album or EP the song is on",
@@ -198,7 +196,7 @@ FIELDS: tuple[Field, ...] = (
         "unmapped_ratio_amber",
         "float",
         "Unmapped share before Status needs attention (0-1)",
-        "Status needs attention when more than this share of songs and albums newly fails to match. Blocks nothing.",
+        "Share of songs and albums that newly fail to match. Blocks nothing.",
     ),
     Field(
         "guards",

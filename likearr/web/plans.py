@@ -355,14 +355,14 @@ class Section:
     name: str
     title: str
     lead: str
-    """One sentence saying what the rows are."""
+    """One sentence saying what the rows are, or ``""`` when the title already says it."""
 
 
 SECTIONS: dict[str, Section] = {
     s.name: s
     for s in (
         Section("add_artists", "Artists to add", "Added to Lidarr, with the metadata profile each will get."),
-        Section("monitor", "Releases to monitor", "Newly wanted, and why."),
+        Section("monitor", "Releases to monitor", ""),
         Section("unmonitor", "Releases to unmonitor", "No longer backed by anything on Spotify."),
         Section("ratchets", "Profiles to widen", "Artists moved to a profile that shows more release types."),
         Section(
@@ -371,15 +371,14 @@ SECTIONS: dict[str, Section] = {
         Section(
             "set_new_items_none",
             "Artists to stop auto-monitoring",
-            'Lidarr\'s "Monitor New Albums" set to None, so their new albums are monitored only when you like '
-            "them. Only artists likearr holds a release of.",
+            'Lidarr\'s "Monitor New Albums" set to None: their new albums are monitored only when you like them.',
         ),
         Section("refresh_artists", "Artists to refresh", "A recent release Lidarr has not caught up with yet."),
         Section("update_reasons", "Why-it's-wanted updates", "Still monitored, for a different set of reasons."),
-        Section("guards", "Guards", "What the safety checks held back, and why."),
+        Section("guards", "Guards", ""),
         Section("name_collisions", "Name collisions", "Wanted artists skipped because Lidarr holds the name."),
         Section("pending", "Waiting", "Liked singles waiting for their album."),
-        Section("unmapped", "Not found", "Songs, albums and artists that could not be matched."),
+        Section("unmapped", "Not found", ""),
     )
 }
 

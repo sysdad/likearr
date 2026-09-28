@@ -108,7 +108,7 @@ def test_settings_shows_a_schedule_preview(client: TestClient) -> None:
 
     assert 'name="schedule.cron"' in page
     assert "20 */6 * * *" in page
-    assert "Next fires:" in page
+    assert "Next fire:" in page
 
 
 def test_settings_says_scheduled_runs_are_enabled_without_the_cli_flags(client: TestClient) -> None:
@@ -200,7 +200,7 @@ def test_the_live_schedule_preview_shows_fires_in_the_typed_timezone(client: Tes
     )
 
     assert response.status_code == 200
-    assert "Next fires:" in response.text
+    assert "Next fire:" in response.text
     assert "Every day at 06:00" in response.text
     assert "error" not in response.text
 
@@ -2265,7 +2265,7 @@ def test_the_clean_up_switch_sits_first_in_a_collapsed_advanced_section(client: 
     advanced = _advanced(page)
     assert advanced.index("<legend>Clean up</legend>") < advanced.index("<form")
     assert "holding folder outside the library" in advanced
-    assert "#optional-clean-up" in advanced
+    assert "docs/install.md#clean-up-setup" in advanced
     assert "Clean up is off." in advanced
     assert page.index("<legend>Guards</legend>") < page.index('id="advanced"')  # Rules and Guards stay visible
 

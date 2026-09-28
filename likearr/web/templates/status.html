@@ -9,7 +9,7 @@
 {% if setup_needed %}<p class="warn" id="setup-needed">{{ setup_needed }} <a href="/settings#lidarr-setup">Open Settings</a>.</p>{% endif %}
 {% if state_missing %}<p class="error">No state database yet. It appears after the first run; if runs have happened, check its path in config.toml.</p>{% endif %}
 {% if lost_state %}<p class="error">{{ lost_state }}</p>{% endif %}
-{% from "_macros.html" import icon, state_pill, coverage_card, reauth_sentence %}
+{% from "_macros.html" import icon, coverage_card, reauth_sentence %}
 {% if job %}<p class="flash">A job is running: <a href="/jobs/{{ job.id }}">{{ job.kind }} {{ job.label }}</a>.</p>{% endif %}
 
 <section class="glance" id="glance" aria-label="At a glance">
@@ -72,7 +72,6 @@
       <form method="post" action="/run-now">
         <button type="submit">Run and apply now</button>
       </form>
-      <span class="sub">Checks and applies in one go. To see the changes first, use <a href="/plan">Review changes</a>.</span>
       {% endif %}
     </div>
     <div class="card stat">
@@ -103,25 +102,6 @@
 </section>
 
 {% if view.collisions %}{% with collisions = view.collisions %}{% include "_collisions.html" %}{% endwith %}{% endif %}
-
-<section id="last-applied">
-  <h2>Last applied run</h2>
-  {% if view.last_applied %}{% with run = view.last_applied %}{% include "_run.html" %}{% endwith %}
-    {% if run_changes %}
-    <details class="panel">
-      <summary>What changed</summary>
-      {% include "_run_changes.html" %}
-    </details>
-    {% endif %}
-  {% else %}<p class="note">{% if view.history %}No apply is recorded in the last {{ view.history | length }} runs.{% else %}No runs yet.{% endif %}</p>{% endif %}
-</section>
-
-{% if view.last_any and view.last_any is not sameas view.last_applied %}
-<section>
-  <h2>Most recent run</h2>
-  {% with run = view.last_any %}{% include "_run.html" %}{% endwith %}
-</section>
-{% endif %}
 
 <details class="panel" id="details">
   <summary>Details: what you like, what Lidarr has, Spotify sources</summary>
@@ -178,6 +158,7 @@
 
 <section id="history">
   <h2>{% if view.history %}Last {{ view.history | length }} runs{% else %}No runs yet{% endif %}</h2>
+  {% if view.history %}
   <div class="table-wrap"><table class="history">
     <thead><tr><th>When</th><th>Status</th><th>Kind</th><th class="num">Monitored</th><th class="num">Unmonitored</th><th class="num">Added</th><th>Message</th></tr></thead>
     <tbody>
@@ -185,31 +166,17 @@
       <tr class="tone-{{ run.tone }}">
         <td class="nowrap">{% if run.run_id %}<a href="/runs/{{ run.run_id }}">{{ run.when.strftime("%a %d %b %H:%M") }}</a>{% else %}{{ run.when.strftime("%a %d %b %H:%M") }}{% endif %}</td>
         <td><span class="pill tone-{{ run.tone }}">{{ run.record.status }}</span></td>
-        <td>{{ "dry run" if run.record.dry_run else "apply" }}</td>
+        <td>{{ "dry run" if run.record.dry_run else "apply" }}{% if run.run_id and view.last_applied and run.run_id == view.last_applied.run_id %} &middot; <a href="/runs/{{ run.run_id }}#changes">What changed</a>{% endif %}</td>
         <td class="num">{{ run.record.counts.get("monitored", "") }}</td>
         <td class="num">{{ run.record.counts.get("unmonitored", "") }}</td>
         <td class="num">{{ run.record.counts.get("added", "") }}</td>
         <td class="msg"{% if run.record.message %} title="{{ run.record.message }}"{% endif %}>{{ run.record.message | short_message }}</td>
       </tr>
-    {% else %}
-      <tr><td colspan="7" class="note">No runs recorded yet.</td></tr>
     {% endfor %}
     </tbody>
   </table></div>
+  {% endif %}
 </section>
 
-{% if recent_jobs %}
-<section>
-  <h2>Recent jobs</h2>
-  <ul class="jobs">
-  {% for m in recent_jobs %}
-    <li><a href="/jobs/{{ m.id }}">{{ m.kind | job_title }}{% if m.kind == "explain" and m.label %}: {{ m.label }}{% endif %}</a> {{ state_pill(m) }} {{ m.started_at | when }}
-      {% if job_run_ids.get(m.id) %} &middot; <a href="/runs/{{ job_run_ids[m.id] }}">What changed</a>{% endif %}
-      {% if m.state == "interrupted" %}<span class="note">likearr restarted while this ran</span>{% endif %}</li>
-  {% endfor %}
-  </ul>
-  <p><a href="/jobs">All jobs</a></p>
-</section>
-{% endif %}
 {% endif %}
 {% endblock %}

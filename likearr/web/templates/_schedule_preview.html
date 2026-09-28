@@ -5,6 +5,6 @@
 <p class="error">{{ schedule_preview.error }}</p>
 {% else %}
 {% if schedule_preview.summary %}<p class="note">{{ schedule_preview.summary }}</p>{% endif %}
-<p class="note">Next fires: {% for f in schedule_preview.fires %}{{ f | fire_when }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
+<p class="note">{% if schedule_preview.fires %}Next fire: {{ schedule_preview.fires[0] | fire_when }}{% else %}Never fires.{% endif %}</p>
 {% endif %}
 </div>

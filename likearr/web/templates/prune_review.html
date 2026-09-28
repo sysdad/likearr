@@ -27,7 +27,6 @@
 <section id="export" class="card">
   <h2>Export</h2>
   <p>Exporting saves your decisions for the commands below and the next review. Nothing moves and nothing changes on Spotify until you run those commands.</p>
-  <p class="note">Trash goes to the holding folder. Nothing is deleted until you empty it yourself.</p>
   {% with oob_export = False %}{% include "_prune_export_status.html" %}{% endwith %}
   <form method="post" action="/prune/{{ meta.id }}/export">
     <label for="notes">Notes (optional, kept in the decisions file)</label>

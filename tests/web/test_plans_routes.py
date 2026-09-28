@@ -636,7 +636,7 @@ def test_a_check_with_nothing_to_change_says_so(client: TestClient, data_dir: Pa
     page = client.get(f"/jobs/{job_id}").text
 
     assert "Nothing to change." in page
-    assert "Nothing in: artists to add, releases to monitor" in page
+    assert "Nothing in:" not in page  # the zero counts already say it
 
 
 def _only_monitor_new_albums(data_dir: Path, planned_diff: Path) -> None:

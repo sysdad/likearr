@@ -467,6 +467,10 @@ def _n(count: int, one: str, many: str) -> str:
     return f"{count} {one}" if count == 1 else f"{count} {many}"
 
 
+RUN_PAGE = "run"
+"""A problem's link target meaning "the run's own page" (`/runs/<id>`), resolved by `health_glance`."""
+
+
 def condition_sentence(
     condition: str, record: HealthRecord, collisions: Sequence[NameCollision] = ()
 ) -> tuple[str, str]:
@@ -504,29 +508,29 @@ def condition_sentence(
         return (
             f"Lidarr's metadata server failed most lookups this run{count}; the artists affected are tried again "
             "next run.",
-            "#last-applied",
+            RUN_PAGE,
         )
     if condition == "new-skipped-artist":
         n = max(record.skipped_artists_new, 1)
         return (
             f"{_n(n, 'artist was', 'artists were')} skipped because Lidarr couldn't look "
             f"{'it' if n == 1 else 'them'} up; likearr tries again next run.",
-            "#last-applied",
+            RUN_PAGE,
         )
     if condition == "new-catalogue-too-large":
         n = max(record.catalogue_too_large_new, 1)
         return (
             f"{_n(n, 'followed artist has', 'followed artists have')} more releases than MusicBrainz lets likearr "
             "read, so only part of their catalogue is wanted.",
-            "#last-applied",
+            RUN_PAGE,
         )
     if condition == "spotify-schema":
         return (
             "Spotify's answer was incomplete, so this run held back every unmonitor. If it keeps happening, "
             "Spotify has changed something.",
-            "#last-applied",
+            RUN_PAGE,
         )
-    return CONDITION_TEXT.get(condition, condition), "#last-applied"
+    return CONDITION_TEXT.get(condition, condition), RUN_PAGE
 
 
 @dataclass(frozen=True, slots=True)
@@ -592,10 +596,10 @@ def health_glance(
     for condition in record.new_conditions:
         text, anchor = condition_sentence(condition, record, published.name_collisions)
         if condition == "new-name-collision" and not collisions_shown:
-            text, anchor = text.removesuffix(" - see below."), "#last-applied"
+            text, anchor = text.removesuffix(" - see below."), RUN_PAGE
         problems.append((text, anchor))
     blocked = dict(zip(published.guards, published.guard_blocked, strict=False))
-    problems.extend((guard, "#last-applied") for guard in published.guards if blocked.get(guard, 0) > 0)
+    problems.extend((guard, RUN_PAGE) for guard in published.guards if blocked.get(guard, 0) > 0)
     # An advisory name-collision guard is the collision card's to explain, not a second note.
     codes = dict(zip(published.guards, published.guard_codes, strict=False))
     notes = [g for g in published.guards if blocked.get(g, 0) <= 0 and codes.get(g) != "name-collision"]
@@ -604,11 +608,13 @@ def health_glance(
         # it keeps the HA dead-man from also lighting up while scheduled runs are stopped.
         notes.append(f"scheduled runs are paused ({run.headline.removeprefix('Paused: ')})")
     if record.status in _HA_AMBER and not problems:
-        problems.append((record.message or f"The last run's status is {record.status}.", "#last-applied"))
+        problems.append((record.message or f"The last run's status is {record.status}.", RUN_PAGE))
     if now - run.when > STALE_AFTER:
         problems.append(
             (f"No run for {ago(now, run.when).removesuffix(' ago')}: check the scheduler (Settings → Schedule).", "")
         )
+    run_page = f"/runs/{run.run_id}" if run.run_id else "#history"
+    problems = [(text, run_page if anchor == RUN_PAGE else anchor) for text, anchor in problems]
     return HealthGlance(healthy=not problems, run=run, problems=problems, notes=notes)
 
 
