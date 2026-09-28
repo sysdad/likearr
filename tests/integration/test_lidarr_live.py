@@ -196,6 +196,7 @@ def ctx(config: Config, client: LidarrClient, lookup: FakeLookup, followed: Fake
     state = SqliteState(config.state_db)
     context = Context(
         config=config,
+        config_path=config.state_db.parent / "config.toml",
         state=state,
         lidarr=client,
         lookup=lookup,

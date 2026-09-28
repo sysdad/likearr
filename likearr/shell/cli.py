@@ -3,9 +3,9 @@
 Argument parsing and nothing else. Every subcommand builds a :class:`Context` and hands off to
 `shell.run` or `shell.commands`, and `main` turns whatever comes back into an exit code.
 
-Expected failures - a missing config file, a Lidarr that is not there, another run holding the
-lock - print one line and exit 1. A traceback is reserved for a bug, and even then it only
-reaches the terminal at ``-v``.
+Expected failures - a missing config file, a Lidarr that is not there - print one line and exit 1.
+Another run holding the lock prints one line and exits 4. A traceback is reserved for a bug, and
+even then it only reaches the terminal at ``-v``.
 """
 
 from __future__ import annotations
@@ -271,6 +271,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     except LockHeld as exc:
         emit(str(exc))
         return EXIT_BUSY
+    except prune_commands.PruneStagePartialError as exc:
+        emit(f"stopped: {exc}")
+        return EXIT_ERROR
     except (prune_commands.PruneStageError, PromoteSaveError) as exc:
         emit(f"refused: {exc}")
         return EXIT_ERROR

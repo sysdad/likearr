@@ -114,6 +114,18 @@ re-authorizes automatically.
 PAGE_LIMIT = 50
 """Spotify's maximum for /me/following, /me/albums, /me/tracks and playlist items."""
 
+_MAX_PLAYLIST_PAGES = 200
+"""10,000 items: Spotify's own hard cap on tracks in one playlist (unlike Liked Songs, saved
+albums and followed artists, whose library-wide 10,000 cap Spotify removed in 2020). A playlist
+read that exceeds this is real evidence of a ``next`` that never turns null, not a real playlist."""
+
+_MAX_SOURCE_PAGES = 4000
+"""200,000 items. A real Liked Songs, saved-albums or followed-artists library can legitimately be
+far larger than the 10,000-item cap Spotify removed from them in 2020 (`_MAX_PLAYLIST_PAGES`, still
+true for playlists, does not apply here), so this bound exists only to stop a ``next`` that never
+turns null from paging until the day's quota is gone - it is not meant to ever fire against a
+genuine library."""
+
 TOTAL_TOLERANCE = 2
 """How far a source's entry count may sit from the ``total`` Spotify reported before the read is
 not trusted. A like added or removed mid-read moves ``total``, and offset paging can skip or
@@ -494,10 +506,10 @@ def _check_loopback_redirect(redirect_uri: str) -> tuple[str, int, str]:
             f"Use http://127.0.0.1:{parsed.port or 8765}{parsed.path or '/callback'} "
             "and register exactly that URI in the Spotify developer dashboard."
         )
-    if host not in {"127.0.0.1", "::1"}:
+    if host != "127.0.0.1":
         raise SourceError(
             f"spotify: redirect_uri host {host!r} is not a loopback address. "
-            "Use http://127.0.0.1:PORT/callback (or http://[::1]:PORT/callback)."
+            "Use http://127.0.0.1:PORT/callback (the callback server listens on IPv4 only)."
         )
     if parsed.scheme != "http":
         raise SourceError("spotify: a loopback redirect_uri must use the http scheme")
@@ -969,6 +981,11 @@ def _as_source_error(exc: HttpError, context: str, *, token_request: bool = Fals
             retry_after=exc.retry_after,
             token_request=token_request,
         )
+    if token_request and exc.status_code == 400 and "invalid_grant" in exc.body_excerpt:
+        return SourceError(
+            f"{context}: Spotify sign-in expired: connect Spotify again in Settings, or run "
+            f"`likearr auth`. (invalid_grant: {exc})"
+        )
     if exc.status_code in (401, 403):
         return SourceError(f"{context}: Spotify refused the request (HTTP {exc.status_code}). ({exc})")
     if exc.status_code == 429 and exc.retry_after is not None:
@@ -1216,12 +1233,30 @@ class SpotifySource:
         )
 
     def _pages(
-        self, url: str, params: Mapping[str, Any] | None, context: str, *, not_owned_playlist_id: str | None = None
+        self,
+        url: str,
+        params: Mapping[str, Any] | None,
+        context: str,
+        *,
+        not_owned_playlist_id: str | None = None,
+        max_pages: int = _MAX_SOURCE_PAGES,
     ) -> Iterator[dict[str, Any]]:
-        """Yield each page, following ``next`` (an absolute URL that already carries its query)."""
+        """Yield each page, following ``next`` (an absolute URL that already carries its query).
+
+        `max_pages` bounds it: a response whose ``next`` never becomes null would otherwise loop
+        until the day's quota is gone. Defaults to `_MAX_SOURCE_PAGES` (a real library is
+        unbounded); a playlist read passes `_MAX_PLAYLIST_PAGES` instead, since Spotify's own
+        10,000-tracks-per-playlist cap makes exceeding it real evidence of a broken ``next``.
+        """
         next_url: str | None = url
         first = True
+        pages = 0
         while next_url:
+            pages += 1
+            if pages > max_pages:
+                raise SourceError(
+                    f"spotify {context}: more than {max_pages * PAGE_LIMIT} items; refusing to page further"
+                )
             page = self._get(next_url, params if first else None, context, not_owned_playlist_id=not_owned_playlist_id)
             yield page
             first = False
@@ -1239,8 +1274,14 @@ class SpotifySource:
         first = True
         total: int | None = None
         raw_items = 0
+        pages = 0
 
         while next_url:
+            pages += 1
+            if pages > _MAX_SOURCE_PAGES:
+                raise SourceError(
+                    f"spotify {context}: more than {_MAX_SOURCE_PAGES * PAGE_LIMIT} items; refusing to page further"
+                )
             page = self._get(next_url, params, context)
             block = page.get("artists")
             if not isinstance(block, dict):
@@ -1352,6 +1393,7 @@ class SpotifySource:
             {"limit": PAGE_LIMIT},
             context,
             not_owned_playlist_id=playlist_id,
+            max_pages=_MAX_PLAYLIST_PAGES,
         )
         for index, page in enumerate(pages):
             items = _require_items(page, context)

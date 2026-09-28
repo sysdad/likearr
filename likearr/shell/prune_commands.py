@@ -197,7 +197,16 @@ def prune_checks_command(ctx: Context, *, out: Path | None = None, now: datetime
 
 
 class PruneStageError(Exception):
-    """`prune-stage` refused to run. The message says why, and nothing was moved."""
+    """`prune-stage` refused to run. The message says why, and nothing was moved.
+
+    Except for its `PruneStagePartialError` subclass: there, some files did move before it stopped.
+    A broad ``except PruneStageError`` that assumes nothing moved must check for that subclass first.
+    """
+
+
+class PruneStagePartialError(PruneStageError):
+    """`prune-stage --apply` stopped part-way through moving files. Some files did move; the
+    manifest records exactly which, and re-running the command moves the rest."""
 
 
 @dataclass(slots=True)
@@ -256,6 +265,8 @@ def prune_stage_command(
         PruneStageError: the holding directory is inside the Lidarr root folder, the mount is
             wrong, the selection is empty or ambiguous, or a decisions file names a protected
             release group. Nothing has been moved when this is raised.
+        PruneStagePartialError: a `--apply` move stopped part-way through. Some files did move;
+            the manifest records exactly which, and re-running the command moves the rest.
         LockHeld: another run holds the lock (`do_apply` only).
     """
     now = now or datetime.now(UTC)
@@ -362,7 +373,7 @@ def prune_stage_command(
             # can safely be told - a remove only for an artist whose every file is out.
             _tell_lidarr(ctx, _plan_after(plan, moves, moved))
         if problem:
-            raise PruneStageError(
+            raise PruneStagePartialError(
                 f"stopped after {len(moved)} of {len(moves)} files: {problem}. Every file that moved is recorded "
                 f"in {holding / day / 'manifest.json'}; run the same command again to move the rest"
             )

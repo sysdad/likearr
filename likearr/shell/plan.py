@@ -129,6 +129,11 @@ def plan(
         if since is not None:
             pending_since[key] = since
 
+    # The major-version check happens here, at the first Lidarr call of the run: after the
+    # sources are read in full (a Spotify failure stops before any Lidarr call), but before
+    # planning does anything with what Lidarr answers.
+    ctx.lidarr.check_version()
+
     # Lidarr is read before resolution now, not after. Two things need it: the `albums-only` tag,
     # and - since a followed artist resolves through MusicBrainz's Spotify URL relationship -
     # which artists the library already holds, which is how a Spotify page linked to several
