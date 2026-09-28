@@ -52,38 +52,59 @@
   {% endif %}
 
   <div class="stats">
-    <div class="card stat">
-      <span class="label">Last run</span>
-      {% if view.last_any %}
-      <span class="value">{{ view.last_any.ago }}</span>
-      <span class="sub">{{ view.last_any.headline }}</span>
-      {% else %}<span class="value">None yet</span><span class="sub">Runs show here once one has finished.</span>{% endif %}
-    </div>
-    <div class="card stat">
-      <span class="label">Next scheduled run</span>
-      {% if schedule_paused %}<span class="value tone-warn">Paused</span><span class="sub">{% if paused_at_local %}since {{ paused_at_local.strftime("%a %d %b %H:%M %Z") }}{% else %}off in config.toml{% endif %}{% if paused_reason %} - {{ paused_reason }}{% endif %} - <a href="/settings">Resume</a></span>
-      {% elif not first_applied %}<span class="value">Waiting</span><span class="sub" id="first-apply-note">Scheduled runs start after your first reviewed apply - <a href="/plan">Review changes</a></span>
-      <form method="post" action="/run-now">
-        <button type="submit" disabled aria-describedby="first-apply-note">Run and apply now</button>
-      </form>
+    <div class="card stat" id="automatic-runs">
+      <span class="label">Automatic runs</span>
+      {% if schedule_paused %}
+      <span class="value tone-warn">Paused</span>
+      <span class="sub">{% if paused_reason %}{{ paused_reason }} · {% endif %}<a href="/settings#schedule">Resume in Settings</a></span>
+      {% elif not first_applied %}
+      <span class="value">Waiting</span>
+      <span class="sub" id="first-apply-note">Starts after you first review and apply changes: <a href="/plan">Review changes</a></span>
+      {% elif next_fire %}
+      <span class="value">On</span>
+      <span class="sub" title="{{ schedule }}">Next: {{ next_fire.strftime("%a %d %b %H:%M %Z") }} ({{ next_in }})</span>
       {% else %}
-      {% if next_fire %}<span class="value" title="{{ schedule }}">{{ next_in }}</span><span class="sub">{{ next_fire.strftime("%a %d %b %H:%M %Z") }}</span>
-      {% else %}<span class="value">Never</span><span class="sub">as written: {{ schedule }} - see <a href="/settings">Settings</a></span>{% endif %}
+      <span class="value">Never</span>
+      <span class="sub">The schedule never fires: <a href="/settings#schedule">Settings</a></span>
+      {% endif %}
+      {% if last_fire_at %}{% set fire = last_fire_job.state if last_fire_job else "" %}
+      <span class="sub{% if fire and fire not in ('done', 'guarded', 'running') %} tone-warn{% endif %}">Last:
+        {%- if fire in ("done", "guarded") %} finished {{ last_fire_ago }}
+        {%- elif fire == "running" %} running now
+        {%- elif fire == "skipped" %} skipped {{ last_fire_ago }}{% if last_fire_reason %} - {{ last_fire_reason | short_message }}{% endif %}
+        {%- elif fire %} {{ fire }} {{ last_fire_ago }}
+        {%- else %} {{ last_fire_ago }}{% endif %}
+        {%- if last_fire_job %} · <a href="/jobs/{{ last_fire_job.id }}">details</a>{% endif %}</span>
+      {% endif %}
+      {% if not schedule_paused %}
       <form method="post" action="/run-now">
-        <button type="submit">Run and apply now</button>
+        <button type="submit"{% if not first_applied %} disabled aria-describedby="first-apply-note"{% endif %}>Run and apply now</button>
       </form>
       {% endif %}
     </div>
-    <div class="card stat">
-      <span class="label">Last scheduled fire</span>
-      {% if last_fire_at %}
-      <span class="value">{% if last_fire_job %}{{ last_fire_job.state | capitalize }}{% else %}{{ last_fire_at | when }}{% endif %}</span>
-      <span class="sub">
-        {{ last_fire_at | when }}{% if last_fire_reason %} - {{ last_fire_reason }}{% endif %}
-        {%- if last_fire_job %} - <a href="/jobs/{{ last_fire_job.id }}">details</a>{% else %} (details no longer kept){% endif -%}
-      </span>
-      {% else %}<span class="value">None yet</span><span class="sub">The schedule hasn't fired yet.</span>{% endif %}
+    <div class="card stat" id="last-change">
+      <span class="label">Last change to Lidarr</span>
+      {% if view.last_applied %}{% with run = view.last_applied %}
+      <span class="value">{{ run.ago }}</span>
+      <span class="sub">{{ last_change }}</span>
+      {% if run.run_id %}<span class="sub"><a href="/runs/{{ run.run_id }}#changes">What changed</a></span>{% endif %}
+      {% endwith %}{% elif view.history and first_applied %}
+      <span class="sub">None in the last {{ view.history | length }} runs.</span>
+      {% else %}
+      <span class="sub">Nothing changed yet.</span>
+      {% endif %}
     </div>
+    {% if pending %}
+    <div class="card stat" id="pending">
+      <span class="label">Pending changes</span>
+      <span class="value">{{ pending.run.ago }}</span>
+      <span class="sub">A check found {{ pending.found }}. <a href="/plan">Review changes</a></span>
+      <span class="sub{% if pending.held %} tone-warn{% endif %}">{{ pending.next_run }}</span>
+    </div>
+    {% endif %}
+  </div>
+  {% if coverage or view.last_planned %}
+  <div class="stats">
     {% if coverage %}{% with c = coverage %}
     {{ coverage_card(c) }}
     <div class="card stat">
@@ -99,29 +120,11 @@
     </div>
     {% endwith %}{% endif %}
   </div>
+  {% endif %}
 </section>
 
 {% if view.collisions %}{% with collisions = view.collisions %}{% include "_collisions.html" %}{% endwith %}{% endif %}
 
-{% if view.last_any %}
-<section class="run-pair" aria-label="Runs">
-  {% if view.last_applied %}{% with run = view.last_applied %}
-  <div class="run tone-{{ run.tone }}" id="last-applied">
-    <span class="label">Last applied run</span>
-    <p class="headline">{{ run.headline }}</p>
-    <p class="when">{{ run.when | when }}</p>
-    {% if run.run_id %}<a href="/runs/{{ run.run_id }}#changes">What changed</a>{% endif %}
-  </div>
-  {% endwith %}{% endif %}
-  {% if view.last_any is not sameas view.last_applied %}{% with run = view.last_any %}
-  <div class="run tone-{{ run.tone }}" id="most-recent">
-    <span class="label">Most recent run</span>
-    <p class="headline">{{ run.headline }}</p>
-    <p class="when">{{ run.when | when }}</p>
-  </div>
-  {% endwith %}{% endif %}
-</section>
-{% endif %}
 
 <details class="panel" id="details">
   <summary>Details: what you like, what Lidarr has, Spotify sources</summary>
@@ -186,7 +189,7 @@
       <tr class="tone-{{ run.tone }}">
         <td class="nowrap">{% if run.run_id %}<a href="/runs/{{ run.run_id }}">{{ run.when.strftime("%a %d %b %H:%M") }}</a>{% else %}{{ run.when.strftime("%a %d %b %H:%M") }}{% endif %}</td>
         <td><span class="pill tone-{{ run.tone }}">{{ run.record.status }}</span></td>
-        <td>{{ "dry run" if run.record.dry_run else "apply" }}</td>
+        <td>{{ "check" if run.record.dry_run else "applied" }}</td>
         <td class="num">{{ run.record.counts.get("monitored", "") }}</td>
         <td class="num">{{ run.record.counts.get("unmonitored", "") }}</td>
         <td class="num">{{ run.record.counts.get("added", "") }}</td>

@@ -386,37 +386,6 @@ def test_the_status_page_has_its_own_tab_title(client: TestClient) -> None:
     assert "<title>Status - likearr</title>" in page
 
 
-def test_status_shows_one_run_card_when_the_newest_run_is_the_last_apply(client: TestClient, data_dir: Path) -> None:
-    with SqliteState(data_dir / "state.sqlite") as state:
-        state.record_run(_record(ts=int(NOW.timestamp()) - 60), None)
-    _login(client)
-
-    page = client.get("/").text
-
-    assert 'id="last-applied"' in page
-    assert 'id="most-recent"' not in page
-
-
-def test_status_shows_the_last_applied_and_most_recent_runs_side_by_side(client: TestClient, data_dir: Path) -> None:
-    with SqliteState(data_dir / "state.sqlite") as state:
-        applied = next(r for r in state.run_history(limit=10) if not r.record.dry_run)
-    _login(client)
-
-    page = client.get("/").text
-
-    pair = page[
-        page.index('<section class="run-pair"') : page.index("</section>", page.index('<section class="run-pair"'))
-    ]
-    last_applied = pair[pair.index('id="last-applied"') : pair.index('id="most-recent"')]
-    assert "Last applied run" in last_applied and "Applied: 4 releases monitored" in last_applied
-    assert f'<a href="/runs/{applied.id}#changes">What changed</a>' in last_applied
-    assert "Most recent run" in pair and "Dry run: would monitor 4 releases" in pair
-    assert page.index('class="run-pair"') < page.index('id="details"')
-    history = page[page.index('id="history"') :]
-    assert "What changed" not in history  # the Last applied run card carries it
-    assert "Playlist pl-owned" in page  # Details still lists the Spotify sources
-
-
 def _newest_run_page(client: TestClient, data_dir: Path) -> str:
     """The `/runs/<id>` page of the newest recorded run: where "What changed" lives."""
     with SqliteState(data_dir / "state.sqlite") as state:
@@ -455,7 +424,7 @@ def test_status_renders_a_last_run_recorded_before_the_lost_state_count(client: 
     response = client.get("/")
 
     assert response.status_code == 200
-    assert "Applied: 4 releases monitored" in response.text
+    assert "Monitored 4 releases" in response.text
     assert "state database doesn&#39;t know" not in response.text
 
 
@@ -1247,6 +1216,182 @@ def test_the_run_page_labels_a_guarded_run_s_blocked_unmonitors(client: TestClie
     assert "EP 2" in page  # the blocked plan is still shown, by name
 
 
+# ---------------------------------------------------------------- Status cards
+
+STATUS_FIRST_APPLY_LINE = "Starts after you first review and apply changes"
+
+
+def _card(page: str, card_id: str) -> str:
+    start = page.index(f'id="{card_id}"')
+    return page[
+        start : page.index('<div class="card stat"', start + 1)
+        if '<div class="card stat"' in page[start + 1 :]
+        else None
+    ]
+
+
+def _scheduled_fire(data_dir: Path, state: str, log: str = "") -> str:
+    """A scheduled job an hour before `NOW`, in `state`, recorded as the last fire."""
+    job_id = "2026-09-23T17-00-00Z-5c4ed1"
+    job_dir = data_dir / "ui" / "jobs" / job_id
+    job_dir.mkdir(parents=True)
+    meta = {
+        "id": job_id,
+        "kind": "scheduled",
+        "argv": ["likearr", "run", "--scheduled", "--apply"],
+        "label": "Scheduled run",
+        "started_at": (NOW - timedelta(hours=1)).isoformat(),
+        "finished_at": (NOW - timedelta(hours=1)).isoformat(),
+        "exit_code": None if state == "skipped" else (0 if state == "done" else 1),
+        "state": state,
+        "drain": True,
+    }
+    (job_dir / "meta.json").write_text(json.dumps(meta))
+    (job_dir / "log.txt").write_text(log)
+    with SqliteState(data_dir / "state.sqlite") as db:
+        db.record_scheduled_fire(NOW - timedelta(hours=1))
+    return job_id
+
+
+def test_automatic_runs_when_paused_gives_the_reason_and_a_link_to_resume(client: TestClient, data_dir: Path) -> None:
+    config_path = data_dir / "config.toml"
+    config_path.write_text(
+        config_path.read_text().replace("[schedule]\n", '[schedule]\nenabled = false\npaused_reason = "away"\n')
+    )
+    _login(client)
+
+    card = _card(client.get("/").text, "automatic-runs")
+
+    assert "Paused" in card and "away" in card
+    assert '<a href="/settings#schedule">Resume in Settings</a>' in card
+    assert "Run and apply now" not in card
+
+
+def test_automatic_runs_shows_a_finished_last_fire_quietly(client: TestClient, data_dir: Path) -> None:
+    job_id = _scheduled_fire(data_dir, "done")
+    _login(client)
+
+    card = _card(client.get("/").text, "automatic-runs")
+
+    assert "Last: finished 1 h ago" in card
+    assert f'<a href="/jobs/{job_id}">details</a>' in card
+    assert "tone-warn" not in card
+
+
+def test_automatic_runs_shows_a_skipped_fire_with_its_reason(client: TestClient, data_dir: Path) -> None:
+    _scheduled_fire(data_dir, "skipped", log="another likearr command holds the run lock; try again when it finishes")
+    _login(client)
+
+    card = _card(client.get("/").text, "automatic-runs")
+
+    assert "Last: skipped 1 h ago - another likearr command holds the run lock" in card
+    assert "tone-warn" in card
+
+
+def test_automatic_runs_shows_a_failed_fire_in_the_warning_style(client: TestClient, data_dir: Path) -> None:
+    _scheduled_fire(data_dir, "failed")
+    _login(client)
+
+    card = _card(client.get("/").text, "automatic-runs")
+
+    assert "Last: failed 1 h ago" in card
+    assert "tone-warn" in card
+
+
+def test_automatic_runs_has_no_last_line_before_the_first_fire(client: TestClient) -> None:
+    _login(client)
+
+    card = _card(client.get("/").text, "automatic-runs")
+
+    assert "Next:" in card
+    assert "Last:" not in card
+
+
+def test_last_change_says_what_the_last_apply_did_and_links_what_changed(client: TestClient, data_dir: Path) -> None:
+    with SqliteState(data_dir / "state.sqlite") as state:
+        applied = next(r for r in state.run_history(limit=10) if not r.record.dry_run)
+    _login(client)
+
+    card = _card(client.get("/").text, "last-change")
+
+    assert "Monitored 4 releases, unmonitored 0, added 0 artists." in card
+    assert f'<a href="/runs/{applied.id}#changes">What changed</a>' in card
+
+
+def test_last_change_before_anything_was_applied(client: TestClient, data_dir: Path) -> None:
+    for path in data_dir.glob("state.sqlite*"):
+        path.unlink()
+    _login(client)
+
+    assert "Nothing changed yet." in _card(client.get("/").text, "last-change")
+
+
+def test_pending_changes_shows_a_check_newer_than_the_last_apply(client: TestClient) -> None:
+    _login(client)
+
+    card = _card(client.get("/").text, "pending")
+
+    assert "A check found 4 to monitor." in card
+    assert '<a href="/plan">Review changes</a>' in card
+    assert "The next automatic run applies these." in card
+    assert "tone-warn" not in card
+
+
+def test_pending_changes_is_hidden_once_the_newest_run_applied(client: TestClient, data_dir: Path) -> None:
+    with SqliteState(data_dir / "state.sqlite") as state:
+        state.record_run(_record(ts=int(NOW.timestamp()) - 60), None)
+    _login(client)
+
+    page = client.get("/").text
+
+    assert 'id="pending"' not in page
+    assert "Pending changes" not in page
+
+
+def test_pending_changes_says_a_guard_holds_unmonitors_back(client: TestClient, data_dir: Path) -> None:
+    from likearr.models import Guard
+    from tests.adapters.test_state_sqlite import _diff
+
+    diff = _diff()
+    diff.guards[:] = [Guard(code="source-shrink", message="liked_tracks shrank 40%", blocked_unmonitors=3)]
+    with SqliteState(data_dir / "state.sqlite") as state:
+        state.record_run(_record(ts=int(NOW.timestamp()) - 60, dry_run=True, status=RunStatus.GUARDED), diff)
+    _login(client)
+
+    card = _card(client.get("/").text, "pending")
+
+    assert "a guard holds some unmonitors back" in card
+    assert "tone-warn" in card
+
+
+def test_pending_changes_says_the_unmonitor_cap_holds_them_back(client: TestClient, data_dir: Path) -> None:
+    counts = {"liked_tracks": 2500, "monitored": 1, "unmonitored": 150}
+    with SqliteState(data_dir / "state.sqlite") as state:
+        state.record_run(_record(ts=int(NOW.timestamp()) - 60, dry_run=True, counts=counts), None)
+    _login(client)
+
+    card = _card(client.get("/").text, "pending")
+
+    assert "holds back all 150 unmonitors: over the cap of 100" in card
+
+
+def test_pending_changes_while_paused_applies_only_when_reviewed(client: TestClient, data_dir: Path) -> None:
+    config_path = data_dir / "config.toml"
+    config_path.write_text(config_path.read_text().replace("[schedule]\n", "[schedule]\nenabled = false\n"))
+    _login(client)
+
+    assert "these apply only when you review them" in _card(client.get("/").text, "pending")
+
+
+def test_the_runs_table_says_check_and_applied(client: TestClient) -> None:
+    _login(client)
+
+    history = client.get("/").text.split('id="history"', 1)[1]
+
+    assert "<td>check</td>" in history and "<td>applied</td>" in history
+    assert "dry run" not in history
+
+
 # ---------------------------------------------------------------- pause / resume
 
 
@@ -1280,7 +1425,7 @@ def test_paused_by_hand_with_no_timestamp_says_off_in_config_not_an_unknown_time
     assert "an unknown time" not in settings_page
 
     status_page = client.get("/").text
-    assert "off in config.toml" in status_page
+    assert "Resume in Settings" in status_page
     assert "an unknown time" not in status_page
 
 
@@ -1373,7 +1518,7 @@ def test_status_before_the_first_reviewed_apply_says_when_the_schedule_starts_an
 
     page = client.get("/").text
 
-    assert FIRST_APPLY_LINE in page
+    assert STATUS_FIRST_APPLY_LINE in page
     assert "disabled" in _run_now_button(page)
     assert "18:20 EDT" not in page, "no countdown to a fire that will not apply anything"
 
@@ -1387,7 +1532,7 @@ def test_status_on_a_new_install_with_no_state_database_says_the_same_and_create
 
     page = client.get("/").text
 
-    assert FIRST_APPLY_LINE in page
+    assert STATUS_FIRST_APPLY_LINE in page
     assert "disabled" in _run_now_button(page)
     assert not (data_dir / "state.sqlite").exists()
 
@@ -2110,8 +2255,8 @@ def test_status_leads_with_health_last_run_and_next_run(client: TestClient) -> N
     assert "All good." in glance
     assert "The last run went fine, and nothing needs you." in glance
     assert "Home Assistant" not in glance
-    assert "Dry run: would monitor" in glance  # the newest run is the fixture's dry run
-    assert "Next scheduled run" in glance
+    assert "A check found 4 to monitor" in glance  # the newest run is the fixture's check
+    assert "Automatic runs" in glance
     assert "More detail after the next run" in glance  # no last-run facts yet: the record's counts
 
 
@@ -2764,7 +2909,7 @@ def test_status_leads_with_a_health_banner_and_stat_cards(client: TestClient, da
     top = page[: page.index('<section id="history">')]
     assert '<div class="banner tone-ok" role="status">' in top
     assert "All good." in top
-    for label in ("Last run", "Next scheduled run", "In Lidarr", "Couldn't be added"):
+    for label in ("Automatic runs", "Last change to Lidarr", "In Lidarr", "Couldn't be added"):
         assert f'<span class="label">{label}</span>' in top
     assert '<details class="panel" id="details">' in page  # the detailed tables, collapsed
 

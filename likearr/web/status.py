@@ -257,6 +257,69 @@ def _headline(record: HealthRecord) -> str:
     )
 
 
+def change_summary(run: RunSummary) -> str:
+    """The "Last change to Lidarr" card's line: what an apply did, or its headline when it did
+    not finish cleanly."""
+    record = run.record
+    if record.status not in _APPLIED:
+        return run.headline
+    counts = record.counts
+    monitored, unmonitored, added = counts.get("monitored", 0), counts.get("unmonitored", 0), counts.get("added", 0)
+    none_set = counts.get("new_items_none", 0)
+    new_items = f", set {_count(none_set, 'artist')} to {_NEW_ITEMS_NONE}" if none_set else ""
+    return (
+        f"Monitored {_count(monitored, 'release')}, unmonitored {unmonitored}, "
+        f"added {_count(added, 'artist')}{new_items}."
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class Pending:
+    """The "Pending changes" card: a check newer than the last apply that found something to do."""
+
+    run: RunSummary
+    found: str
+    """"8 to monitor, 2 to unmonitor, 2 artists to add"."""
+    next_run: str
+    """What the next automatic run does with them, in one line."""
+    held: bool
+    """Some of it will be held back: said in the warning style."""
+
+
+def pending_changes(view: StatusView, *, schedule_on: bool, first_applied: bool, unmonitor_cap: int) -> Pending | None:
+    """The newest run when it is a check that found changes, else ``None``. The note reads only
+    what the check recorded: its blocking guards, and its unmonitor count against the cap a
+    scheduled run applies (`max_unmonitors_scheduled`)."""
+    run = view.last_any
+    if run is None or not run.record.dry_run or run.record.status not in _APPLIED:
+        return None
+    counts = run.record.counts
+    monitored, unmonitored, added = counts.get("monitored", 0), counts.get("unmonitored", 0), counts.get("added", 0)
+    none_set = counts.get("new_items_none", 0)
+    parts = [f"{n} {what}" for n, what in ((monitored, "to monitor"), (unmonitored, "to unmonitor")) if n]
+    if added:
+        parts.append(f"{_count(added, 'artist')} to add")
+    if none_set:
+        parts.append(f"{_count(none_set, 'artist')} to set to {_NEW_ITEMS_NONE}")
+    if not parts:
+        return None
+    held = False
+    if not schedule_on:
+        note = "Automatic runs are paused: these apply only when you review them."
+    elif not first_applied:
+        note = "These apply only when you review them."
+    elif run.guards:
+        note, held = "The next automatic run applies these, but a guard holds some unmonitors back.", True
+    elif unmonitored > unmonitor_cap:
+        note, held = (
+            f"The next automatic run holds back all {unmonitored} unmonitors: over the cap of {unmonitor_cap}.",
+            True,
+        )
+    else:
+        note = "The next automatic run applies these."
+    return Pending(run=run, found=", ".join(parts), next_run=note, held=held)
+
+
 def _why_stopped(record: HealthRecord) -> str:
     """The cause, without the lead-in the record's message already spells out in the headline."""
     message = record.message or "see the log"
