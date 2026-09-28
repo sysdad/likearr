@@ -45,9 +45,7 @@ see the script's own docstring for the plan id and the one-time browser install.
 Plain, specific language in docs and UI text. Short dashes (`-`), not em dashes.
 
 Docs and comments describe the project, not one install of it: no first person, and no counts,
-dates or rulings from a particular deployment. CI's narrative lint checks this against
-`scripts/narrative_lint_phrases.txt`; run it with `python3 scripts/narrative_lint.py`. A real
-third-party hit, such as a quoted album title, is kept with `narrative:allow` on that line.
+dates or rulings from a particular deployment.
 
 ## Versioning
 
@@ -58,9 +56,6 @@ Releases are tagged `vX.Y.Z` (semantic versioning). Record user-facing changes u
 
 Open against `main`. Say what changed and why, link the issue it fixes, and see the PR template's
 checklist for what needs to pass before review.
-
-A fork PR's identity-guard check always fails - that's expected, not a hit, and not something to
-fix on your end; see `docs/dev/identity-guard.md` for why.
 
 A new source (anything besides Spotify) starts as a feature request issue, not a PR: see the
 README's [Scope](README.md#scope) section for what's not planned and what's possible later.
