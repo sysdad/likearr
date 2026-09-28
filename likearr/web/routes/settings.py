@@ -10,7 +10,7 @@ import logging
 import re
 import tomllib
 from collections.abc import Mapping, Sequence
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 import anyio
@@ -19,15 +19,19 @@ from starlette.responses import PlainTextResponse, RedirectResponse, Response
 from starlette.routing import Route
 
 from likearr.adapters.spotify import (
+    AccountRefused,
     SpotifyAuth,
+    TokenSet,
     asks_for_write_scopes,
     lacks_collaborative,
+    read_account,
     read_authorized_at,
     read_granted_scopes,
     reauth_due,
 )
+from likearr.adapters.state_sqlite import SqliteState
 from likearr.config import Config, ConfigError
-from likearr.models import SPOTIFY_WRITE_SCOPES
+from likearr.models import SPOTIFY_WRITE_SCOPES, RunStatus
 from likearr.playlist_names import (
     COLLABORATIVE_REAUTH_REASON,
     NOT_OWNED_CONFIGURED_NOTE,
@@ -44,7 +48,7 @@ from likearr.web.auth import content_security_policy
 from likearr.web.context import POLL_STOP, AfterCallback, _Web, _web
 from likearr.web.helpers import _first_applied, _form_pairs, _parse_playlists, _playlist_jobs, _read_config, _readable
 from likearr.web.jobs import JobMeta, JobRefused, JobState
-from likearr.web.status import reauth_view
+from likearr.web.status import ReauthView, reauth_view
 
 log = logging.getLogger("likearr.web.app")
 """Under the app's own name, so log lines read as they did before the split (#154)."""
@@ -519,10 +523,48 @@ async def settings_schedule(request: Request) -> Response:
 # ---------------------------------------------------------------- Spotify connect (#79)
 
 
+SPOTIFY_DOCS = "https://github.com/sysdad/likearr/blob/main/docs/spotify.md"
+"""Where the Spotify box sends a connect that fails."""
+
+
+def _refused_on_last_run(config: Config, authorized_at: datetime | None) -> bool:
+    """Whether the newest run failed because Spotify refused the stored refresh token
+    (``invalid_grant``: revoked, or past its six months) after it was last authorized."""
+    if not config.state_db.is_file():  # never create it: see healthz
+        return False
+    try:
+        with SqliteState(config.state_db) as state:
+            last = state.last_run()
+    except Exception:  # a broken state database is Status's to report, not this line's
+        return False
+    if last is None or last.status is not RunStatus.ERROR or "invalid_grant" not in last.message:
+        return False
+    return authorized_at is None or last.ts > authorized_at.timestamp()
+
+
+def _reauth_reason(reauth: ReauthView, *, has_token: bool, revoked: bool, needs_collaborative: bool) -> str:
+    """Which one reason to re-authorize the Spotify box gives (#40), most urgent first; the
+    template turns the key into its sentence. "switch-only" is the answer when nothing is wrong."""
+    if not has_token:
+        return "never"
+    if revoked:
+        return "revoked"
+    if reauth.due is None:
+        return "unknown-date"
+    if reauth.days_left is not None and reauth.days_left < 0:
+        return "overdue"
+    if reauth.tone == "warn":
+        return "due-soon"
+    if needs_collaborative:
+        return "collaborative"
+    return "switch-only"
+
+
 def spotify_status(config: Config, *, now: datetime) -> dict[str, Any]:
     """What the Settings page's Spotify panel shows: whether it can be connected at all, and -
-    from the token file, without ever taking its lock - the same authorization date, re-auth due
-    date and scopes Status already reads (`read_authorized_at`, `read_granted_scopes`, `reauth_view`)."""
+    from the token file, without ever taking its lock - who it is connected as, the same
+    authorization date, re-auth due date and scopes Status already reads, and the reason to
+    re-authorize, if any."""
     try:
         configured = bool(config.spotify.client_id)
         client_id_error = ""
@@ -532,20 +574,25 @@ def spotify_status(config: Config, *, now: datetime) -> dict[str, Any]:
     authorized_at = read_authorized_at(config.spotify.token_file)
     reauth = reauth_view(authorized_at, reauth_due(authorized_at) if authorized_at else None, now=now)
     granted = read_granted_scopes(config.spotify.token_file)
+    has_token = authorized_at is not None or granted is not None
+    # A token granted before likearr asked for playlist-read-collaborative (#103, item 3):
+    # everything it did before still works; only playlists you collaborate on need a re-auth.
+    needs_collaborative = lacks_collaborative(granted)
+    revoked = has_token and _refused_on_last_run(config, authorized_at)
     return {
         "configured": configured,
         "client_id_error": client_id_error,
         "reauth": reauth,
+        "account": read_account(config.spotify.token_file),
         "granted_scopes": sorted(granted) if granted else [],
-        "has_token": authorized_at is not None or granted is not None,
+        "has_token": has_token,
         # #161: a plain Re-authorize keeps write access the token already has; offer the opt-in only without it.
         "keeps_write": asks_for_write_scopes(config.spotify.token_file),
-        # A token granted before likearr asked for playlist-read-collaborative (#103, item 3):
-        # everything it did before still works; only playlists you collaborate on need a re-auth.
-        "needs_collaborative": lacks_collaborative(granted),
+        "reason": _reauth_reason(reauth, has_token=has_token, revoked=revoked, needs_collaborative=needs_collaborative),
         "callback_mode": bool(config.ui.public_url),
         "public_url": config.ui.public_url,
         "redirect_uri": config.spotify.redirect_uri,
+        "docs": SPOTIFY_DOCS,
     }
 
 
@@ -619,12 +666,18 @@ async def spotify_connect_start(request: Request) -> Response:
     return web.render(request, "settings.html", context)
 
 
-async def _finish_spotify_auth(web: _Web, config: Config, *, returned_state: str, code: str) -> str:
+async def _finish_spotify_auth(
+    web: _Web, config: Config, *, returned_state: str, code: str
+) -> str | spotify_connect.PendingSwitch:
     """Common to the paste-back finish and the direct-callback route: the single-use, server-side
     `state` `spotify_connect_start` minted - minted only behind the login gate, so only a session
     that was logged in when the flow started can ever hold a valid one - is the whole of the
     authorization here; there is no session binding to check on top of it (see
-    `web.spotify_connect`'s docstring for why). Returns a message to show; never raises, and never
+    `web.spotify_connect`'s docstring for why).
+
+    Saves the new token when it belongs to the recorded Spotify account, or none is recorded yet
+    (#40). Another account's token is held instead, and returned for the caller to ask the user
+    about (`spotify_switch` saves it). Otherwise returns a message to show; never raises, and never
     includes the code, the verifier or a token in what it returns."""
     pending = web.spotify_pending.consume(returned_state) if returned_state else None
     if pending is None:
@@ -637,11 +690,36 @@ async def _finish_spotify_auth(web: _Web, config: Config, *, returned_state: str
         tokens = await anyio.to_thread.run_sync(
             spotify_connect.exchange, config.spotify, code, pending.verifier, pending.redirect_uri
         )
+    except AccountRefused as exc:
+        log.info("spotify authorization refused for this account: %s", exc)
+        return (
+            "Spotify won't let likearr use that account: an app in development mode only serves the accounts "
+            "on its User Management list. Add the account there, then connect again. The current connection "
+            "is unchanged."
+        )
     except SourceError as exc:
-        log.info("spotify authorization exchange failed: %s", exc)
-        return f"Spotify authorization failed: {exc}"
-    expires = datetime.fromtimestamp(tokens.expires_at, tz=UTC).isoformat(timespec="seconds")
-    log.info("spotify connected from the web UI: scopes %s, expires %s", tokens.scope or "(none reported)", expires)
+        log.info("spotify authorization failed: %s", exc)
+        if "GET /me" in str(exc):
+            return (
+                f"likearr could not check which Spotify account that is ({exc}), so nothing was saved. "
+                "The current connection is unchanged; try again."
+            )
+        return (
+            f"Spotify authorization failed: {exc}. Check that {pending.redirect_uri} is a redirect URI "
+            f"in your Spotify app ({SPOTIFY_DOCS})."
+        )
+    new = tokens.account
+    previous = read_account(config.spotify.token_file)
+    if new is not None and previous is not None and previous.id != new.id:
+        log.info("spotify authorization is for another account; waiting for the user to confirm the switch")
+        return web.spotify_switches.hold(tokens, previous=previous, new=new, include_write=pending.include_write)
+    await anyio.to_thread.run_sync(spotify_connect.save, config.spotify, tokens)
+    return await _connected(web, config, tokens, include_write=pending.include_write)
+
+
+async def _connected(web: _Web, config: Config, tokens: TokenSet, *, include_write: bool) -> str:
+    """After a save: fetch playlist names if needed, and say what was granted."""
+    log.info("spotify connected from the web UI: scopes %s", tokens.scope or "(none reported)")
     # A token now exists, so `names_needed` no longer holds this back (#118): with an empty names
     # cache, fetch them now rather than leaving Status without playlist names until the next check.
     # It also re-lists when the new token may read collaborative playlists the last listing greyed
@@ -649,12 +727,13 @@ async def _finish_spotify_auth(web: _Web, config: Config, *, returned_state: str
     if web.settings.auto_fetch_names:
         await anyio.to_thread.run_sync(web.fetch_names_if_needed)
     granted = tokens.scope or "(none reported)"
-    connected = f"Spotify connected. Granted scopes: {granted}. Access token expires {expires}."
+    who = f" as {tokens.account.label}" if tokens.account else ""
+    connected = f"Spotify connected{who}. Granted scopes: {granted}."
     # What this attempt asked for comes from the server-side pending entry, never the callback (#161).
     missing_write = sorted(set(SPOTIFY_WRITE_SCOPES) - set(tokens.scope.split()))
     if not missing_write:
         return connected
-    if pending.include_write:
+    if include_write:
         return (
             f"{connected} Spotify did not grant the write access promote-save needs (missing "
             f"{', '.join(missing_write)}), so promote-save will refuse until you re-authorize and approve it."
@@ -662,6 +741,47 @@ async def _finish_spotify_auth(web: _Web, config: Config, *, returned_state: str
     if not config.prune.enabled:  # promote-save is part of Clean up (#148): nothing to offer
         return connected
     return f"{connected} Read access only. To use promote-save, re-authorize with its write-access box ticked."
+
+
+def _finished(web: _Web, request: Request, result: str | spotify_connect.PendingSwitch) -> Response:
+    """A switch to confirm is its own page; a message is the flash on Settings."""
+    if isinstance(result, spotify_connect.PendingSwitch):
+        return web.render(request, "spotify_callback.html", {"switch": result})
+    request.session["flash"] = result
+    return RedirectResponse("/settings", status_code=303)
+
+
+async def spotify_switch(request: Request) -> Response:
+    """POST /settings/spotify/switch: the confirm for a token of another Spotify account (#40).
+    Behind the login gate, unlike the callback that held it. ``confirmed=yes`` saves it; anything
+    else drops it."""
+    web = _web(request)
+    posted = await _posted(request)
+    switch = web.spotify_switches.consume(posted.get("switch", [""])[0])
+    if switch is None:
+        request.session["flash"] = (
+            "That account switch has expired or was already used. Re-authorize Spotify to start again."
+        )
+        return RedirectResponse("/settings#spotify", status_code=303)
+    if posted.get("confirmed", [""])[0] != "yes":
+        request.session["flash"] = f"Still connected as {switch.previous.label}. Nothing was saved."
+        return RedirectResponse("/settings#spotify", status_code=303)
+    try:
+        config = web.config()
+    except ConfigError as exc:
+        request.session["flash"] = f"config.toml does not load, so nothing was saved: {exc}"
+        return RedirectResponse("/settings#spotify", status_code=303)
+    current = read_account(config.spotify.token_file)
+    if current is None or current.id != switch.previous.id:
+        request.session["flash"] = (
+            "The Spotify connection changed since you were asked, so nothing was saved. "
+            "Re-authorize Spotify to try again."
+        )
+        return RedirectResponse("/settings#spotify", status_code=303)
+    await anyio.to_thread.run_sync(spotify_connect.save, config.spotify, switch.tokens)
+    log.info("spotify switched to another account from the web UI")
+    request.session["flash"] = await _connected(web, config, switch.tokens, include_write=switch.include_write)
+    return RedirectResponse("/settings#spotify", status_code=303)
 
 
 async def spotify_connect_finish(request: Request) -> Response:
@@ -681,8 +801,7 @@ async def spotify_connect_finish(request: Request) -> Response:
     except SourceError as exc:
         request.session["flash"] = str(exc)
         return RedirectResponse("/settings", status_code=303)
-    request.session["flash"] = await _finish_spotify_auth(web, config, returned_state=returned_state, code=code)
-    return RedirectResponse("/settings", status_code=303)
+    return _finished(web, request, await _finish_spotify_auth(web, config, returned_state=returned_state, code=code))
 
 
 _OAUTH_ERROR_CODE = re.compile(r"[a-z_]{1,40}")
@@ -723,10 +842,12 @@ async def spotify_callback(request: Request) -> Response:
         error = params["error"]
         shown = error if _OAUTH_ERROR_CODE.fullmatch(error) else "an unrecognised error"
         return web.render(request, "spotify_callback.html", {"message": f"Spotify refused authorization: {shown}"})
-    message = await _finish_spotify_auth(
+    result = await _finish_spotify_auth(
         web, config, returned_state=params.get("state", ""), code=params.get("code", "")
     )
-    return web.render(request, "spotify_callback.html", {"message": message})
+    if isinstance(result, spotify_connect.PendingSwitch):
+        return web.render(request, "spotify_callback.html", {"switch": result})
+    return web.render(request, "spotify_callback.html", {"message": result})
 
 
 # ---------------------------------------------------------------- Lidarr setup + Doctor, in Settings (#80, #85)
@@ -1029,6 +1150,7 @@ ROUTES: list[Route] = [
     Route("/settings/playlists/{job_id}", playlists_poll, methods=["GET"]),
     Route("/settings/spotify/connect", spotify_connect_start, methods=["POST"]),
     Route("/settings/spotify/finish", spotify_connect_finish, methods=["POST"]),
+    Route("/settings/spotify/switch", spotify_switch, methods=["POST"]),
     Route("/spotify/callback", spotify_callback, methods=["GET"]),
     Route("/settings/lidarr-setup/preview", lidarr_setup_preview_start, methods=["POST"]),
     Route("/settings/lidarr-library", lidarr_library, methods=["POST"]),

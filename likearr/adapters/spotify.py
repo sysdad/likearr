@@ -199,6 +199,10 @@ class TokenSet:
             data["display_name"] = self.display_name or ""
         return json.dumps(data, indent=2)
 
+    @property
+    def account(self) -> SpotifyAccount | None:
+        return SpotifyAccount(self.user_id, self.display_name or "") if self.user_id is not None else None
+
     def with_account(self, account: SpotifyAccount | None) -> TokenSet:
         if account is None:
             return self
@@ -742,42 +746,48 @@ class SpotifyAuth:
             "client_id": self._config.client_id,
         }
         fresh = self._token_request(
-            form, previous_refresh_token=tokens.refresh_token, authorized_at=tokens.authorized_at
+            form,
+            previous_refresh_token=tokens.refresh_token,
+            authorized_at=tokens.authorized_at,
+            account=tokens.account,
         )
-        if tokens.user_id is not None:
-            account: SpotifyAccount | None = SpotifyAccount(tokens.user_id, tokens.display_name or "")
-        else:
-            # A token file from before accounts were recorded: record it now, or leave it for the
-            # next refresh. The refreshed token is already saved either way.
-            try:
-                account = fetch_account(self._client, fresh.access_token, sleep=self._sleep)
-            except SourceError:
-                account = None
-        if account is None:
+        if fresh.account is not None:
+            return fresh
+        # A token file from before accounts were recorded: record it now, or leave it for the next
+        # refresh. The rotated refresh token is already saved either way.
+        try:
+            account = fetch_account(self._client, fresh.access_token, sleep=self._sleep)
+        except SourceError:
             return fresh
         fresh = fresh.with_account(account)
         self._save(fresh)
         return fresh
 
     def _token_request(
-        self, form: dict[str, str], *, previous_refresh_token: str, authorized_at: float | None, save: bool = True
+        self,
+        form: dict[str, str],
+        *,
+        previous_refresh_token: str,
+        authorized_at: float | None,
+        save: bool = True,
+        account: SpotifyAccount | None = None,
     ) -> TokenSet:
         """POST to the token endpoint and persist the answer (unless `save` is false).
 
-        `authorized_at` is the caller's decision, never derived here: now for a code exchange,
-        the stored value for a refresh.
+        `authorized_at` and `account` are the caller's decision, never derived here: now and
+        unknown for a code exchange, the stored values for a refresh.
         """
         secret = self._config.client_secret
         if secret:
             form = {**form, "client_secret": secret}
         with _stop_signals_deferred():
-            return self._send_and_save(
-                form, previous_refresh_token=previous_refresh_token, authorized_at=authorized_at, save=save
-            )
+            tokens = self._send(form, previous_refresh_token=previous_refresh_token, authorized_at=authorized_at)
+            tokens = tokens.with_account(account)
+            if save:
+                self._save(tokens)
+            return tokens
 
-    def _send_and_save(
-        self, form: dict[str, str], *, previous_refresh_token: str, authorized_at: float | None, save: bool
-    ) -> TokenSet:
+    def _send(self, form: dict[str, str], *, previous_refresh_token: str, authorized_at: float | None) -> TokenSet:
         try:
             response = request_with_retries(
                 self._client,
@@ -800,11 +810,11 @@ class SpotifyAuth:
         if not isinstance(payload, dict) or "access_token" not in payload:
             raise SourceError("spotify auth: token response has no access_token")
 
-        # Spotify rotates refresh tokens: a new one must be persisted before anything else can
+        # Spotify rotates refresh tokens: `_token_request` persists this before anything else can
         # fail, or the next run is locked out with a refresh token that has already been used.
         refresh_token = str(payload.get("refresh_token") or previous_refresh_token)
         expires_in = float(payload.get("expires_in") or 3600)
-        tokens = TokenSet(
+        return TokenSet(
             access_token=str(payload["access_token"]),
             refresh_token=refresh_token,
             expires_at=self._now() + expires_in,
@@ -812,9 +822,6 @@ class SpotifyAuth:
             token_type=str(payload.get("token_type") or "Bearer"),
             authorized_at=authorized_at,
         )
-        if save:
-            self._save(tokens)
-        return tokens
 
     # ---------------------------------------------------------------- cross-process lock
 

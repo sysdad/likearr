@@ -260,6 +260,10 @@ decisions. The file moves themselves stay a deliberate by-hand CLI step (`prune-
 Clean up hands you the exact command for after its previews, and following artists or saving
 albums on Spotify is `promote-save`, also by hand.
 
+A review opens with your earlier decisions filled in, so you only decide what is new, and asks
+Spotify to follow or save only what you choose in that review. Trash moves albums to a holding
+folder; nothing is deleted until you empty it yourself.
+
 Carrying it out needs more setup than the rest of likearr: the library mounted at Lidarr's exact
 path in the `likearr-cli` container, and a holding folder on the same filesystem, outside the
 library (see [`docs/DEPLOY.md`](docs/DEPLOY.md)). Turn it on in Settings > Advanced, or with

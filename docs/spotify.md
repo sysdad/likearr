@@ -71,15 +71,46 @@ instance, and only needs registering once in the shared app. An instance using t
 direct-callback URI instead (`[ui] public_url` set) needs its own `<public_url>/spotify/callback`
 added to that same app - one app can hold more than one redirect URI.
 
-**The trap:** Settings -> Connect Spotify authorizes whichever Spotify account the browser
-happens to be signed into, not necessarily the account you meant to connect. Sign out of Spotify
-in that browser first (or use a private window) so the sign-in prompt actually asks, then confirm
-which account got connected. Settings has no readback for this; the CLI does -
-`docker compose run --rm likearr-cli auth --manual -c /data/config.toml` prints the connected
-account's name once the token is written.
+**Check the account before approving.** Connect Spotify authorizes whichever Spotify account the
+browser is signed into. Spotify's page names that account; use its "Not you?" link to switch
+before you approve. Settings then shows "Connected as" that account, and asks before replacing a
+connection to a different one (see [Connecting and re-authorizing](#connecting-and-re-authorizing)).
 
 Every instance sharing an app also shares its request quota - see "Development Mode limits" below
 for what that means day to day.
+
+## Connecting and re-authorizing
+
+Settings -> Connect Spotify (Re-authorize Spotify, once connected) always opens Spotify's own
+page. After you approve, Settings shows who likearr is connected as, what access it has and until
+when.
+
+You need to re-authorize only when Settings gives a reason: the six months are nearly up, a scope
+is missing, or Spotify refused the saved authorization on the last run. Otherwise re-authorizing
+only switches accounts.
+
+If a different account approves than the one likearr is connected as, likearr asks before it
+switches, and saves nothing until you confirm. After a switch, the next run plans against the new
+account's library, so review it before applying.
+
+## If connecting fails
+
+- **Spotify says the redirect URI is invalid** (`INVALID_CLIENT: Invalid redirect URI`): add the
+  exact redirect URI to the app's **Redirect URIs** (step 3). That is `spotify.redirect_uri`
+  (default `http://127.0.0.1:8765/callback`) for the copy-and-paste flow, or
+  `<public_url>/spotify/callback` when `[ui] public_url` is set. Settings shows the exact value
+  while a connect is under way.
+- **"Spotify won't let likearr use that account"**: Spotify answered `403` for it. A Development
+  Mode app serves only the accounts on its **User Management** list (step 7). Add the account
+  there and connect again. The existing connection is unchanged.
+- **"likearr could not check which Spotify account that is"**: the check after you approved
+  failed (a network error, or the quota). Nothing was saved; connect again later.
+- **"Spotify authorization failed"**: the code could not be exchanged for a token. A redirect URI
+  that differs from the registered one fails here too.
+- **"That Spotify authorization attempt has expired"**: an attempt can be finished once, within
+  ten minutes. Click Connect Spotify again.
+- **The paste-back page fails to load**: that is expected in the copy-and-paste flow. Copy the
+  whole address from the address bar into Settings anyway.
 
 ## Development Mode limits, and what they mean for likearr
 

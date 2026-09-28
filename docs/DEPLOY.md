@@ -517,9 +517,8 @@ accounts. A household with several Spotify accounts runs one instance per accoun
    [`deploy/compose.example.yaml`](../deploy/compose.example.yaml). Each also needs its own
    `LIKEARR_ALLOWED_HOSTS` (if set), `[ui] public_url` (if used), port and `LIKEARR_UI_PASSWORD`.
 3. **Connect each instance from its own browser session**, signed in as that instance's account -
-   see [`docs/spotify.md`, "Adding another person"](spotify.md#adding-another-person) for the trap
-   (Connect authorizes whichever account the browser is signed into) and how to check which
-   account got connected.
+   see [`docs/spotify.md`, "Adding another person"](spotify.md#adding-another-person): Connect
+   authorizes whichever account the browser is signed into, and Spotify's page names it.
 
 Several instances can point at the same Lidarr. Ownership is tracked per instance, not shared, so
 whichever instance monitors a release first is the one that owns it. If that person then unlikes it,

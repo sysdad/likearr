@@ -11,6 +11,27 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
 
 ## [Unreleased]
 
+### Added
+
+- **Settings shows which Spotify account likearr is connected as**, what access it has and until
+  when, and gives the reason when re-authorizing is needed. The account is recorded on the next
+  connect or token refresh.
+- **Connecting a different Spotify account asks first.** Nothing is saved until you confirm the
+  switch.
+
+### Fixed
+
+- **Connect and Re-authorize Spotify always show Spotify's page**, which names the account about
+  to approve. Before, Spotify could skip it and silently connect whichever account the browser
+  was signed into.
+- **An account the Spotify app can't serve** (not on its User Management list) now gets a plain
+  message and keeps the existing connection.
+
+### Changed
+
+- The Spotify box in Settings and Clean up's intro are shorter; the detail is in
+  `docs/spotify.md` and the README.
+
 ## [0.5.1]
 
 ### Breaking

@@ -3,6 +3,15 @@
 {% block nav %}<nav><span class="brand">likearr</span></nav>{% endblock %}
 {% block content %}
 <h1>Spotify</h1>
+{% if switch %}
+<p class="warn">This switches likearr from {{ switch.previous.label }} to {{ switch.new.label }}: the next run plans against {{ switch.new.label }}'s library. Nothing is saved until you confirm.</p>
+<form method="post" action="/settings/spotify/switch" class="actions">
+  <input type="hidden" name="switch" value="{{ switch.key }}">
+  <button type="submit" name="confirmed" value="yes" class="primary">Switch to {{ switch.new.label }}</button>
+  <button type="submit" name="confirmed" value="no">Keep {{ switch.previous.label }}</button>
+</form>
+{% else %}
 <p>{{ message }}</p>
 <p><a href="/settings">Continue to Settings</a></p>
+{% endif %}
 {% endblock %}

@@ -39,6 +39,11 @@ carries can change what was asked for. Spotify grants scopes at the consent scre
 the token ends up with are whatever the user approved there; `include_write` only decides what
 likearr says about them afterwards.
 
+**Whose account it is** (#40): the callback exchanges the code, then asks ``GET /me`` with the new
+token before anything is saved. The account recorded with the stored token, or none recorded yet,
+saves at once. Another account is held here (`PendingSwitchStore`), in memory only, until the user
+confirms the switch from Settings behind the login gate.
+
 This is also why the direct-callback route (`GET /spotify/callback`, reached by a cross-site
 top-level GET redirect from Spotify) can be exempted from the login gate (`auth._OPEN_PATHS`)
 instead of loosening the session cookie's `SameSite=Strict` for every route: the redirect never
@@ -49,6 +54,7 @@ from __future__ import annotations
 
 import hmac
 import re
+import secrets
 import threading
 import time
 import urllib.parse
@@ -56,16 +62,19 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from likearr.adapters.http import build_client
-from likearr.adapters.spotify import ACCOUNTS_AUTHORIZE_URL, SpotifyAuth, TokenSet
+from likearr.adapters.spotify import ACCOUNTS_AUTHORIZE_URL, SpotifyAccount, SpotifyAuth, TokenSet, fetch_account
 from likearr.config import SpotifyConfig
 
 __all__ = [
     "PENDING_AUTH_TTL_S",
     "PendingAuth",
     "PendingSpotifyAuthStore",
+    "PendingSwitch",
+    "PendingSwitchStore",
     "build_authorize",
     "exchange",
     "one_click_form_action",
+    "save",
 ]
 
 SPOTIFY_ACCOUNTS_ORIGIN = "https://" + urllib.parse.urlsplit(ACCOUNTS_AUTHORIZE_URL).netloc
@@ -145,6 +154,50 @@ class PendingSpotifyAuthStore:
             del self._pending[key]
 
 
+@dataclass(frozen=True, slots=True)
+class PendingSwitch:
+    """A token for another Spotify account than the one recorded, waiting for the user's confirm."""
+
+    key: str
+    tokens: TokenSet
+    previous: SpotifyAccount
+    new: SpotifyAccount
+    include_write: bool
+    created_at: float
+
+
+class PendingSwitchStore:
+    """Server-side, in-memory, single-use and expiring like `PendingSpotifyAuthStore`: a token
+    held here is saved only by `consume` and a confirm, and dropped by a restart or the TTL."""
+
+    def __init__(self, *, now: Callable[[], float] = time.time, ttl_s: float = PENDING_AUTH_TTL_S) -> None:
+        self._now = now
+        self._ttl = ttl_s
+        self._lock = threading.Lock()
+        self._pending: dict[str, PendingSwitch] = {}
+
+    def hold(
+        self, tokens: TokenSet, *, previous: SpotifyAccount, new: SpotifyAccount, include_write: bool
+    ) -> PendingSwitch:
+        """Keep `tokens` under a new random key, the one thing the confirm form carries."""
+        switch = PendingSwitch(secrets.token_urlsafe(16), tokens, previous, new, include_write, self._now())
+        with self._lock:
+            self._sweep()
+            self._pending[switch.key] = switch
+        return switch
+
+    def consume(self, key: str) -> PendingSwitch | None:
+        with self._lock:
+            self._sweep()
+            match = next((k for k in self._pending if hmac.compare_digest(k, key)), None)
+            return self._pending.pop(match) if match is not None else None
+
+    def _sweep(self) -> None:
+        cutoff = self._now() - self._ttl
+        for key in [k for k, pending in self._pending.items() if pending.created_at < cutoff]:
+            del self._pending[key]
+
+
 def build_authorize(
     config: SpotifyConfig, *, redirect_uri: str | None, include_write: bool = False
 ) -> tuple[str, str, str]:
@@ -158,11 +211,23 @@ def build_authorize(
 
 
 def exchange(config: SpotifyConfig, code: str, verifier: str, redirect_uri: str) -> TokenSet:
-    """A throwaway `SpotifyAuth` for `SpotifyAuth.exchange_code`: one POST to Spotify's token
-    endpoint, and the same atomic, 0600, lock-held token write `likearr auth` always does. Call
-    this from a worker thread (`anyio.to_thread`), never the event loop itself."""
+    """One POST to Spotify's token endpoint, then ``GET /me`` with the new token: the tokens with
+    their account, saved nowhere yet (`save`). Call this from a worker thread (`anyio.to_thread`),
+    never the event loop itself.
+
+    Raises:
+        AccountRefused: ``GET /me`` answered 403.
+        SourceError: the exchange or the account check failed.
+    """
     with build_client() as client:
-        return SpotifyAuth(config, client).exchange_code(code, verifier, redirect_uri=redirect_uri)
+        tokens = SpotifyAuth(config, client).request_code_tokens(code, verifier, redirect_uri=redirect_uri)
+        return tokens.with_account(fetch_account(client, tokens.access_token))
+
+
+def save(config: SpotifyConfig, tokens: TokenSet) -> None:
+    """The same atomic, 0600, lock-held token write `likearr auth` does. From a worker thread."""
+    with build_client() as client:
+        SpotifyAuth(config, client).save_authorization(tokens)
 
 
 def _host_and_port(host: str, port: int | None) -> tuple[str, int | None]:
