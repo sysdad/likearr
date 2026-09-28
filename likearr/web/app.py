@@ -110,7 +110,7 @@ never a loopback literal. No ``::1``: `AllowedHostMiddleware` compares only what
 
 HISTORY_ROWS = 20
 RUN_CHANGES_CAP = 10
-"""Rows per section on Status's inline "What changed" (#76) before it says "show all" and points
+"""Rows per section on Status's inline "What changed" before it says "show all" and points
 at the run's own `/runs/<id>` page, which shows every row."""
 
 MAX_QUERY = 200
@@ -173,7 +173,7 @@ _ICON_SVG_PATH = _HERE / "static" / "icon.svg"
 
 def favicon_ico(request: Request) -> Response:
     """Browsers still ask `GET /favicon.ico` directly, ignoring the `<link rel="icon">` in
-    `base.html`'s head (issue #141). This answers it with the same mark rather than leaving it a
+    `base.html`'s head. This answers it with the same mark rather than leaving it a
     404 (logged in) or, worse, a 303 to `/login` (logged out - `/favicon.ico` is also in
     `auth._OPEN_PATHS` for that reason)."""
     return Response(_ICON_SVG_PATH.read_bytes(), media_type="image/svg+xml")
@@ -226,7 +226,7 @@ _RESOLVER_CHANGE_NOTE = (
     "likearr's matching changed since the run before this one, so the two can't be compared: some "
     "of these changes may come from that, not from anything you did on Spotify."
 )
-"""Above the list, when the record's baseline says the resolver version changed (#76): a plain
+"""Above the list, when the record's baseline says the resolver version changed: a plain
 answer to "did my Spotify change, or did likearr?", distinct from the terse `_BASELINE_NOTES` used
 elsewhere on the page."""
 
@@ -236,7 +236,7 @@ def _resolver_note(record: HealthRecord) -> str:
 
 
 def _part_way_note(record: HealthRecord, diff: Diff) -> str:
-    """Above the list, when the list below is not what actually happened (#54, #76): a stale
+    """Above the list, when the list below is not what actually happened: a stale
     refusal made no changes at all, a guarded run held back every unmonitor by design, or (the
     original case) an apply stopped part-way with no way to say which of its planned changes
     actually reached Lidarr, only how many. In every case the list is labelled as the plan the
@@ -262,7 +262,7 @@ def _part_way_note(record: HealthRecord, diff: Diff) -> str:
     if record.status is not RunStatus.ERROR:
         return ""
     if record.changes_made and record.changes_planned is not None and record.changes_made >= record.changes_planned:
-        # Every planned change reached Lidarr; only confirming the last batch failed (#174).
+        # Every planned change reached Lidarr; only confirming the last batch failed.
         return (
             f"This run made all {record.changes_planned} of its planned changes, but confirming them with "
             "Lidarr failed. The list below is what it applied."
@@ -335,7 +335,7 @@ def _run_changes(web: _Web, config: Config, run_id: int, *, cap: int | None) -> 
 
 
 _RUN_LINKED_KINDS = frozenset({"apply", SCHEDULED_KIND})
-"""Job kinds that change Lidarr and so may have a run to link to (#76)."""
+"""Job kinds that change Lidarr and so may have a run to link to."""
 
 
 def _job_run_id(state: SqliteState, meta: JobMeta) -> int | None:
@@ -350,7 +350,7 @@ def _job_run_id(state: SqliteState, meta: JobMeta) -> int | None:
 
 
 def _run_job_link(state: SqliteState, jobs: Sequence[JobMeta], run_id: int) -> JobMeta | None:
-    """The kept apply or scheduled job whose window contains `run_id` (#128 item 3): the reverse
+    """The kept apply or scheduled job whose window contains `run_id`: the reverse
     of `_job_run_id`, so the run page can link to a job's log when the job is still kept. At most
     one job's window ever contains a given run - the job runner runs one job at a time - so the
     first match is returned."""
@@ -394,8 +394,8 @@ def status(request: Request) -> Response:
     schedule = config.schedule.cron
     last = web.last_run(facts_path(config))
     # Paused stops the false "next run" the Status page used to show while cron was commented out
-    # by hand (the bug #68 exists to fix): with the schedule off, there is no next fire to report -
-    # the scheduler still fires on schedule underneath (issue #68 phase 2), but every fire while
+    # by hand: with the schedule off, there is no next fire to report -
+    # the scheduler still fires on schedule underneath, but every fire while
     # paused is a child that does nothing and says so, so there is nothing useful to count down to.
     fire = next_fire(schedule, now, web.tz) if config.schedule.enabled else None
     # The time comes from SqliteState, never from the job store: the job store only keeps the
@@ -425,7 +425,7 @@ def status(request: Request) -> Response:
             "reauth_note": reauth_note,
             "has_token": has_token,
             "granted_scopes": sorted(granted_scopes) if granted_scopes else [],
-            # #103 item 3: a token from before playlist-read-collaborative keeps working; only a
+            # A token from before playlist-read-collaborative keeps working; only a
             # playlist you collaborate on needs the re-auth, so this is a note, never a problem.
             "needs_collaborative": lacks_collaborative(granted_scopes),
             "schedule": schedule,
@@ -450,12 +450,12 @@ def status(request: Request) -> Response:
 
 async def run_now(request: Request) -> Response:
     """Status page's Run now: the same `scheduled` job, the same lock, the same queue - the *arr
-    "Run now" pattern (issue #68 phase 2). `fire_now` itself returns at once - the job shows up in
+    "Run now" pattern. `fire_now` itself returns at once - the job shows up in
     job history, whether it starts straight away, waits behind another job, or - past the queue
     wait - is recorded skipped - but it does its own config read and sqlite write synchronously,
     so it runs off the event loop, the same as `job_cancel` does for stopping a child.
 
-    While `[schedule] enabled` is false, the button is not on the page (issue #131), but a stale
+    While `[schedule] enabled` is false, the button is not on the page, but a stale
     tab or a direct POST can still reach here: load the config fresh and refuse before firing, so
     a press never writes a skipped fire into "Last scheduled fire". A config that fails to load is
     not this route's problem to report - fall through to the old behaviour, the same as a fire from
@@ -468,7 +468,7 @@ async def run_now(request: Request) -> Response:
     if config is not None and not config.schedule.enabled:
         request.session["flash"] = "Scheduled runs are paused - resume them in Settings."
         return RedirectResponse("/", status_code=303)
-    # The same refusal for the first-apply gate (#111): the button is disabled until then, and the
+    # The same refusal for the first-apply gate: the button is disabled until then, and the
     # child it would start publishes `paused` anyway, but that would still record a fire.
     if config is not None and not await anyio.to_thread.run_sync(lambda: _first_applied(config)):
         request.session["flash"] = (
@@ -488,7 +488,7 @@ before `int()` sees it, the same guard `plan_section`'s `page` param uses."""
 
 
 def run_page(request: Request) -> Response:
-    """`/runs/<id>` (#76, #128): every run's own page, not only ones with a diff - a failed or
+    """`/runs/<id>`: every run's own page, not only ones with a diff - a failed or
     config-stale run stores none. The run record itself (status, message, guards) always shows;
     "What changed" only when there is a diff to show it from, and a link to the run's job log
     when a kept apply or scheduled job's window still contains it."""
@@ -521,13 +521,13 @@ def run_page(request: Request) -> Response:
 def _collision_actions(
     web: _Web, config: Config, cards: Sequence[CollisionCard], last: LastRun | None
 ) -> dict[str, dict[str, Any]]:
-    """What each collision card can do (#54), by the wanted artist's MBID:
+    """What each collision card can do, by the wanted artist's MBID:
 
     - ``accept``: the apply confirm of the newest check that is still reviewable and reports this
       collision, with `--accept-health` ticked. Empty when there is none: "Check again" makes one.
     - ``releases``: what the last run wanted of the skipped artist, ``(release group, title)``,
       each with "Not this one" - the Look up deny flow, which checks the last run wanted it. Only a
-      release "Not this one" can stop (`deniable`, #153): one a saved album wants is left out.
+      release "Not this one" can stop (`deniable`): one a saved album wants is left out.
     """
     newest: tuple[JobMeta, Diff] | None = None
     for meta in web.runner.jobs():
@@ -556,7 +556,7 @@ def _collision_actions(
 
 
 def _unmatched_rows(request: Request) -> tuple[_Web, dict[str, Any], list[unmatched_view.Row]]:
-    """The page's context so far, and every row of the last run (#60). It reads the last-run file and
+    """The page's context so far, and every row of the last run. It reads the last-run file and
     the playlist-name cache, nothing else: no Spotify, MusicBrainz or Lidarr call."""
     web = _web(request)
     try:
@@ -652,7 +652,7 @@ def _phase(log_text: str) -> str:
 
 def _progress_line(log_text: str) -> str:
     """The newest ``progress:`` line the child logged, timestamp and logger name stripped off
-    (issue #119) - shown under the phase while a run is in progress. The fixed ``progress:``
+    - shown under the phase while a run is in progress. The fixed ``progress:``
     prefix (`shell.run`'s resolve and add-loop progress lines both use it) is what lets this be a
     simple scan rather than a format-specific parse."""
     for line in reversed(log_text.splitlines()):
@@ -815,15 +815,13 @@ def _last_match(text: str, pattern: re.Pattern[str]) -> str:
 
 
 def _failure_reason(meta: JobMeta, run_record: str, raw_output: str, tail: str, output: str) -> str:
-    """A failed or skipped job's headline reason, for the job page above the Technical log (#127):
+    """A failed or skipped job's headline reason, for the job page above the Technical log:
     empty when nothing said why, so the fallback text ("...says why.") stays true.
 
     A plan, apply or scheduled run's own health record `message` first (`stale_message` reads the
     same field); otherwise - or when that came up empty, run record or not - the last line the
     child logged at `ERROR`, the last `FAIL` line it printed, or the `config error:` line the CLI
-    itself prints when `config.toml` won't load (#127 follow-up: this last one used to have a
-    remedy mapping that nothing ever reached, since it matched neither of the other two patterns),
-    whichever a cause is found in first.
+    itself prints when `config.toml` won't load, whichever a cause is found in first.
     """
     if meta.state not in (JobState.FAILED, JobState.SKIPPED):
         return ""
@@ -851,7 +849,7 @@ def _run_record_flag(run_record: str, key: str) -> bool | None:
 
 _NO_TOKEN_FILE = "no token file"
 """What the Spotify adapter's message names (`shell/run.py`) when there is no `spotify-token.json`
-yet - the day-one failure (#127's "why it matters"). Caught by text as well as `spotify_ok`,
+yet - the day-one failure. Caught by text as well as `spotify_ok`,
 since the "other kinds" branch of `_failure_reason` never has a run record to read a flag from."""
 
 
@@ -859,10 +857,10 @@ def _failure_remedy(reason: str, *, spotify_ok: bool | None, lidarr_ok: bool | N
     """A failed or skipped job's fix, in UI terms: (lead-in text, link label, link target), or
     `("", "", "")` when no known cause matches - the Technical log is still the only answer.
 
-    A pure function so every mapping is a one-line unit test (#127's "Tests / acceptance"). The
+    A pure function so every mapping is a one-line unit test. The
     run record's flags decide it where there is one; the message text otherwise, since `likearr
     auth` (what the CLI itself names) has no page of its own - the browser path to the same fix is
-    Settings (#79's Connect Spotify button, #85's Doctor).
+    Settings' Connect Spotify button, or Doctor.
     """
     if spotify_ok is False or _NO_TOKEN_FILE in reason:
         return "Connect Spotify in", "Settings", "/settings"
@@ -877,7 +875,7 @@ _STATE_TEXT_REASON_SHOWN = {
     JobState.FAILED: "Failed.",
     JobState.SKIPPED: "Skipped: nothing ran.",
 }
-"""`_STATE_TEXT`'s line for a job whose `failure_reason` is already shown (#127): shortened so the
+"""`_STATE_TEXT`'s line for a job whose `failure_reason` is already shown: shortened so the
 page never says "the log below says why" above a reason it is already showing."""
 
 
@@ -900,8 +898,8 @@ def _job_context(web: _Web, meta: JobMeta) -> dict[str, Any]:
         lidarr_ok=_run_record_flag(run_record, "lidarr_ok"),
     )
     return {
-        # A stale apply is a message with a way forward, not an error: the run says what moved (#27
-        # names the setting), and "Check again" keeps the plan's own shrink choice. `run_record` is
+        # A stale apply is a message with a way forward, not an error: the run says what moved,
+        # and "Check again" keeps the plan's own shrink choice. `run_record` is
         # the same JSON line this would otherwise search `raw_output` for again; fall back to the
         # full output only when `_split_run_record` found no such line to hand it directly.
         "stale_message": (_run_message(run_record or raw_output) or _STALE_FALLBACK) if stale else "",
@@ -937,7 +935,7 @@ def _lidarr_url(web: _Web) -> str:
 
 def _first_check_pending(web: _Web) -> bool:
     """Whether no check has ever been recorded - the empty MusicBrainz cache this job is paying
-    for right now (issue #120). Mirrors `_plan_page_context`'s `first_check`."""
+    for right now. Mirrors `_plan_page_context`'s `first_check`."""
     try:
         config = web.config()
     except ConfigError:
@@ -963,7 +961,7 @@ def _job_run_id_for(web: _Web, meta: JobMeta) -> int | None:
 def _prune_ready(web: _Web, meta: JobMeta) -> bool:
     """A "Find unneeded albums" job that finished with a readable report: its page is the review
     itself. One without (failed, or a report that won't parse) keeps its job page and log, and so
-    does every one while Clean up is off (#148): its review would answer "Clean up is off"."""
+    does every one while Clean up is off: its review would answer "Clean up is off"."""
     return (
         meta.kind == "prune"
         and meta.state is JobState.DONE
@@ -973,7 +971,7 @@ def _prune_ready(web: _Web, meta: JobMeta) -> bool:
 
 
 def jobs_page(request: Request) -> Response:
-    """`/jobs` (#128 item 4): every kept job, newest first - `JobRunner.jobs()` already lists
+    """`/jobs`: every kept job, newest first - `JobRunner.jobs()` already lists
     them that way; only Status's own "Recent jobs" list ever capped it to 5. Each one links to
     its own page, and to its run's "What changed" where `_job_run_id` finds one."""
     web = _web(request)
@@ -1101,7 +1099,7 @@ async def explain_deny(request: Request) -> Response:
         return RedirectResponse(back, status_code=303)
     reasons = [reason for r in wanted for reason in r.reasons]
     if not deniable(reasons):
-        # A saved album or a hand-kept release: refusing it would change nothing (#153).
+        # A saved album or a hand-kept release: refusing it would change nothing.
         request.session["flash"] = f"Not this one can't stop that release: {deny_note(reasons)}"
         return RedirectResponse(back, status_code=303)
     return _deny(request, web, release)
@@ -1126,7 +1124,7 @@ async def explain_start(request: Request) -> Response:
 
 
 def _not_found(request: Request, exc: Exception) -> Response:
-    """`exception_handlers[404]` (#142): Starlette's own answer to a path no route matches at all
+    """`exception_handlers[404]`: Starlette's own answer to a path no route matches at all
     is a bare `text/plain` "Not Found" - no nav, no viewport tag. `AuthGateMiddleware` sits closer
     to the browser than the router and has already sent a logged-out visitor to `/login` for any
     path outside `_OPEN_PATHS`, so a request that reaches here is always a logged-in one; a
@@ -1172,7 +1170,7 @@ def create_app(settings: WebSettings) -> ASGIApp:
         await anyio.to_thread.run_sync(web.runner.shutdown, settings.shutdown_timeout_s)
 
     hosts = list(dict.fromkeys([*config.ui.allowed_hosts, *LOOPBACK_HOSTS]))
-    # Unset (#3): loopback plus any IPv4 address, and no host name - see AllowedHostMiddleware.
+    # Unset: loopback plus any IPv4 address, and no host name - see AllowedHostMiddleware.
     any_ipv4 = not config.ui.allowed_hosts
     log.info(
         "likearr answers to host(s) %s%s (%s)",
@@ -1189,7 +1187,7 @@ def create_app(settings: WebSettings) -> ASGIApp:
             secret_key=settings.session_secret or secrets.token_urlsafe(32),
             session_cookie="likearr_session",
             max_age=7 * 24 * 3600,
-            # Kept "strict" for every route, including Spotify's direct-callback mode (#79):
+            # Kept "strict" for every route, including Spotify's direct-callback mode:
             # `/spotify/callback` never depends on this cookie at all (it is exempted from the
             # login gate and authorizes itself with a single-use server-side `state` instead -
             # see `web.spotify_connect` and `spotify_callback`), so there is no reason to loosen

@@ -57,12 +57,12 @@ class FakeLookup:
     release_groups: dict[str, ReleaseGroup] = field(default_factory=dict)
     barcodes: dict[str, str | list[str]] = field(default_factory=dict)
     """Barcode -> the release group(s) holding it, in the order MusicBrainz lists them. Compared as
-    a GTIN, leading zeros dropped, as the real adapter compares them (issue #150)."""
+    a GTIN, leading zeros dropped, as the real adapter compares them."""
     unofficial: set[str] = field(default_factory=set)
     """Release group MBIDs whose barcode hits are not Official releases."""
     isrcs: dict[str, list[str]] = field(default_factory=dict)
     isrc_titles: dict[str, dict[str, str]] = field(default_factory=dict)
-    """ISRC -> {release group MBID: the title of the recording it came from} (issue #163). A release
+    """ISRC -> {release group MBID: the title of the recording it came from}. A release
     group left out comes from an untitled recording, which the resolver never drops."""
     catalogues: dict[str, list[str]] = field(default_factory=dict)
     tracklists: dict[str, list[str]] = field(default_factory=dict)
@@ -73,7 +73,7 @@ class FakeLookup:
     adapter's looser gate accepts. Checked before `searches`."""
     artist_searches: dict[str, tuple[str, str] | None] = field(default_factory=dict)
     relations: dict[str, list[ArtistRelation] | None] = field(default_factory=dict)
-    """Artist MBID -> the artist-artist relationships MusicBrainz records for it (issue #14).
+    """Artist MBID -> the artist-artist relationships MusicBrainz records for it.
     ``None`` stages "could not be read", the composite lookup's answer to a failure."""
     other_credit_searches: dict[tuple[str, str], list[str]] = field(default_factory=dict)
     """Stage `release_groups_under_other_credits` as given, overriding the derived index."""
@@ -83,10 +83,10 @@ class FakeLookup:
     """What `fail` raises, when a test needs a specific subclass. Defaults to `MetadataError`."""
     calls: dict[str, int] = field(default_factory=dict)
     tracklists_read: list[str] = field(default_factory=list)
-    """Every release group whose tracklist was asked for, in order (issue #164)."""
+    """Every release group whose tracklist was asked for, in order."""
     cache_hits: int = 0
     """Unused by this fake (it has no cache of its own); mirrors `MusicBrainzLookup.cache_hits` so
-    a test can wrap it in `CompositeLookup` and read `mb_cache_hits` off that (issue #119)."""
+    a test can wrap it in `CompositeLookup` and read `mb_cache_hits` off that."""
     live_calls: int = 0
     """Every fake call counts as live, since this fake never actually caches anything - mirrors
     `MusicBrainzLookup.live_calls` for the same reason as `cache_hits` above."""
@@ -186,7 +186,7 @@ class FakeLookup:
         return min(hits) if hits else None
 
     def search_artist_candidates(self, name: str) -> Sequence[tuple[str, str]]:
-        """Every artist of exactly this name (issue #152). A staged `artist_searches` answer is the
+        """Every artist of exactly this name. A staged `artist_searches` answer is the
         only candidate, so a test that stages one artist gets that one here too."""
         self._count("search_artist_candidates")
         if name in self.artist_searches:
@@ -309,8 +309,8 @@ def rg(
     released: str | None = "2020-01-01",
     credit: Sequence[str] | None = None,
 ) -> ReleaseGroup:
-    """A `ReleaseGroup`, studio Album by default. `credit` is the main credited artists' MBIDs
-    (#164); by default the one artist, `artist_mbid`."""
+    """A `ReleaseGroup`, studio Album by default. `credit` is the main credited artists' MBIDs;
+    by default the one artist, `artist_mbid`."""
     return ReleaseGroup(
         mbid=mbid,
         title=title,

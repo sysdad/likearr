@@ -88,7 +88,7 @@ def test_len_reports_only_live_entries() -> None:
 
 
 def test_the_write_scope_choice_is_kept_server_side_with_the_attempt() -> None:
-    """#161: whether this attempt asked for the write scopes lives in the pending entry, beside the
+    """Whether this attempt asked for the write scopes lives in the pending entry, beside the
     verifier - never in anything the callback's query string could change."""
     store = PendingSpotifyAuthStore()
     store.start(state="s1", verifier="v1", redirect_uri="http://127.0.0.1:8765/callback", mode="paste")
@@ -118,7 +118,7 @@ def test_build_authorize_asks_for_the_write_scopes_only_when_told(
     assert scope(with_write) == ALL_SCOPES
 
 
-# ---------------------------------------------------------------- one-click Connect (#11)
+# ---------------------------------------------------------------- one-click Connect
 
 _PUBLIC = "https://likearr.example.org"
 _ALLOWED = ("https://accounts.spotify.com", "https://likearr.example.org")

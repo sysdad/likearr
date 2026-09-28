@@ -81,7 +81,7 @@ class ResolveResult:
     """Intents abandoned because the metadata lookup raised. Never zero silently."""
     provisional: set[str] = field(default_factory=set)
     """Intent keys resolved this run while the lookup reported a failure (`resolve_all`'s
-    `lookup_failures` moved), whatever the answer. Acted on this run, never cached (#53)."""
+    `lookup_failures` moved), whatever the answer. Acted on this run, never cached."""
 
     @property
     def degraded(self) -> bool:
@@ -258,7 +258,7 @@ def _titles_match(mb_title: str, spotify_title: str) -> bool:
 
 
 AMBIGUOUS_SAME_NAME_STEP = "ambiguous:same-name-artists"
-"""Different MusicBrainz artists share the Spotify artist's name *and* the album title (issue #32).
+"""Different MusicBrainz artists share the Spotify artist's name *and* the album title.
 
 UNMAPPED, deliberately. The name search cannot tell two same-named artists apart, and the tie-break
 it used to fall back on - earliest release date - is no evidence of which one the user meant: it
@@ -292,7 +292,7 @@ def _title_tier(mb_title: str, album: SpotifyAlbumRef) -> int:
     ``"I'm Ready"``); 2 for everything else, which is every match that only holds once a qualifier
     is dropped from MusicBrainz's side - the fallback, never ranked above a literal match.
 
-    Issue #89: `_titles_match` rightly calls CRUISR's plain EP *All Over* and the earlier single
+    `_titles_match` rightly calls CRUISR's plain EP *All Over* and the earlier single
     *All Over (Bear//Face Remix)* the same release, because :func:`normalize_title` reads
     "(... Remix)" as a qualifier, and the earliest date then took the remix for a song Spotify
     filed on the plain EP. The same holds for an earlier "X (Live)", "X (Demo)" or "X (Acoustic)"
@@ -317,18 +317,18 @@ def _saved_album_fit(rg: ReleaseGroup, album: SpotifyAlbumRef) -> tuple[int, int
 
     Album before EP before Single before anything else; a studio release (no secondary type)
     before a Demo, Live or Compilation; then the title Spotify printed over one that only matches
-    once a qualifier is dropped (`_title_tier`, issue #89); then the first-release year closest to
+    once a qualifier is dropped (`_title_tier`); then the first-release year closest to
     the year Spotify gives the album, when both are known; only then the earliest date and the
-    lowest MBID, which is all #23 ever looked at. That rule alone sent saved albums to a
+    lowest MBID. Ranking by date and MBID alone sent saved albums to a
     same-titled earlier release by the same artist - Yellowcard's *Lights and Sounds* to its 2005
     lead single, Sublime's *Sublime* to a 1988 demo - once RESOLVER_VERSION 5 made them re-resolve.
 
-    The title tier comes *after* type and studio-ness, not first, because this path had the #89
-    flaw only in the narrow case they leave tied: two studio EPs, *The Feeling* and an untagged
+    The title tier comes *after* type and studio-ness, not first, because this path had the same
+    title-matching flaw only in the narrow case they leave tied: two studio EPs, *The Feeling* and an untagged
     *The Feeling (Remixes)*, went to the earlier. Putting it first would let an exact-titled
     single beat Spotify's "Kangaroo" as MusicBrainz's "Kangaroo EP", which the type rank decides.
     One exception runs before this order, in `_studio_title_first`: a studio release titled exactly
-    as Spotify prints it removes every secondary-typed candidate (issue #166), so a saved EP "X" is
+    as Spotify prints it removes every secondary-typed candidate, so a saved EP "X" is
     no longer outranked by the same artist's live Album "X (Live)".
     """
     other = len(_SAVED_ALBUM_TYPE_RANK)
@@ -353,7 +353,7 @@ def _saved_album_fit(rg: ReleaseGroup, album: SpotifyAlbumRef) -> tuple[int, int
 
 def _studio_title_first(candidates: Sequence[ReleaseGroup], album: SpotifyAlbumRef) -> Sequence[ReleaseGroup]:
     """One artist's candidates for a saved album, without the secondary-typed ones when a studio
-    release carries exactly the title Spotify printed (issue #166).
+    release carries exactly the title Spotify printed.
 
     `normalize_title` drops "(Live)" and an Album outranks an EP, so a saved EP "X" went to the same
     artist's live Album "X (Live)". A studio release titled as Spotify prints it (`_title_tier` 0)
@@ -376,11 +376,11 @@ def _per_artist(
     """Each artist's best candidate, in first-seen order.
 
     A saved album prefers the release that *is* an album (`_saved_album_fit`). A liked or playlist
-    track prefers the title Spotify printed (`_title_tier`, issue #89), then keeps the earliest
+    track prefers the title Spotify printed (`_title_tier`), then keeps the earliest
     date, then the lowest MBID: the `smallest` scope and the Singles rule reason from that release
     onward and choose among the artist's releases themselves, and changing what they start from was
     not the fix here. Only the choice *within* an artist moves: every artist still gets exactly one
-    candidate, so the #32 same-name handling downstream sees the same artists it always did.
+    candidate, so the same-name handling downstream sees the same artists it always did.
 
     `holds_song` - a track's only, see `_song_evidence` - says whether a release is shown to carry
     the song. It is asked only when one artist has **several** candidates tied in a literal title
@@ -421,14 +421,14 @@ def _with_rivals(survivor: ReleaseGroup, candidates: Sequence[ReleaseGroup]) -> 
 def _pick_by_barcode(
     album: SpotifyAlbumRef, upc: str, matches: Sequence[BarcodeMatch]
 ) -> tuple[ReleaseGroup | None, str]:
-    """The release group a saved album's barcode names, or ``None`` and why not (issue #150).
+    """The release group a saved album's barcode names, or ``None`` and why not.
 
     Returns ``(release_group, note)``: the note is appended to a hit's detail, and for a miss it is
     the whole reason, which opens the UNMAPPED detail.
 
     **One release group** holds the barcode: it is the answer, with no title check. A barcode is an
-    exact identifier, and the two real albums behind #150 both fail a title comparison with
-    Spotify's ("Chet Baker in New York" against "In New York [Original Jazz Classics Remasters]"),
+    exact identifier, and a real album can fail a title comparison with Spotify's own title
+    ("Chet Baker in New York" against "In New York [Original Jazz Classics Remasters]"),
     so checking it would undo the fix.
 
     **Several** release groups hold it - the same pressing filed under an album and under the
@@ -471,7 +471,7 @@ def _map_spotify_album(
     applies), and loosening this comparison is only ever safe paired with that gate staying exact.
 
     `same_name` is empty unless the name search returned releases by **more than one** artist - two
-    MusicBrainz artists sharing the Spotify name (issue #32) - and it has two shapes:
+    MusicBrainz artists sharing the Spotify name - and it has two shapes:
 
     One artist's several same-titled releases are chosen between by `_per_artist`, which is where
     `saved_album` matters: a saved album prefers the Album over a same-titled single, EP or demo.
@@ -614,7 +614,7 @@ def resolve_album(intent: AlbumIntent, lookup: MetadataLookup) -> Resolution:
     )
 
 
-# --------------------------------------------------------------------------- the opt-outs (#15)
+# --------------------------------------------------------------------------- the opt-outs
 
 EXCLUDED_STEP_PREFIX = "track:excluded:"
 """Steps for a track the user has opted out of, and only those.
@@ -652,7 +652,7 @@ def _is_remix_release(rg: ReleaseGroup) -> bool:
 
     The title half is not belt and braces, it is the half that works. `is_studio` already refuses
     anything carrying the `Remix` secondary type, so a type-only rule would have changed nothing
-    at all: every release group in issue #15 is typed `EP` with **no** secondary types, which is
+    at all: the release groups this catches are typed `EP` with **no** secondary types, which is
     exactly why they beat the real album on size under the `smallest` scope.
     """
     return SecondaryType.REMIX in rg.secondary_types or has_remix_marker(rg.title)
@@ -663,7 +663,7 @@ class _DenyProbe(frozenset[str]):
 
     `resolve_all` resolves each track with the deny list swapped for one of these, so the
     `Resolution` can record every denied release it was refused on the way to its answer
-    (`Resolution.denied_skipped`, issue #271). `_refusal` is the only place the resolver reads the
+    (`Resolution.denied_skipped`). `_refusal` is the only place the resolver reads the
     deny list, and it reads it by membership, so recording there covers every path without
     threading a collector through each of them. Recording a denied release that did not end up
     mattering costs one extra re-resolve after it is un-denied; missing one would be the bug.
@@ -711,7 +711,7 @@ SINGLE_FALLBACK_STEP = "track:single-fallback"
 answer only a clock can reach: see `_due` for why an expiry must never undo it."""
 
 REMIX_ONLY_STEP = "track:remix-only"
-"""A track kept on a remix release because every release that could hold it is one (issue #89).
+"""A track kept on a remix release because every release that could hold it is one.
 
 RESOLVED, and deliberately *not* under `EXCLUDED_STEP_PREFIX`: the release is monitored. Produced
 only while `allow_remix_releases` is off and `keep_remix_only_tracks` is on, and only where the
@@ -741,8 +741,8 @@ def _remix_only(
     compilation among them and the refusal stands, because the setting is about a song with
     nowhere else to go, not about overriding the other two opt-outs. A Various Artists release is
     never kept, and one that is *not* a remix means the song has somewhere else to go - it is
-    simply a place likearr never monitors - so the refusal stands then too. That is issue #15's
-    own Grease case: the original "You're the One That I Want" is on the Various Artists
+    simply a place likearr never monitors - so the refusal stands then too. That is the Grease
+    case: the original "You're the One That I Want" is on the Various Artists
     soundtrack and, among monitorable releases, only on *Grease (The Remix EP)*; the remix rule
     was switched on for exactly that song, and keeping the EP would undo it.
 
@@ -869,7 +869,7 @@ def _is_smallest_candidate(rg: ReleaseGroup, artist_mbid: str, rules: ExclusionR
     ``track:various-artists``) is the better answer, so `smallest` defers to it instead. Various
     Artists is never a candidate for the same reason it is never monitored elsewhere.
 
-    That type check is also why this scope needed issue #15's remix rule and the `Remix` secondary
+    That type check is also why this scope needed the remix rule, since the `Remix` secondary
     type did not give it: ``Grease (The Remix EP)`` is typed `EP` with no secondary types, so it
     is "studio" here, and an EP outranks an Album, so a remix record containing the original
     recording beat the film soundtrack on size. `_refusal` is what refuses it now.
@@ -925,7 +925,7 @@ def _title_words(title: str) -> frozenset[str]:
 
 
 def _isrc_release_groups(intent: TrackIntent, lookup: MetadataLookup) -> tuple[list[ReleaseGroup], str]:
-    """The release groups of this track's ISRC, without recordings of clearly another song (#163).
+    """The release groups of this track's ISRC, without recordings of clearly another song.
 
     MusicBrainz sometimes files one ISRC on two of an artist's recordings - Dean Martin's "Good
     Mornin' Life" and "Kiss" share ``USCA29600867`` - and the release groups of both then read as
@@ -1024,7 +1024,7 @@ def _resolve_smallest(
 def _pick_by_isrc(
     intent: TrackIntent, lookup: MetadataLookup, same_name: Sequence[ReleaseGroup]
 ) -> tuple[ReleaseGroup | None, str]:
-    """Choose between same-named artists' same-titled releases by the track's own ISRC (issue #32).
+    """Choose between same-named artists' same-titled releases by the track's own ISRC.
 
     The name search found one release per artist and no way to tell the artists apart. The ISRC
     identifies *this recording*, and MusicBrainz files it under release groups credited to the
@@ -1088,8 +1088,8 @@ def _isrc_stand_in(
 
     Spotify's track objects never carry the album's UPC, so a liked or playlist track reaches
     :func:`_map_spotify_album` with nothing but a title and a credit to search on - and on a large
-    library hundreds of tracks can end UNMAPPED at ``track:album:search`` for want of an exact match
-    (issue #1). The track's own **ISRC** is a real identifier and was never consulted, because
+    library hundreds of tracks can end UNMAPPED at ``track:album:search`` for want of an exact match.
+    The track's own **ISRC** is a real identifier and was never consulted, because
     every step that reads it runs *after* the album has mapped.
 
     Returns ``(release_group, why, excluded, refused)``; the caller uses the release group exactly as if
@@ -1099,7 +1099,7 @@ def _isrc_stand_in(
     way, so a track that is still UNMAPPED says what the fallback tried.
 
     `excluded` is a ready-made `track:excluded:*` resolution, set only when every candidate that
-    survived the Various Artists filter was then refused by an opt-out (issue #15). Without it a
+    survived the Various Artists filter was then refused by an opt-out. Without it a
     track whose only homes are all box sets would report the *mapping* failure that preceded the
     fallback, which says nothing about the user's own setting being what refused it. The refused
     candidates are filtered rather than vetoed, so a set holding one allowed release and forty
@@ -1107,7 +1107,7 @@ def _isrc_stand_in(
     either tier below would have accepted - the Spotify title, or the track's own artist by credit
     name, so a stranger's release carrying the recording is not among them - plus every Various
     Artists hit, which is never kept but can show the song has a home that is not a remix, for
-    :func:`_remix_only` to decide on (issue #89). Otherwise empty, except when every hit is
+    :func:`_remix_only` to decide on. Otherwise empty, except when every hit is
     credited to Various Artists: those are returned for the same reason.
 
     Two tiers, both over release groups MusicBrainz files this exact recording under, Various
@@ -1206,7 +1206,7 @@ def _isrc_stand_in(
 
 
 JOINING_RELATIONSHIPS = frozenset({"member of band", "collaboration"})
-"""The MusicBrainz artist-artist relationship types that make two credits one act (issue #14).
+"""The MusicBrainz artist-artist relationship types that make two credits one act.
 
 ``member of band`` (John Mayer is a member of John Mayer Trio) and ``collaboration`` (an artist is
 one of those behind a named project) say the two artists made the music together. No other type
@@ -1216,7 +1216,7 @@ matching, which fails closed: the intent stays UNMAPPED, as it was before this r
 """
 
 RELATED_CREDIT_STEP = "track:album:related-credit"
-"""How the release Spotify named was mapped when a relationship decided the credit (issue #14).
+"""How the release Spotify named was mapped when a relationship decided the credit.
 
 Never a resolution's final `step` - the Singles rule decides that from the release group, as it
 does after the ISRC stand-in - so it is recorded in the detail, which always says which
@@ -1278,7 +1278,7 @@ def _related_credit(
     *,
     track_is_remix: bool,
 ) -> tuple[ReleaseGroup | None, str, Resolution | None, tuple[ReleaseGroup, ...]]:
-    """The release Spotify named, found under a credit MusicBrainz joins to Spotify's (issue #14).
+    """The release Spotify named, found under a credit MusicBrainz joins to Spotify's.
 
     Asked only once the name search and the ISRC stand-in have both failed, so it can change no
     answer they reach. Spotify credits *TRY! - Live In Concert* to "John Mayer" and MusicBrainz
@@ -1404,7 +1404,7 @@ def _track_artist_mbid(intent: TrackIntent, spotify_rg: ReleaseGroup, lookup: Me
     Normally the mapped release's primary artist. On a Various Artists compilation that credit is
     the VA placeholder, whose "catalogue" is millions of release groups (paging through them would
     take hours) - so use the TRACK's own artist instead. Costs lookups only in that
-    Various Artists case, and names an artist only on evidence (issue #152):
+    Various Artists case, and names an artist only on evidence:
 
     1. **The ISRC.** The release groups MusicBrainz files this recording under, Various Artists
        ones aside, credited to Spotify's artist name (`credits_match`): when they are all one
@@ -1447,9 +1447,9 @@ def _song_evidence(intent: TrackIntent, lookup: MetadataLookup) -> Callable[[Rel
     Two kinds of evidence, either enough: the track's ISRC is filed under it, or its title *is*
     the song's (`normalize_title` equality) - a single named after the song. The second is not
     decoration. MusicBrainz often files a title-track single's recording without the ISRC Spotify
-    reports, and on a replay of #89 over a real library the ISRC alone moved several title tracks - "The
-    Joker", "Harvest Moon", "Nick Of Time" - off their own single, onto the album or onto another
-    single. The ISRC is asked at most once, and only if a tie reaches it.
+    reports, and on a replay over a real library the ISRC alone moved several title tracks -
+    "The Joker", "Harvest Moon", "Nick Of Time" - off their own single, onto the album or onto
+    another single. The ISRC is asked at most once, and only if a tie reaches it.
     """
     wanted = normalize_title(intent.name)
     memo: list[frozenset[str]] = []
@@ -1467,7 +1467,7 @@ def _song_evidence(intent: TrackIntent, lookup: MetadataLookup) -> Callable[[Rel
 
 
 UNAVAILABLE_STEP = "source:unavailable"
-"""A liked or playlist track Spotify no longer serves (issue #166).
+"""A liked or playlist track Spotify no longer serves.
 
 Spotify returns a taken-down or region-locked track with an empty name, an empty artist and an
 empty "Various Artists" album. There is nothing to look up, so :func:`resolve_track` answers
@@ -1509,13 +1509,13 @@ def resolve_track(
        when that finds nothing either is the answer UNMAPPED - there is nothing to reason about.
        When the name search instead finds the title under **two same-named artists**, the ISRC
        chooses between them (:func:`_pick_by_isrc`), and if it cannot the answer is UNMAPPED at
-       `AMBIGUOUS_SAME_NAME_STEP` - never the earliest of them (issue #32). When only one of
+       `AMBIGUOUS_SAME_NAME_STEP` - never the earliest of them. When only one of
        those artists' titles passes, it is taken unless the ISRC names one of the *others*
        (:func:`_contested_by_isrc`); then the ISRC fallback looks for that artist's release, and
        failing that the answer is ambiguous too. When the ISRC finds nothing either and
        `relations` is given, a release group the name search refused **only on the credit** is
        taken if MusicBrainz records a ``member of band`` or ``collaboration`` relationship joining
-       its artist to Spotify's (:func:`_related_credit`, issue #14) - *Try!* under John Mayer Trio
+       its artist to Spotify's (:func:`_related_credit`) - *Try!* under John Mayer Trio
        for Spotify's "John Mayer". Never on the names alone.
     b. If that release group is a studio Album or EP, it is the answer (``track:album``).
        MusicBrainz's type decides this, never Spotify's `album_type`, which files EPs as
@@ -1543,10 +1543,10 @@ def resolve_track(
        single itself (``track:single-fallback``). The single's release date is the clock;
        `pending_since` is used only when that date is unknown.
 
-    `rules` are the issue #15 opt-outs. They never *change* which release wins; they remove
+    `rules` are the exclusion opt-outs. They never *change* which release wins; they remove
     releases from the running, and the steps above then decide among what is left. A refused
     release Spotify named still gets step c's studio Album/EP search when the ISRC finds nothing
-    allowed (issue #96): it is not monitored, but the album that lists the song is. Where nothing
+    allowed: it is not monitored, but the album that lists the song is. Where nothing
     is left the answer is UNMAPPED at a ``track:excluded:*`` step naming the release that would
     have been monitored and the setting that refused it.
     """
@@ -1603,7 +1603,7 @@ def resolve_track(
         map_detail = f"{map_detail}; {why}"
         if spotify_rg is None and excluded is None and refused_rg is None and not contested and relations is not None:
             # Only where every rule before this answered UNMAPPED at the name search, so nothing
-            # that resolves without it can resolve differently with it (issue #14).
+            # that resolves without it can resolve differently with it.
             spotify_rg, related, excluded, refused = _related_credit(
                 intent, lookup, relations, rules, track_is_remix=track_is_remix
             )
@@ -1638,7 +1638,7 @@ def resolve_track(
             refusal = None
             if refused_rg is not None:
                 # The release Spotify named is refused and the ISRC names nothing allowed, but the
-                # Singles rule's studio Album/EP search still runs from it (issue #96): a song
+                # Singles rule's studio Album/EP search still runs from it: a song
                 # Spotify filed on a box set or a remix single whose artist's album lists it lands
                 # on the album, as it would from any single.
                 from_named = allowed_home(refused_rg, from_scope=scope, followed=followed_artist_mbids)
@@ -1659,7 +1659,7 @@ def resolve_track(
             if refusal is not None:
                 # The one exit where an opt-out is the answer (the terminal gate in `_resolve_mapped`
                 # refuses only for the searches made from a refused release, whose refusal is this
-                # one), so the one place a song whose every release is a remix is kept (issue #89).
+                # one), so the one place a song whose every release is a remix is kept.
                 kept = _remix_only(
                     intent, rules, refusal, proven=refused, named=refused_rg, track_is_remix=track_is_remix
                 )
@@ -1782,7 +1782,7 @@ def _resolve_mapped(
         try:
             catalogue = lookup.artist_release_groups(artist_mbid)
         except CatalogueTooLarge:
-            # Permanent, not an outage (#151): a composer's catalogue is too long to page through,
+            # Permanent, not an outage: a composer's catalogue is too long to page through,
             # so there is no title search to make, and the answers below stand on what is known.
             catalogue, too_large = (), True
         for rg in catalogue:
@@ -1910,7 +1910,7 @@ def _resolve_mapped(
 
 
 def _other_performers(named: ReleaseGroup, candidate: ReleaseGroup) -> bool:
-    """True when the title search must skip `candidate`: another performance of the work (#164).
+    """True when the title search must skip `candidate`: another performance of the work.
 
     MusicBrainz credits a classical release group to the composer first ("Jean Sibelius; London
     Philharmonic Orchestra, Paavo Berglund"), and the title search walks the first credit's
@@ -1966,7 +1966,7 @@ def _reusable(
     window may have closed) and UNMAPPED must be re-resolved every run (MusicBrainz gains data,
     and a lookup that failed once should not stick).
 
-    `rules` makes reuse sensitive to the issue #15 opt-outs, in two different ways for two
+    `rules` makes reuse sensitive to the exclusion opt-outs, in two different ways for two
     different costs. The two switches are compared through `ExclusionRules.token`, so flipping one
     re-resolves every liked and playlist track - which is right, because it is a rule change - and
     because the default token is `""`, a resolution written before the field existed still matches
@@ -1974,13 +1974,13 @@ def _reusable(
     compared against the release the cached answer *chose*, so adding one MBID re-resolves only
     the intents that landed on it rather than the whole library, and against the denied releases
     it was refused on the way (`Resolution.denied_skipped`), so removing one re-resolves only the
-    intents that were kept off it (issue #271).
+    intents that were kept off it.
 
     `followed_artist_mbids` makes reuse sensitive to **follow state**, and is passed only under the
     `smallest` scope, where the dedupe rule reads it. Without this a resolution made before the
     artist was followed is permanent, so following them later never swaps their single for the
-    album the follow already brings - a departure from the rule the scope is written around
-    (issue #9). Only a `track:smallest:*` resolution is checked: any other step means no studio
+    album the follow already brings - a departure from the rule the scope is written around.
+    Only a `track:smallest:*` resolution is checked: any other step means no studio
     release held the song at all, which no follow changes.
 
     A resolution whose `followed` was never recorded is **back-filled rather than re-resolved**
@@ -1988,8 +1988,8 @@ def _reusable(
     is returned (and therefore what gets written back to the cache). On a `smallest` library the
     great majority of cached resolutions are `covered-by-follow` for artists who are still
     followed, so re-resolving them all would cost thousands of lookups to arrive at the answers
-    already on disk. The ones whose step *disagrees* are re-resolved, and they are exactly the
-    stale answers issue #9 is about.
+    already on disk. The ones whose step *disagrees* are re-resolved, since those are exactly the
+    stale answers that must not be reused.
 
     Age is not checked here: an answer that is merely old is still valid, and `resolve_all` keeps
     it when its re-check fails. See `_due`.
@@ -2012,7 +2012,7 @@ def _reusable(
             # every liked track in the library.
             return None
         if not hit.denied_skipped <= rules.deny_releases:
-            # And removing one re-resolves only the intents that were kept off it (issue #271):
+            # And removing one re-resolves only the intents that were kept off it:
             # the answer they fell through to is not what they would get now.
             return None
     if followed_artist_mbids is not None and isinstance(hit, Resolution) and hit.step.startswith(SMALLEST_STEP_PREFIX):
@@ -2034,7 +2034,7 @@ def _due(
 ) -> tuple[Resolution, bool]:
     """`hit`, with its clock started if it had none, and whether it is old enough to check again.
 
-    Age makes reuse expire (issue #165): a track or saved-album answer whose `checked_at` is at
+    Age makes reuse expire: a track or saved-album answer whose `checked_at` is at
     least ``max_age(key)`` before `now` is looked up again, so a MusicBrainz correction or merge
     reaches an intent that already resolved instead of waiting for the next `RESOLVER_VERSION`.
     `max_age` is asked per key because the shell jitters it by key, so a library cached in one run
@@ -2061,7 +2061,7 @@ def _settle(result: ResolveResult, key: str, due: Resolution | None, *, failed: 
     """Record this run's answer for `key`, keeping a due answer where its re-check fell short.
 
     `due` is a cached answer looked up again only because it was old (`_due`). It is kept, unmoved
-    and still due, when the re-check failed or only reached a provisional answer (#53): an answer
+    and still due, when the re-check failed or only reached a provisional answer: an answer
     MusicBrainz confirmed is not traded for one it did not, as `mb_cache` serves a stale entry when
     its refetch fails. It is also kept, with its clock restarted, when the re-check would have
     stepped it backwards from a single fallback to waiting: an expiry changes when an answer is
@@ -2120,22 +2120,22 @@ def resolve_all(
     `lookup_failures` is a running count of the lookup's failures this run, including the ones it
     answered some other way (``CompositeLookup.mb_failure_count``). It is read before and after
     each intent actually resolved - never around a cache hit - and an intent during which it moved
-    is added to `ResolveResult.provisional` (issue #53). The answer itself is unchanged: this only
+    is added to `ResolveResult.provisional`. The answer itself is unchanged: this only
     tells the caller that it was reached after MusicBrainz failed. ``None``, the default, means
     the lookup reports nothing, and nothing is provisional.
 
     `relations` lets a liked or playlist track take a release group MusicBrainz credits to an
-    artist it records as joined to Spotify's credit (issue #14, :func:`_related_credit`). ``None``,
+    artist it records as joined to Spotify's credit (:func:`_related_credit`). ``None``,
     the default, is the resolver without that rule.
 
     `progress` is called with ``(intents done, intents total)`` right after each artist, album or
     track intent is handled - a cache hit counts as done too, since the caller's progress line is
     about how much of the snapshot is behind it, not how much MusicBrainz work happened. Core stays
-    pure either way: it calls the function and never logs anything itself (issue #119). ``None``,
+    pure either way: it calls the function and never logs anything itself. ``None``,
     the default, means nobody is listening.
 
     `max_age` is how old a cached track or saved-album answer may get before it is looked up again,
-    per intent key (issue #165, :func:`_due`). Every answer resolved here is stamped
+    per intent key (:func:`_due`). Every answer resolved here is stamped
     `checked_at=now`. ``None``, the default, reuses an answer however old it is.
     """
     result = ResolveResult()
@@ -2228,7 +2228,7 @@ def resolve_all(
         if due is not None and due.step == SINGLE_FALLBACK_STEP:
             # Settled on its single by the fallback window, whose clock the shell cleared when it
             # settled: that window has already run out, so the re-check starts from there rather
-            # than from a fresh wait (#165 review). An album that has appeared still wins.
+            # than from a fresh wait. An album that has appeared still wins.
             ran_out = now - timedelta(days=fallback_days)
             since = None if clock is None else _days_since(now, clock)
             if since is None or since < fallback_days:

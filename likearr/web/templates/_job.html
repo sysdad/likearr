@@ -7,7 +7,7 @@
     {% if remedy_label %}<p class="error">{{ remedy_text }} <a href="{{ remedy_url }}">{{ remedy_label }}</a>.</p>{% endif %}
   {% endif %}
   {% endif %}
-  {# aria-hidden (#142): this ticks every poll while running, and the live region wrapping this
+  {# aria-hidden: this ticks every poll while running, and the live region wrapping this
      page's #job (see job.html) would otherwise announce it every 2s. The finish/fail line above
      still announces normally. #}
   <p class="when" aria-hidden="true">Started {{ meta.started_at | when }}; {{ "running for" if not meta.finished else "took" }} {{ elapsed }}.</p>

@@ -1,7 +1,7 @@
 """Configuration: env vars for secrets and for where likearr runs, one TOML file for behaviour.
 
 Nothing personal or site-specific lives in code. Secrets are never read from the TOML file, and
-neither are the deployment settings below (issue #3): each setting has one source, so there is
+neither are the deployment settings below: each setting has one source, so there is
 nothing to reconcile. The file holds what the web UI edits; `likearr start` writes it from
 `deploy/config.example.toml` on a first start with none (`write_initial_config`).
 
@@ -48,7 +48,7 @@ it without importing the web package: `start` reads it and takes it out of its o
 and the job runner strips it from every child's."""
 
 UI_PASSWORD_MIN_LENGTH = 16
-"""`start` refuses a shorter `UI_PASSWORD_ENV`, counted as given, not stripped (issue #170). The
+"""`start` refuses a shorter `UI_PASSWORD_ENV`, counted as given, not stripped. The
 login pause is per address, so a short or dictionary password is the weak point it cannot cover."""
 
 
@@ -60,7 +60,7 @@ LIDARR_URL_ENV = "LIKEARR_LIDARR_URL"
 ALLOWED_HOSTS_ENV = "LIKEARR_ALLOWED_HOSTS"
 MUSICBRAINZ_CONTACT_ENV = "LIKEARR_MUSICBRAINZ_CONTACT"
 DEFAULT_MUSICBRAINZ_CONTACT = "https://github.com/sysdad/likearr"
-"""The project URL: a normal MusicBrainz User-Agent contact when the install sets none (#3)."""
+"""The project URL: a normal MusicBrainz User-Agent contact when the install sets none."""
 
 DEFAULT_TOKEN_FILE = "spotify-token.json"
 DEFAULT_STATE_DB = "state.sqlite"
@@ -87,10 +87,10 @@ def _setup_sentence(missing: tuple[str, ...]) -> str:
 @dataclass(frozen=True, slots=True)
 class LidarrConfig:
     url: str = ""
-    """From `LIDARR_URL_ENV`, never the file (#3). Empty when unset: the config still loads, so the
+    """From `LIDARR_URL_ENV`, never the file. Empty when unset: the config still loads, so the
     service starts and says what is missing, and building the Lidarr client refuses instead."""
     root_folder: str = ""
-    """Empty until chosen (#3): a first start has none, and Settings or a single Lidarr root folder
+    """Empty until chosen: a first start has none, and Settings or a single Lidarr root folder
     fills it in. No run plans or applies while it or `quality_profile` is empty (`unset`)."""
     quality_profile: str = ""
     lean_profile: str = "Lean"
@@ -103,7 +103,7 @@ class LidarrConfig:
     refresh_timeout_max_s: float = 3600.0
     """The ceiling, so one enormous catalogue cannot hold a run for hours. Never below the floor."""
     max_refreshes_per_run: int = 10
-    """How many followed artists a run may refresh to chase a recent release (issue #8).
+    """How many followed artists a run may refresh to chase a recent release.
 
     Each refresh is a Lidarr command likearr waits on, so an uncapped run could spend hours on a
     week when a lot of artists released at once. The artists that miss the cap are simply picked
@@ -150,7 +150,7 @@ class LidarrConfig:
 
     @property
     def api_key(self) -> str:
-        # Stripped (issue #7): a CR or LF left by a Windows-line-ending env file or a file-based
+        # Stripped: a CR or LF left by a Windows-line-ending env file or a file-based
         # Kubernetes Secret makes h11 refuse the header, quoting the whole key in its error.
         key = os.environ.get("LIKEARR_LIDARR_API_KEY", "").strip()
         if not key:
@@ -163,7 +163,7 @@ class SpotifyConfig:
     token_file: Path
     playlists: tuple[str, ...] = ()
     """Playlist IDs the user OWNS or collaborates on (the latter once the token has
-    ``playlist-read-collaborative``, #103). Any other playlist returns no items under Spotify Dev Mode."""
+    ``playlist-read-collaborative``). Any other playlist returns no items under Spotify Dev Mode."""
     redirect_uri: str = "http://127.0.0.1:8765/callback"
     followed_artists: bool = True
     saved_albums: bool = True
@@ -171,7 +171,7 @@ class SpotifyConfig:
 
     @property
     def client_id(self) -> str:
-        cid = os.environ.get("LIKEARR_SPOTIFY_CLIENT_ID", "").strip()  # stripped, as `api_key` (#7)
+        cid = os.environ.get("LIKEARR_SPOTIFY_CLIENT_ID", "").strip()  # stripped, as `api_key`
         if not cid:
             raise ConfigError("LIKEARR_SPOTIFY_CLIENT_ID is not set")
         return cid
@@ -185,7 +185,7 @@ class SpotifyConfig:
 class MusicBrainzConfig:
     contact: str = DEFAULT_MUSICBRAINZ_CONTACT
     """Required by MusicBrainz's User-Agent policy: an email or project URL. From
-    `MUSICBRAINZ_CONTACT_ENV`, never the file (#3)."""
+    `MUSICBRAINZ_CONTACT_ENV`, never the file."""
     base_url: str = "https://musicbrainz.org/ws/2"
     min_interval_s: float = 1.0
     negative_cache_days: int = 7
@@ -193,14 +193,14 @@ class MusicBrainzConfig:
     """How long a *successful* MusicBrainz answer is trusted before it is looked up again.
 
     Positive answers used to live for ever, so a corrected Spotify link or an artist merge was
-    never seen and - after a merge - that artist's releases quietly stopped being monitored
-    (issue #9). Each entry's real expiry is jittered deterministically by up to 25% of this, so
+    never seen and - after a merge - that artist's releases quietly stopped being monitored.
+    Each entry's real expiry is jittered deterministically by up to 25% of this, so
     the cache does not fall due all at once and spend a run at 1 request/second catching up.
     A refetch that fails keeps serving the cached answer, so this can never cost a mapping.
 
     It also sets how long a resolved song or saved-album answer is reused before it is worked out
-    again: 4/3 of this, jittered by intent key the same way (issue #165,
-    `shell.plan.resolution_max_age`). Zero re-resolves every answer on every run.
+    again: 4/3 of this, jittered by intent key the same way
+    (`shell.plan.resolution_max_age`). Zero re-resolves every answer on every run.
     """
 
 
@@ -227,7 +227,7 @@ class RulesConfig:
     allow_remix_releases: bool = True
     """Opt-out: when false, a remix release is never chosen unless the liked track is a remix."""
     keep_remix_only_tracks: bool = True
-    """With remixes off, still keep a liked track whose every release is a remix (issue #89)."""
+    """With remixes off, still keep a liked track whose every release is a remix."""
     deny_releases: tuple[str, ...] = ()
     """Release group MBIDs the resolver must never choose. Validated and lowercased in
     `parse_config`, so the resolver may trust their shape."""
@@ -270,7 +270,7 @@ ever runs rather than discovered by a `QUOTA_EXCEEDED`."""
 @dataclass(frozen=True, slots=True)
 class ScheduleConfig:
     """`[schedule]`: when the scheduled run fires, and whether it does. Read by the in-service
-    scheduler (`likearr.web.schedule`, issue #68) and by `run --scheduled` itself, not just the web
+    scheduler (`likearr.web.schedule`) and by `run --scheduled` itself, not just the web
     UI, which is why it lives here rather than in `[ui]` - `[ui]` never stops or times a run
     (docs/dev/DESIGN.md) - and outside `Config.plan_fingerprint`, so pausing or rescheduling can never make
     a reviewed plan stale.
@@ -317,7 +317,7 @@ class WebhookSinkConfig:
     url: str
     timeout_s: float = 10.0
     notify: str = WEBHOOK_NOTIFY_ALWAYS
-    """Which runs the webhook is sent (#112). `always`: every run that reaches a remote sink, as
+    """Which runs the webhook is sent. `always`: every run that reaches a remote sink, as
     before. `problems`: only a run `core.health.should_notify` says is news - a new problem, or the
     recovery from one. The default keeps an existing webhook (a heartbeat, a Home Assistant
     trigger) getting every run."""
@@ -344,7 +344,7 @@ class UiConfig:
     """
 
     allowed_hosts: tuple[str, ...] = ()
-    """Host names (without a port) the web UI answers to, from `ALLOWED_HOSTS_ENV` (#3), never the
+    """Host names (without a port) the web UI answers to, from `ALLOWED_HOSTS_ENV`, never the
     file. Anything else is refused before any page is served, which is what stops DNS rebinding: a
     hostile page that rebinds its own name to this server still sends its own name as the host.
     ``localhost`` and ``127.0.0.1`` are always allowed on top of this list, for the container
@@ -355,12 +355,12 @@ class UiConfig:
     Defaults to `LIDARR_URL_ENV`, which is what likearr itself calls and may be a container name no
     browser can resolve. Never called by likearr."""
     cli_command: str = DEFAULT_CLI_COMMAND
-    """How a terminal on this install runs likearr, put in front of every command Clean up shows
-    (#58), so they paste and run as they are. The documented install is the default; another
+    """How a terminal on this install runs likearr, put in front of every command Clean up shows,
+    so they paste and run as they are. The documented install is the default; another
     setup (an ssh to the host, a container exec) is this one setting. Shown, never run."""
     public_url: str = ""
     """This service's own https address, e.g. ``https://likearr.example.org`` - empty by default.
-    When set, Spotify's "Connect Spotify" (issue #79) offers a direct-callback mode that redirects
+    When set, Spotify's "Connect Spotify" offers a direct-callback mode that redirects
     straight to ``<public_url>/spotify/callback`` instead of the paste-back flow, using this exact
     URI registered in the Spotify developer app. Must be ``https://``; a bare host, an http:// URL,
     a query string or a fragment is a recorded error, same as every other `[ui]` value - it never
@@ -381,8 +381,8 @@ def default_holding_dir(root_folder: str) -> str:
 
 @dataclass(frozen=True, slots=True)
 class PruneConfig:
-    """`[prune]`: whether Clean up is on (#148), and where `prune-stage` moves files, for the
-    commands Clean up shows (#58).
+    """`[prune]`: whether Clean up is on, and where `prune-stage` moves files, for the
+    commands Clean up shows.
 
     Checked but never fatal, like `[ui]`: only the web UI reads it (the CLI only warns), and a typo
     must not stop a scheduled run. A value with a problem falls back to the default and the problem
@@ -390,7 +390,7 @@ class PruneConfig:
     """
 
     enabled: bool = False
-    """Whether the web UI offers Clean up and promote-save's Spotify write access (#148). Off by
+    """Whether the web UI offers Clean up and promote-save's Spotify write access. Off by
     default: Clean up needs the library mounted at Lidarr's path, the likearr-cli container and a
     holding folder, so a user turns it on knowingly. The prune CLI commands still run when it is
     off, with a one-line warning."""
@@ -452,7 +452,7 @@ class Config:
 
 PLACEHOLDER_CONTACT = "you@example.com"
 """The MusicBrainz contact the example config used to ship. Still loads from the env var, but Doctor
-warns: it identifies nobody, which defeats MusicBrainz's reason for asking (issue #110)."""
+warns: it identifies nobody, which defeats MusicBrainz's reason for asking."""
 
 KNOWN_KEYS: dict[str, frozenset[str]] = {
     "lidarr": frozenset(
@@ -538,7 +538,7 @@ REMOVED_KEYS: dict[tuple[str, str], str] = {
     ("ui", "allowed_hosts"): ALLOWED_HOSTS_ENV,
     ("musicbrainz", "contact"): MUSICBRAINZ_CONTACT_ENV,
 }
-"""Deployment settings that moved from the file to the environment (#3). One still in the file
+"""Deployment settings that moved from the file to the environment. One still in the file
 fails the load - `[ui]` included, which otherwise never does - naming the env var to use instead,
 so an upgraded install cannot quietly keep a value likearr no longer reads."""
 
@@ -754,7 +754,7 @@ def _ui(section: object, *, lidarr_url: str) -> UiConfig:
     included - so a typo here must not stop a run, least of all before any health sink exists to
     report it. `start` refuses to start on a recorded problem, and the Status page shows any that
     appear later. A value with a problem falls back to its default, and a key it does not read
-    is a recorded problem too (issue #110).
+    is a recorded problem too.
     """
     host_errors: list[str] = []
     cleaned = _allowed_hosts(host_errors)
@@ -843,7 +843,7 @@ def validate_cron_and_timezone(cron: str, timezone: str) -> None:
     `MIN_SCHEDULE_INTERVAL_MINUTES`, or a timezone `zoneinfo` does not recognise.
 
     The one place this wording lives, so a live preview (`web.settings.preview_schedule`) and a
-    rejected save can never disagree about why a line is bad - see issue #86. Validates only the
+    rejected save can never disagree about why a line is bad. Validates only the
     cron line and the timezone; `_schedule` also checks `enabled` and `paused_reason`, which have
     no live-preview equivalent.
 
@@ -930,8 +930,8 @@ def _req(d: dict, key: str, section: str) -> object:
 
 
 NEW_CONFIG_MODE = 0o660
-"""A config file `write_initial_config` creates: no world bits, like a Settings save leaves one
-(#171), and group bits kept so a host user in the container's group can edit it by hand (#107)."""
+"""A config file `write_initial_config` creates: no world bits, like a Settings save leaves one,
+and group bits kept so a host user in the container's group can edit it by hand."""
 
 _EXAMPLE_NAME = "config.example.toml"
 
@@ -947,7 +947,7 @@ def example_config_text() -> str:
 
 
 def write_initial_config(path: Path) -> bool:
-    """Create `path` from the example config if there is no file there yet (#3). Never overwrites.
+    """Create `path` from the example config if there is no file there yet. Never overwrites.
 
     The text is written to a temp file beside `path` and hard-linked into place, so a reader sees
     no file or the whole one, and a file that appears in the meantime is kept rather than replaced

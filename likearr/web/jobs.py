@@ -27,7 +27,7 @@ The rules the design asks for, all enforced here rather than by the pages that c
   publishes a lock error to Home Assistant;
 - a `scheduled` job (`submit_scheduled`) queues behind whatever holds the one job slot for up to
   an hour rather than being refused outright, then gives up and is recorded `skipped` - the
-  in-service scheduler's fire, and "Run now", both go through it (issue #68 phase 2);
+  in-service scheduler's fire, and "Run now", both go through it;
 - a job still marked running when the server starts is marked ``interrupted`` - unless its process
   is provably still alive and still that job (same PID, same kernel start time, same argv; Linux
   ``/proc``), when it is re-adopted: watched until it ends, and no other job starts meanwhile;
@@ -93,7 +93,7 @@ PASSWORD_ENV = UI_PASSWORD_ENV
 SCHEDULED_KIND = "scheduled"
 """The job kind a scheduler fire - or "Run now" - is submitted as (`likearr.web.schedule`). The
 only kind whose shutdown behaviour depends on its `phase` rather than the static `drain` it
-started with (issue #68 phase 3): see `JobRunner._must_drain`."""
+started with: see `JobRunner._must_drain`."""
 
 JOB_PHASE_APPLY = "apply"
 """`JobMeta.phase`'s value once a scheduled job has printed `PHASE_MARKER_APPLY`: it may have
@@ -115,7 +115,7 @@ _TAIL_BYTES = 64 * 1024
 
 QUEUE_WAIT_S = 60.0 * 60.0
 """How long a `scheduled` submission queues behind a running job before it gives up and is
-recorded `skipped` (issue #68 phase 2): 60 minutes."""
+recorded `skipped`: 60 minutes."""
 
 STOP_WAIT_S = TOKEN_REQUEST_WORST_CASE_S + 55.0
 """How long a stopped child gets between SIGTERM and SIGKILL: two minutes.
@@ -176,7 +176,7 @@ class JobMeta:
     adopted: bool = False
     """Still running from before a server restart: watched, not spawned, by this server."""
     phase: str = ""
-    """`SCHEDULED_KIND` only (issue #68 phase 3): `""` while still planning, `JOB_PHASE_APPLY`
+    """`SCHEDULED_KIND` only: `""` while still planning, `JOB_PHASE_APPLY`
     once it has printed `PHASE_MARKER_APPLY` and may have started writing to Lidarr. Determined on
     demand - at a shutdown decision or at startup recovery - by looking for that line in the job's
     own `log.txt`, and recorded here only once a job that was still running stops being so, for
@@ -492,7 +492,7 @@ class JobRunner:
         draining job; the container's own stop grace period is the real bound, and it is set
         longer than an apply takes.
 
-        A `SCHEDULED_KIND` job (issue #68 phase 3) does not use the `drain` it was started with
+        A `SCHEDULED_KIND` job does not use the `drain` it was started with
         for this decision - see `_must_drain`: still planning, it is cancelled and re-fired after
         restart, because planning has written nothing to Lidarr; once it has printed the
         apply-phase marker it is drained exactly like a UI apply, because Lidarr may already be
@@ -532,8 +532,8 @@ class JobRunner:
         return running.meta.drain
 
     def _scheduled_phase(self, meta: JobMeta) -> tuple[str, bool]:
-        """`meta`'s apply-phase, and whether that makes it "cancelled during planning" (issue #68
-        phase 3). For anything but a `SCHEDULED_KIND` job, `meta.phase` is returned unchanged and
+        """`meta`'s apply-phase, and whether that makes it "cancelled during planning". For
+        anything but a `SCHEDULED_KIND` job, `meta.phase` is returned unchanged and
         it is never "cancelled" in this sense - only a scheduled job's shutdown depends on it."""
         if meta.kind != SCHEDULED_KIND:
             return meta.phase, False
@@ -615,7 +615,7 @@ class JobRunner:
                 # `drain=True` still isolates the child from a terminal Ctrl-C (`start_new_session`)
                 # and still means Cancel refuses it - but for `SCHEDULED_KIND`, `shutdown`'s own
                 # wait-or-stop decision no longer trusts this flag: `_must_drain` decides from the
-                # job's actual apply phase instead (issue #68 phase 3), because a scheduled run
+                # job's actual apply phase instead, because a scheduled run
                 # spends most of its time still planning, which is safe to cancel and re-fire.
                 self.start(kind, args, label=label, needs_run_lock=True, drain=True)
                 return

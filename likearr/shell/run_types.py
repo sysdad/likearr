@@ -1,6 +1,6 @@
 """What a run produces: the plan and apply results, and the errors an apply stops with.
 
-Split out of `shell.run` (#156) so `shell.plan`, `shell.apply` and `shell.run_report` can share them
+Split out of `shell.run` so `shell.plan`, `shell.apply` and `shell.run_report` can share them
 without importing each other.
 """
 
@@ -38,12 +38,12 @@ class PlanResult:
     mb_stale_served: int = 0
     """MusicBrainz lookups answered from an expired cache entry because the refetch failed."""
     lidarr_metadata_attempts: int = 0
-    """Lidarr metadata lookups genuinely asked of Lidarr this run (issue #18); excludes a term
+    """Lidarr metadata lookups genuinely asked of Lidarr this run; excludes a term
     skipped because it is still inside its negative-cache TTL."""
     lidarr_metadata_attempt_failures: int = 0
     """Of `lidarr_metadata_attempts`, how many failed. `core.health.lidarr_metadata_outage`'s input."""
     tagged_without_state: tuple[str, ...] = ()
-    """Artists carrying likearr's Lidarr tag with no `owned_artists` row (#175): a lost or replaced
+    """Artists carrying likearr's Lidarr tag with no `owned_artists` row: a lost or replaced
     state database. Reported in the log and the run record; it changes nothing else."""
 
     @property
@@ -77,7 +77,7 @@ class ApplyResult:
     MusicBrainz, and a run that degraded for all that time would be the permanent amber again."""
     foreign_artists: list[str] = field(default_factory=list)
     """Artist MBIDs the plan would add that were already in Lidarr without likearr's tag: someone
-    else added them first (issue #4). Left alone this run, and not likearr's afterwards either."""
+    else added them first. Left alone this run, and not likearr's afterwards either."""
     unmapped_in_lidarr: list[str] = field(default_factory=list)
     """``artist_mbid/rg_mbid`` pairs Lidarr still has no album for; retried next run."""
     already_monitored: list[str] = field(default_factory=list)
@@ -86,7 +86,7 @@ class ApplyResult:
     lidarr_written: bool = False
     """Set before any call to Lidarr that is not a known read (`_WriteWatch`): tags and profiles
     created, profiles set, new-item monitoring changed, artists added or re-monitored. What makes
-    "changed nothing" true or false, beyond the counted changes (#54)."""
+    "changed nothing" true or false, beyond the counted changes."""
 
 
 def changes_made(applied: ApplyResult) -> int:
@@ -149,7 +149,7 @@ class _WriteWatch:
 
 
 class ApplyStopped(Exception):
-    """An apply failed after it began changing Lidarr (#54). Carries what it had done by then, so
+    """An apply failed after it began changing Lidarr. Carries what it had done by then, so
     the record can say "stopped part-way: N of M changes made" rather than a bare failure."""
 
     def __init__(self, applied: ApplyResult, planned: int, cause: Exception) -> None:

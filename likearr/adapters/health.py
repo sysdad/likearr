@@ -45,7 +45,7 @@ class MqttSink:
     """Publishes a retained, QoS-1 JSON message to an MQTT broker (paho-mqtt v2 API)."""
 
     local = False
-    """Retained on the broker, so a dry run must never reach it (see `publish_all`, issue #19)."""
+    """Retained on the broker, so a dry run must never reach it (see `publish_all`)."""
 
     def __init__(self, config: MqttSinkConfig) -> None:
         self._config = config
@@ -71,8 +71,8 @@ class MqttSink:
 
 
 def webhook_payload(record: HealthRecord, *, recovered: bool) -> dict[str, object]:
-    """The webhook body: every key of `record.to_dict()`, unchanged, plus `title`, `body` and `type`
-    (#112), so Apprise API and ntfy's templating have readable text to show. Additive only: a
+    """The webhook body: every key of `record.to_dict()`, unchanged, plus `title`, `body` and `type`,
+    so Apprise API and ntfy's templating have readable text to show. Additive only: a
     consumer of the old body keeps working, and no record field is named any of the three."""
     note = notification(record.status, record.message, recovered=recovered)
     return {**record.to_dict(), "title": note.title, "body": note.body, "type": note.type}
@@ -82,7 +82,7 @@ class WebhookSink:
     """POSTs the health record as JSON to a generic webhook URL, with a readable title and body."""
 
     local = False
-    """A remote endpoint, so a dry run must never reach it (see `publish_all`, issue #19)."""
+    """A remote endpoint, so a dry run must never reach it (see `publish_all`)."""
 
     def __init__(self, config: WebhookSinkConfig) -> None:
         self._config = config
@@ -98,7 +98,7 @@ class WebhookSink:
         since an Apprise key or a private ntfy topic in it is as good as a password.
         """
         # `paused` and `skipped` are never news, whatever the caller passed: the CLI's
-        # no-state-database path (#111) publishes a `paused` record without asking `should_notify`.
+        # no-state-database path publishes a `paused` record without asking `should_notify`.
         if self._config.notify == WEBHOOK_NOTIFY_PROBLEMS and (not notify or record.status in _IDLE):
             return
         try:
@@ -139,13 +139,13 @@ def publish_all(
     A dry run (`record.dry_run`) applies nothing, so publishing it to a retained sink would
     overwrite the last real run's result: a hand-run dry-run check would blank Home Assistant's
     view of the last scheduled apply and reset the `ts` dead-man's-switch built on it for a run
-    that changed nothing (issue #19). `explain`, `doctor` and friends never build sinks at all, so
+    that changed nothing. `explain`, `doctor` and friends never build sinks at all, so
     this only changes `likearr run`. Every non-dry terminal status - `error`, `stale`, `guarded`,
     a scheduled run's `skipped` - still reaches every sink, exactly as before: those only ever
     arise with `dry_run = false` in normal operation (a scheduled cron line always carries
     `--apply`, and `stale`/`guarded` only occur mid-apply), except the configuration refusal above.
 
-    ``notify`` is whether this run is news (`core.health.should_notify`, #112). Only the webhook
+    ``notify`` is whether this run is news (`core.health.should_notify`). Only the webhook
     reads it: a `notify = "problems"` webhook skips a run that is not, and every webhook titles a
     recovery. stdout and MQTT get every record exactly as before - MQTT is retained state that
     Home Assistant's `ts` dead-man's switch reads, so it needs every run.

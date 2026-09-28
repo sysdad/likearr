@@ -209,7 +209,7 @@ def test_the_resolver_step_is_always_visible() -> None:
 # 2014 album "Jungle". likearr matched the song to "Jungle" (1969) by Jungle, a US psychedelic rock
 # band, and the name-collision guard then skipped that artist because Lidarr already holds the
 # London band (id 9003). Explain used to say "likearr would add it" and never said why nothing
-# downloaded. Resolver bug #32.
+# downloaded.
 
 import datetime as _dt  # noqa: E402
 
@@ -531,7 +531,7 @@ def test_a_limit_keeps_the_first_answers_and_counts_the_rest() -> None:
     assert "Record 4" not in report.details
 
 
-# ---------------------------------------------------------------- a release nothing wants any more (#36 review)
+# ---------------------------------------------------------------- a release nothing wants any more
 
 ORPHAN_VIEW = lidarr_view(
     artists=[lidarr_artist(ARTIST, name="The Weeknd")], albums=[lidarr_album(ALBUM, monitored=True, files=1)]
@@ -639,7 +639,7 @@ def test_the_jungle_artist_answer_carries_the_wrong_match_flag() -> None:
     assert "The only release likearr wants from Jungle looks like a wrong match" in artist.text
 
 
-# ---------------------------------------------------------------- #32 fixed: ambiguity is said, not guessed
+# ---------------------------------------------------------------- ambiguity is said, not guessed
 
 JUNGLE_AMBIGUOUS = Resolution(
     intent_key=BUSY.key,
@@ -791,7 +791,7 @@ def test_the_json_report_carries_the_cards() -> None:
     assert data["left_out"] == 0
 
 
-# ---------------------------------------------------------------- "Not this one" only where it works (#153)
+# ---------------------------------------------------------------- "Not this one" only where it works
 
 
 def _why(*kinds: ReasonKind) -> frozenset[Reason]:

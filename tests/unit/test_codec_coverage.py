@@ -1,8 +1,8 @@
-"""Every persisted model survives its codec, field by field (issue #157).
+"""Every persisted model survives its codec, field by field.
 
 The codecs that write likearr's files and state rows list their fields by hand, across the package.
 Nothing failed when a new model field was left out of one: `Resolution.rules` read back as its
-default for weeks (#100), and it reached the diff file the same way. This test builds each
+default for weeks, and it reached the diff file the same way. This test builds each
 persisted dataclass from its own type hints with **every field set away from its default**, at
 every depth, round-trips it through each codec that writes it, and compares field by field.
 
@@ -294,7 +294,7 @@ CODECS = [
         Diff,
         lambda d: diff_from_run_dict(json.loads(_diff_to_json(d))),
         dropped={
-            "update_reasons": "stored positionally by asdict; the Status page omits it (#76)",
+            "update_reasons": "stored positionally by asdict; the Status page omits it",
             "pending": "no display reader needs it (diff_from_run_dict)",
             "unmapped": "no `_kind` discriminator in the asdict shape, so it is not decoded (diff_from_run_dict)",
         },
@@ -362,7 +362,7 @@ CODECS = [
         lambda r: _row_from_dict(_via_json(_row_to_dict(r))),
         dropped={
             "release_date": "prune-stage selects and trashes by id and path; it never reads the date",
-            "protection": "written for the review's words (#64); prune-stage reads protected rows by artist only",
+            "protection": "written for the review's words; prune-stage reads protected rows by artist only",
         },
     ),
     Codec(

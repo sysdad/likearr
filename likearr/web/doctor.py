@@ -1,4 +1,4 @@
-"""Parse `likearr doctor --json` for the web UI's read-only Doctor view (issue #80).
+"""Parse `likearr doctor --json` for the web UI's read-only Doctor view.
 
 `doctor` itself changes nothing and is run as a child job through `JobRunner`, same as every
 other Lidarr- or Spotify-reading command the UI starts; this module only turns its `--json` line
@@ -37,7 +37,7 @@ class DoctorView:
 
     @property
     def problems(self) -> tuple[DoctorCheck, ...]:
-        """What needs attention, listed first (#85): every FAIL, then every WARN - and any level
+        """What needs attention, listed first: every FAIL, then every WARN - and any level
         this module does not know, which is safer shown than hidden - each in doctor's order."""
         fails = tuple(c for c in self.checks if c.level == "FAIL")
         return fails + tuple(c for c in self.checks if c.level not in ("FAIL", "PASS", "SKIP"))

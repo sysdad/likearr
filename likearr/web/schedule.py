@@ -1,4 +1,4 @@
-"""The in-service scheduler (issue #68 phase 2): decides *when* to fire, never *what* runs.
+"""The in-service scheduler: decides *when* to fire, never *what* runs.
 
 A background thread, started from the app `lifespan` and stopped with it. Each iteration:
 
@@ -251,11 +251,11 @@ class Scheduler:
         """When to fire the missed-fire catch-up, or `None` if none is due.
 
         `None` covers: the config does not load, there is no state database yet (nothing has ever
-        run), this service has never recorded a fire (a fresh database, or one from before phase
-        2), or the schedule's next fire after the last recorded one is still in the future - none
-        of those is a missed fire.
+        run), this service has never recorded a fire (a fresh database, or one older than fire
+        tracking), or the schedule's next fire after the last recorded one is still in the future -
+        none of those is a missed fire.
 
-        A fire recorded `cancelled` (issue #68 phase 3, `SqliteState.scheduled_fire_cancelled`) -
+        A fire recorded `cancelled` (`SqliteState.scheduled_fire_cancelled`) -
         a redeploy's SIGTERM caught its child still planning - is due at its *own* recorded time,
         not the schedule's next slot after it: that exact fire never ran, so it is what is missed,
         not whatever comes next.

@@ -5,7 +5,7 @@
 # named stage (rather than `COPY --from=ghcr.io/astral-sh/uv:0.6` directly) so Dependabot's
 # docker ecosystem can see and track this image: it does not watch images referenced only in
 # a COPY --from. Pinned by digest (the `0.6` tag can move) - a multi-arch index, so the digest
-# still resolves on both amd64 and arm64 (#105). Re-resolve with:
+# still resolves on both amd64 and arm64. Re-resolve with:
 #   curl -s "https://ghcr.io/token?service=ghcr.io&scope=repository:astral-sh/uv:pull" \
 #     | grep -o '"token":"[^"]*"' | cut -d'"' -f4 \
 #     | xargs -I{} curl -s -D - -o /dev/null -H "Authorization: Bearer {}" \
@@ -33,7 +33,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Now add the project itself and install it into the same venv.
 COPY likearr ./likearr
 COPY README.md ./
-# The example config `likearr start` writes to /data/config.toml on a first start with none (#3),
+# The example config `likearr start` writes to /data/config.toml on a first start with none,
 # inside the package where `config.example_config_text` looks for it.
 COPY deploy/config.example.toml ./likearr/config.example.toml
 # pyproject's wheel force-include reads it from deploy/, and hatch checks that path on every build,
@@ -58,8 +58,8 @@ FROM python:3.12-slim@sha256:2f17fc044b579bab302c2e8054d3a686e2cb9a83de48e70534b
 ARG LIKEARR_UID=1000
 ARG LIKEARR_GID=1000
 
-# Not read by likearr itself (the version comes from the installed package's own metadata, issue
-# #113) - these two exist only to label the image and to tell `likearr doctor`/the web footer
+# Not read by likearr itself (the version comes from the installed package's own metadata) -
+# these two exist only to label the image and to tell `likearr doctor`/the web footer
 # which commit is running, which the image otherwise has no way to know (`.dockerignore` excludes
 # `.git`). Neither is required: an image built without them is simply unlabelled and shows no
 # commit. Pass them with, for example, `--build-arg VCS_REF=$(git rev-parse --short HEAD)
@@ -78,13 +78,13 @@ RUN (getent group "${LIKEARR_GID}" >/dev/null || groupadd --gid "${LIKEARR_GID}"
 
 WORKDIR /app
 
-# Root-owned and world-readable, not owned by the runtime user (#171): the process can read and
+# Root-owned and world-readable, not owned by the runtime user: the process can read and
 # run its code but never rewrite it, and a restarted container cannot carry an edited copy.
 # Everything likearr writes lives under /data.
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/likearr /app/likearr
 
-# PYTHONSAFEPATH (#171): `python -c` and `python -m` would otherwise put the working directory
+# PYTHONSAFEPATH: `python -c` and `python -m` would otherwise put the working directory
 # (writable /data, or a job's directory under it) first on sys.path, so a file planted there would
 # shadow the standard library in the healthcheck and in every job, and outlive a restart.
 ENV PATH="/app/.venv/bin:${PATH}" \

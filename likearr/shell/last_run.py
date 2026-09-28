@@ -223,8 +223,8 @@ def last_run_facts(
 
 
 def _after_apply(view: LidarrView, executed: Diff, applied: _Applied) -> LidarrView:
-    # An artist Lidarr refused to add is skipped the same way: it is not in Lidarr at all (#173).
-    # One someone else added first (#4) is in Lidarr, but none of the plan's changes to it were made.
+    # An artist Lidarr refused to add is skipped the same way: it is not in Lidarr at all.
+    # One someone else added first is in Lidarr, but none of the plan's changes to it were made.
     skipped = set(applied.skipped_artists) | set(applied.unknown_artists) | set(applied.foreign_artists)
     refused = set(applied.unmapped_in_lidarr)
     artists = dict(view.artists)
@@ -378,7 +378,7 @@ def _album_ref_from_dict(raw: Mapping[str, Any]) -> SpotifyAlbumRef:
 
 def snapshot_to_dict(snapshot: SourceSnapshot) -> dict[str, Any]:
     """A `SourceSnapshot` as JSON, losslessly: every field round-trips through `snapshot_from_dict`
-    (see `tests/shell/test_last_run.py`). Shared with `shell.spotify_snapshot` (issue #68 phase 3),
+    (see `tests/shell/test_last_run.py`). Shared with `shell.spotify_snapshot`,
     which saves a scheduled run's read for a redeploy to reuse."""
     return {
         "fetched_at": snapshot.fetched_at.isoformat(),

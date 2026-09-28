@@ -1,4 +1,4 @@
-"""`docs/spotify.md` (issue #109): the redirect URI and scopes it documents must never drift from
+"""`docs/spotify.md`: the redirect URI and scopes it documents must never drift from
 what the code actually sends Spotify. Each fact here is read from the source of truth - `SpotifyConfig`'s
 default and `models.SPOTIFY_READ_SCOPES` / `SPOTIFY_WRITE_SCOPES` - rather than hardcoded a second
 time, so a future change to either fails this test instead of silently going stale in the doc.
@@ -56,7 +56,7 @@ def test_readme_links_to_the_spotify_app_guide() -> None:
 
 
 def test_the_docs_say_read_only_by_default_and_write_on_opt_in() -> None:
-    """#161: sign-in asks for the read scopes only; `--promote-save` adds the write ones. The
+    """Sign-in asks for the read scopes only; `--promote-save` adds the write ones. The
     README, DEPLOY.md, CLI.md and this guide must all say so, and name the opt-in command."""
     for path in (DOCS_ROOT.parent / "README.md", DOCS_ROOT / "DEPLOY.md", DOCS_ROOT / "CLI.md", SPOTIFY_DOC):
         text = path.read_text()

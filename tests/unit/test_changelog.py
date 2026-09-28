@@ -1,7 +1,7 @@
-"""issue #106: a `CHANGELOG.md` at the repo root, and the release-specific passages moved out of
+"""A `CHANGELOG.md` at the repo root, and the release-specific passages moved out of
 `docs/DEPLOY.md`.
 
-issue #168 (CHANGELOG option C): at publication, the detailed `Unreleased` entries are replaced by
+At publication, the detailed `Unreleased` entries are replaced by
 a short `## [0.5.0]` summary (8 to 10 bullets, no issue numbers), and `Unreleased` sits above it
 for whatever accumulates after the tag.
 

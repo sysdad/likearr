@@ -37,7 +37,7 @@ __all__ = [
 _SPOTIFY_ID = re.compile(r"[A-Za-z0-9]{1,64}")
 
 NOT_OWNED_REASON = "Spotify doesn't share this playlist's songs with a personal app"
-"""Why a playlist the picker lists cannot be a source, in one fixed wording (issue #103).
+"""Why a playlist the picker lists cannot be a source, in one fixed wording.
 The one place this sentence is written - the picker, `likearr playlists`, the README and
 `docs/dev/DESIGN.md` all say this, not their own paraphrase."""
 
@@ -48,7 +48,7 @@ COLLABORATIVE_REAUTH_REASON = (
     "you collaborate on this playlist, but Spotify was connected before likearr asked to read "
     "collaborative playlists: re-authorize Spotify (Settings, or `likearr auth`), then refresh this list"
 )
-"""Why a collaborative playlist someone else owns is not offered yet (issue #103, item 3): the
+"""Why a collaborative playlist someone else owns is not offered yet: the
 stored token predates ``playlist-read-collaborative``. A re-authorization fixes it; a copy is not
 needed, so this replaces `NOT_OWNED_REASON` and its workaround for such a playlist."""
 
@@ -68,11 +68,11 @@ class NamesCache:
     not_owned: frozenset[str] = frozenset()
     """Ids the newest successful fetch listed but marked not readable (not owned, and not a
     collaborative one the token may read) - replaced whole by every fetch, unlike `names`: it is
-    what a save refuses (issue #103, item 1), and only the latest listing is trusted to say a
+    what a save refuses, and only the latest listing is trusted to say a
     playlist is *currently* unreadable. The file key stays ``not_owned``."""
     needs_reauth: frozenset[str] = frozenset()
     """The subset of `not_owned` a re-authorization would make readable: collaborative playlists
-    listed by a token without ``playlist-read-collaborative`` (#103, item 3). Replaced whole too."""
+    listed by a token without ``playlist-read-collaborative``. Replaced whole too."""
 
 
 def names_path(config_path: Path) -> Path:

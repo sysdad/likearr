@@ -193,7 +193,7 @@ def test_parse_config_full_overrides(tmp_path: Path) -> None:
 def test_an_empty_file_loads_with_a_default_or_an_unset_value_for_everything(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Issue #3: nothing in the file is required any more. Paths default beside it, the
+    """Nothing in the file is required any more. Paths default beside it, the
     deployment settings come from the environment, and the two `[lidarr]` keys a user picks in
     Settings are empty - reported by `unset`, never a load failure."""
     monkeypatch.delenv("LIKEARR_LIDARR_URL")
@@ -259,7 +259,7 @@ def test_bad_allowed_hosts_are_a_recorded_problem_naming_the_env_var(
 def test_a_removed_key_fails_the_load_naming_its_env_var_without_echoing_the_value(
     tmp_path: Path, section: str, key: str, env: str
 ) -> None:
-    """Issue #3: these moved to the environment. `[ui]` never fails a load otherwise; this does."""
+    """These moved to the environment. `[ui]` never fails a load otherwise; this does."""
     raw = _raw(**{section: {key: "VALUE-SENTINEL"}})
 
     with pytest.raises(ConfigError) as caught:
@@ -303,7 +303,7 @@ def test_setup_needed_names_what_is_missing_and_where_to_set_it(unset: dict[str,
 
 
 def test_a_first_start_writes_the_example_and_the_next_load_reads_it_unchanged(tmp_path: Path) -> None:
-    """Issue #3's Compose start: an empty data directory and environment variables only."""
+    """Compose start: an empty data directory and environment variables only."""
     data = tmp_path / "data"
     data.mkdir()
     path = data / "config.toml"
@@ -454,7 +454,7 @@ def test_spotify_client_secret_optional(monkeypatch: pytest.MonkeyPatch, tmp_pat
 def test_a_secret_is_stripped_of_surrounding_whitespace_when_read(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, section: str, key: str, env: str, raw: str
 ) -> None:
-    """Issue #7: a Windows-line-ending env file or a file-based Kubernetes Secret leaves a CR or LF
+    """A Windows-line-ending env file or a file-based Kubernetes Secret leaves a CR or LF
     on the value, which h11 then refuses to send - quoting the whole value in its error."""
     config = parse_config(MINIMAL_RAW, base_dir=tmp_path)
     monkeypatch.setenv(env, raw)
@@ -497,8 +497,8 @@ def test_a_client_secret_that_is_only_whitespace_is_none(monkeypatch: pytest.Mon
 def test_a_secret_in_the_toml_is_refused_pointing_at_its_env_var_without_echoing_it(
     tmp_path: Path, section: str, key: str, env: str
 ) -> None:
-    """Config only ever trusts the env var, so a secret written into the file is never read. Issue
-    #110 makes that an unknown key, which fails the load - naming the env var, never the value."""
+    """Config only ever trusts the env var, so a secret written into the file is never read. That
+    makes it an unknown key, which fails the load - naming the env var, never the value."""
     raw = _raw(**{section: {key: "SECRET-SENTINEL"}})
 
     with pytest.raises(ConfigError) as caught:
@@ -591,7 +591,7 @@ def test_health_webhook_section_overrides(tmp_path: Path) -> None:
 
 
 def test_health_webhook_notify_defaults_to_always(tmp_path: Path) -> None:
-    """#112: an existing `[health.webhook]` with no `notify` keeps posting every run, as before."""
+    """An existing `[health.webhook]` with no `notify` keeps posting every run, as before."""
     raw = _raw(health={"webhook": {"url": "https://example.invalid/hook"}})
 
     config = parse_config(raw, base_dir=tmp_path)
@@ -666,11 +666,11 @@ def test_liked_track_scope_accepts_both_documented_values(tmp_path: Path) -> Non
         assert config.rules.liked_track_scope == value
 
 
-# ---------------------------------------------------------------- the issue #15 opt-outs
+# ---------------------------------------------------------------- the opt-outs
 
 
 def test_the_opt_outs_default_to_the_behaviour_that_shipped_before_them(tmp_path: Path) -> None:
-    """A config that never heard of issue #15 must resolve exactly as it did before it."""
+    """A config that never heard of the opt-outs must resolve exactly as it did before them."""
     config = parse_config(_raw(), base_dir=tmp_path)
 
     assert config.rules.allow_compilation_fallback is True
@@ -690,7 +690,7 @@ def test_flipping_either_switch_moves_the_token(tmp_path: Path) -> None:
 
 
 def test_keep_remix_only_tracks_reaches_the_core_and_moves_the_token(tmp_path: Path) -> None:
-    """Issue #89: on by default, so a `c1r0` library keeps its token; off is its own token."""
+    """On by default, so a `c1r0` library keeps its token; off is its own token."""
     kept = parse_config(_raw(rules={"allow_remix_releases": False}), base_dir=tmp_path)
     dropped = parse_config(
         _raw(rules={"allow_remix_releases": False, "keep_remix_only_tracks": False}), base_dir=tmp_path
@@ -833,7 +833,7 @@ def test_denying_a_release_moves_the_plan_fingerprint(tmp_path: Path) -> None:
     assert before.plan_fingerprint != after.plan_fingerprint
 
 
-# ---------------------------------------------------------------- [ui] (web UI, issue #29)
+# ---------------------------------------------------------------- [ui] (web UI)
 
 
 def test_the_ui_block_is_optional_and_no_allowed_hosts_is_the_unset_default(tmp_path: Path) -> None:
@@ -895,7 +895,7 @@ def test_the_ui_block_is_not_part_of_the_plan_fingerprint(monkeypatch: pytest.Mo
     assert before.plan_fingerprint == after.plan_fingerprint
 
 
-# ---------------------------------------------------------------- [schedule] cron/timezone (issue #68 phase 2)
+# ---------------------------------------------------------------- [schedule] cron/timezone
 
 
 def test_the_schedule_block_defaults_to_every_six_hours_utc(tmp_path: Path) -> None:
@@ -943,7 +943,7 @@ def test_validate_cron_and_timezone_matches_what_the_load_would_refuse(
     tmp_path: Path, cron: str, timezone: str, problem: str
 ) -> None:
     """`web.settings.preview_schedule`'s live preview calls `validate_cron_and_timezone` directly,
-    rather than going through a full `parse_config` - this checks the two paths agree (issue #86):
+    rather than going through a full `parse_config` - this checks the two paths agree:
     same exception type, same message, for the same bad cron line or timezone.
     """
     with pytest.raises(ConfigError, match=problem) as direct:
@@ -955,7 +955,7 @@ def test_validate_cron_and_timezone_matches_what_the_load_would_refuse(
 
 
 def test_the_old_ui_cron_keys_are_unknown_ui_keys_not_a_schedule(tmp_path: Path) -> None:
-    """#162: `[ui] cron_schedule` / `cron_timezone` were aliases for `[schedule] cron` / `timezone`
+    """`[ui] cron_schedule` / `cron_timezone` were aliases for `[schedule] cron` / `timezone`
     and are gone. They are now unknown `[ui]` keys like any other - recorded problems, which the
     server refuses to start on - and never quietly read as the schedule."""
     config = parse_config(
@@ -1085,7 +1085,7 @@ def test_a_fallback_lidarr_url_a_browser_cannot_use_means_no_lidarr_links(
 
 
 def test_an_unknown_ui_key_is_a_recorded_problem_never_a_load_failure(tmp_path: Path) -> None:
-    # Issue #110: a misspelt key must never do nothing in silence. [ui] stays checked-but-never-fatal,
+    # A misspelt key must never do nothing in silence. [ui] stays checked-but-never-fatal,
     # so the cron run still loads; `start` refuses on the recorded problem and names it.
     config = parse_config(_raw(ui={"public_ur": "https://a.b"}), base_dir=tmp_path)
 
@@ -1093,7 +1093,7 @@ def test_an_unknown_ui_key_is_a_recorded_problem_never_a_load_failure(tmp_path: 
     assert config.lidarr.url == "http://lidarr:8686"
 
 
-# ---------------------------------------------------------------- #58: Clean up's commands
+# ---------------------------------------------------------------- Clean up's commands
 
 
 def test_the_cli_command_defaults_to_the_documented_install(tmp_path: Path) -> None:
@@ -1117,7 +1117,7 @@ def test_a_cli_command_is_one_line(tmp_path: Path) -> None:
         assert any("cli_command" in e for e in config.ui.errors)
 
 
-# ---------------------------------------------------------------- #79: [ui] public_url
+# ---------------------------------------------------------------- [ui] public_url
 
 
 def test_public_url_defaults_to_empty(tmp_path: Path) -> None:
@@ -1187,7 +1187,7 @@ def test_a_holding_dir_inside_the_library_or_not_absolute_is_a_problem_never_fat
 
 
 def test_clean_up_is_off_by_default(tmp_path: Path) -> None:
-    """#148: Clean up is opt-in. No `[prune]` table, or one without `enabled`, means off."""
+    """Clean up is opt-in. No `[prune]` table, or one without `enabled`, means off."""
     assert parse_config(_raw(), base_dir=tmp_path).prune.enabled is False
     config = parse_config(_raw(prune={"holding_dir": "/srv/holding"}), base_dir=tmp_path)
     assert config.prune.enabled is False
@@ -1225,7 +1225,7 @@ def test_prune_enabled_is_outside_the_plan_fingerprint(tmp_path: Path) -> None:
     assert on.plan_fingerprint == parse_config(_raw(), base_dir=tmp_path).plan_fingerprint
 
 
-# ---------------------------------------------------------------- [schedule] (issue #68, phase 1)
+# ---------------------------------------------------------------- [schedule]
 
 
 def test_the_schedule_block_is_optional_and_defaults_to_enabled(tmp_path: Path) -> None:
@@ -1306,7 +1306,7 @@ def test_the_schedule_block_is_not_part_of_the_plan_fingerprint(tmp_path: Path) 
 
 
 def test_the_example_config_loads_as_written_leaving_only_the_library_to_pick() -> None:
-    """Issue #3: a first start writes this file verbatim, so it must load as it is, and must not
+    """A first start writes this file verbatim, so it must load as it is, and must not
     carry a placeholder root folder or quality profile that would be taken for a real choice."""
     config = load_config(EXAMPLE_CONFIG_PATH)
 
@@ -1317,7 +1317,7 @@ def test_the_example_config_loads_as_written_leaving_only_the_library_to_pick() 
     assert config.state_db.name == "state.sqlite"
 
 
-# ---------------------------------------------------------------- strict validation (issue #110)
+# ---------------------------------------------------------------- strict validation
 
 
 def _load_example_with(tmp_path: Path, old: str, new: str) -> Config:
@@ -1484,7 +1484,7 @@ def test_one_second_against_musicbrainz_org_loads(tmp_path: Path) -> None:
 
 
 def test_the_old_example_contact_placeholder_still_loads(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Option B (issue #110): Doctor warns about it; the load does not refuse it.
+    # Option B: Doctor warns about it; the load does not refuse it.
     monkeypatch.setenv("LIKEARR_MUSICBRAINZ_CONTACT", PLACEHOLDER_CONTACT)
     config = load_config(EXAMPLE_CONFIG_PATH)
 
@@ -1506,7 +1506,7 @@ def test_known_keys_match_the_dataclass_fields() -> None:
     def names(cls: type, *, minus: tuple[str, ...] = ()) -> set[str]:
         return {f.name for f in dataclasses.fields(cls)} - set(minus)
 
-    # The deployment settings are fields, read from the environment, never keys (#3).
+    # The deployment settings are fields, read from the environment, never keys.
     assert KNOWN_KEYS["lidarr"] == names(LidarrConfig, minus=("url",))
     assert KNOWN_KEYS["spotify"] == names(SpotifyConfig)
     assert KNOWN_KEYS["musicbrainz"] == names(MusicBrainzConfig, minus=("contact",))

@@ -89,7 +89,7 @@ def test_a_config_change_since_supersedes_a_plan() -> None:
 
 
 def test_a_plan_that_recorded_no_settings_is_superseded() -> None:
-    # `apply` refuses a diff without a config fingerprint (#27); the page must not offer it.
+    # `apply` refuses a diff without a config fingerprint; the page must not offer it.
     assert plan_state(_meta(), None, FINGERPRINT, applied_since=False, now=NOW).name == "superseded"
 
 
@@ -132,8 +132,8 @@ def test_steps_read_as_how_it_was_found() -> None:
 
 
 def test_every_step_the_resolver_emits_is_said_in_words() -> None:
-    """#76 showed `track:title->album` raw in "Found by". Every literal step in the resolver must
-    have words; a new step without them fails here instead of on the page."""
+    """`track:title->album` must never show raw in "Found by". Every literal step in the resolver
+    must have words; a new step without them fails here instead of on the page."""
     import re
     from pathlib import Path
 
@@ -398,7 +398,7 @@ def test_an_apply_after_the_plan_supersedes_it_and_a_dry_run_does_not() -> None:
 
 
 def test_an_apply_that_changed_nothing_does_not_supersede_a_plan() -> None:
-    # A cron apply every 6 h with nothing to do would otherwise kill every plan (#35 review).
+    # A cron apply every 6 h with nothing to do would otherwise kill every plan.
     from likearr.web.plans import applied_since
     from tests.adapters.test_state_sqlite import _health_record
 
@@ -439,7 +439,7 @@ def test_a_reason_update_row_names_its_release() -> None:
     assert "_href:Release" not in named[-1]
 
 
-# ---------------------------------------------------------------- the plan token (#30)
+# ---------------------------------------------------------------- the plan token
 
 
 def test_the_plan_token_binds_the_job_to_what_its_diff_says() -> None:
@@ -524,7 +524,7 @@ def test_the_on_disk_column_says_what_stays_on_disk() -> None:
 
 
 def test_an_apply_that_stopped_part_way_supersedes_a_plan() -> None:
-    """#54: it changed Lidarr before it failed, so the plan no longer describes Lidarr."""
+    """It changed Lidarr before it failed, so the plan no longer describes Lidarr."""
     from likearr.models import RunStatus
     from likearr.web.plans import applied_since
     from tests.adapters.test_state_sqlite import _health_record
@@ -545,7 +545,7 @@ def test_an_apply_that_stopped_part_way_supersedes_a_plan() -> None:
     assert not applied_since(failed(None), finished.isoformat())
 
 
-# ---------------------------------------------------------------- run_change_sections (#76)
+# ---------------------------------------------------------------- run_change_sections
 
 
 def test_run_change_sections_names_every_row_and_leaves_empty_sections_out() -> None:
@@ -603,7 +603,7 @@ def test_run_change_sections_caps_a_long_section_and_says_so() -> None:
     assert monitor_full["capped"] is False
 
 
-# ---------------------------------------------------------------- "Monitor New Albums" (#172)
+# ---------------------------------------------------------------- "Monitor New Albums"
 
 
 def test_the_monitor_new_albums_write_is_a_section_right_after_the_re_monitored_artists() -> None:
@@ -617,7 +617,7 @@ def test_the_monitor_new_albums_write_is_a_section_right_after_the_re_monitored_
 
 
 def test_a_profile_widening_says_what_happens_to_monitor_new_albums_when_it_goes_to_none() -> None:
-    """#172: widening to Full must not auto-monitor what it shows, and the review says so."""
+    """Widening to Full must not auto-monitor what it shows, and the review says so."""
     diff = _diff()
     diff.set_new_items_none[:] = [A1]
     diff.ratchets[:] = [

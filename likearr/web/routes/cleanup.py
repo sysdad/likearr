@@ -1,10 +1,10 @@
 """Clean up: the prune review's routes - building a report, deciding each artist, exporting the
-decisions, the read-only previews and the finish checklist (#31, #55, #58).
+decisions, the read-only previews and the finish checklist.
 
-Split out of `likearr.web.app` (#154); `create_app` mounts `ROUTES` where these routes always
-stood in its list, and passes `AFTER` to `_Web` for the preview chain (#266).
+Split out of `likearr.web.app`; `create_app` mounts `ROUTES` where these routes always
+stood in its list, and passes `AFTER` to `_Web` for the preview chain.
 
-Every route answers only while `[prune] enabled` is on (#148, `_when_on`). Off, ``GET /prune``
+Every route answers only while `[prune] enabled` is on (see `_when_on`). Off, ``GET /prune``
 says what Clean up is and how to turn it on, and every other route answers that page with a 404,
 so nothing starts and nothing is exported. The ledger and old prune jobs are left as they are.
 """
@@ -45,10 +45,10 @@ from likearr.web.context import AfterCallback, _Web, _web
 from likearr.web.jobs import JobMeta, JobRefused, JobState
 
 log = logging.getLogger("likearr.web.app")
-"""Under the app's own name, so log lines read as they did before the split (#154)."""
+"""Under the app's own name, so log lines read as they did before the split."""
 
 
-# ---------------------------------------------------------------- prune review (#31)
+# ---------------------------------------------------------------- prune review
 
 
 def _prune_jobs(web: _Web) -> list[JobMeta]:
@@ -91,7 +91,7 @@ def _prune_or_none(web: _Web, job_id: str) -> tuple[JobMeta, prune.PruneView, Pa
 
 
 def _prune_words(web: _Web, artists: Sequence[prune.PruneArtist]) -> dict[str, Mapping[str, str]]:
-    """What a protected album's "always kept" line names, beyond the report (#64): playlists by
+    """What a protected album's "always kept" line names, beyond the report: playlists by
     their cached name, and - for a report that did not record it - each song's title from the last
     run's snapshot. Nothing is fetched; what is not known is worded without it. Each is read only
     when a row needs it: the names file only for a playlist's song, the last run only for a song
@@ -114,7 +114,7 @@ def _prune_rows_context(
     web: _Web, job_id: str, view: prune.PruneView, draft: prune.Draft, params: Mapping[str, str]
 ) -> dict[str, Any]:
     query = params.get("q", "")[:200]
-    # No filter asked for opens on what needs a decision (#55); anything unknown is everything.
+    # No filter asked for opens on what needs a decision; anything unknown is everything.
     show = params.get("show", "needs")
     show = show if show in prune.SHOW_FILTERS else "all"
     raw_page = params.get("page", "1")
@@ -142,7 +142,7 @@ def _prune_summary(view: prune.PruneView, draft: prune.Draft) -> dict[str, Any]:
 
 
 def _prune_draft_locked(web: _Web, job_id: str, view: prune.PruneView, job_dir: Path) -> tuple[prune.Draft, str]:
-    """The job's draft with anything new in the ledger filled in (#55), and why the ledger will not
+    """The job's draft with anything new in the ledger filled in, and why the ledger will not
     read (empty when it did, or when there is none yet). Call with `_PRUNE_LOCK` held.
 
     Done on every read, not once: `prefill` applies only entries this draft has not seen and never
@@ -306,7 +306,7 @@ async def prune_decide(request: Request) -> Response:
 
 async def prune_export(request: Request) -> Response:
     """Write the decisions file and the review snapshot beside the report, for the terminal steps,
-    and record what was decided in the ledger (#55), so the next report starts from it. It writes
+    and record what was decided in the ledger, so the next report starts from it. It writes
     those files and nothing else: no move, no Spotify call."""
     web = _web(request)
     form = await request.form(max_files=0, max_fields=4)
@@ -368,7 +368,7 @@ def _record_in_ledger(
     return ""
 
 
-# ---------------------------------------------------------------- the previews (#58)
+# ---------------------------------------------------------------- the previews
 
 
 _PREVIEW_LOCK = threading.RLock()
@@ -475,7 +475,7 @@ def _after_preview(web: _Web, meta: JobMeta) -> None:
             return
         chain = ["stage", *(["spotify"] if binding.asks_spotify else []), "checks"]
         then = next((s for s in chain if not getattr(binding, s)), None)
-    if then is not None and web.cleanup_enabled():  # turned off mid-chain: start nothing more (#148)
+    if then is not None and web.cleanup_enabled():  # turned off mid-chain: start nothing more
         problem = start_preview(web, meta.plan_id, then)
         if problem:
             log.info("clean up preview %s not started: %s", then, problem)
@@ -486,7 +486,7 @@ _CHAIN_GAP = timedelta(seconds=10)
 
 
 def _prune_finish_context(web: _Web, meta: JobMeta, job_dir: Path, summary: Mapping[str, Any]) -> dict[str, Any] | None:
-    """The "Finish the clean up" checklist for the current export (#58), or ``None`` before one.
+    """The "Finish the clean up" checklist for the current export, or ``None`` before one.
 
     Reads only: the preview jobs' own files, and the token file for the scope names (never a token).
     A preview is shown only for the export it previewed (`cleanup.Binding`)."""
@@ -533,7 +533,7 @@ def _prune_finish_context(web: _Web, meta: JobMeta, job_dir: Path, summary: Mapp
         "checks": cleanup.read_checks(steps["checks"]["path"]),
         "asks_spotify": cleanup.asks_spotify(job_dir / "decisions.json"),
         "missing_scopes": sorted(REQUIRED_SCOPES - granted) if granted is not None else None,
-        # #161: in direct-callback mode the missing-write-scope hint can also start the flow itself.
+        # In direct-callback mode the missing-write-scope hint can also start the flow itself.
         "callback_mode": bool(config.ui.public_url),
         "running": any(s["state"] == "running" for s in steps.values()),
         "holding": config.holding_dir,
@@ -621,7 +621,7 @@ def _write_json(path: Path, body: Mapping[str, Any]) -> None:
 
 
 def _cleanup_off(request: Request, status: int = 404) -> Response:
-    """What every Clean up route answers while `[prune] enabled` is off (#148): what it does and
+    """What every Clean up route answers while `[prune] enabled` is off: what it does and
     how to turn it on. ``GET /prune`` - the nav's old link, a bookmark - is a page (its route passes
     200, which covers the HEAD Starlette adds too); anything else is not there (404), so a stale
     tab's decide or export changes nothing."""

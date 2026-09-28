@@ -246,7 +246,7 @@ def test_it_does_not_create_a_missing_directory(tmp_path: Path) -> None:
 
 
 def test_the_call_sites_keep_the_modes_they_had(tmp_path: Path, umask_022: None) -> None:
-    """Plan and diff files are 0600 (#158 follow-up); the manifest still keeps the umask's mode
+    """Plan and diff files are 0600; the manifest still keeps the umask's mode
     (it is a record of moves, not a plan); state files were `mkstemp` (0600) already."""
     from datetime import UTC, datetime
 
@@ -271,7 +271,7 @@ def test_the_call_sites_keep_the_modes_they_had(tmp_path: Path, umask_022: None)
 
 
 def test_adopt_and_promote_save_plan_files_are_0600(tmp_path: Path, umask_022: None) -> None:
-    """#158 follow-up: `write_adopt_plan` and `write_plan` (promote-save) kept the umask's mode,
+    """`write_adopt_plan` and `write_plan` (promote-save) kept the umask's mode,
     like `write_diff` did above. `prune_report_command`'s `prune.json` is covered in
     `tests/shell/test_prune_commands.py`, which already has the fakes a real report needs."""
     from datetime import UTC, datetime

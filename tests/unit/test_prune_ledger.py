@@ -1,4 +1,4 @@
-"""The Clean up ledger (#55): what earlier reviews decided."""
+"""The Clean up ledger: what earlier reviews decided."""
 
 from __future__ import annotations
 

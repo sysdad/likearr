@@ -1,6 +1,6 @@
 """A cancelled scheduled run's Spotify read, saved so a redeploy costs zero Spotify calls.
 
-Issue #68 phase 3. The MusicBrainz work a plan does - the slow part, up to
+The MusicBrainz work a plan does - the slow part, up to
 an hour on a cold cache - is already saved lookup by lookup (`adapters/musicbrainz.py`), so a
 re-fired run answers from cache with no network. The one thing not preserved was the Spotify read
 itself: a few dozen requests, done once, up front, by `SpotifySource.read`. So a *scheduled* run

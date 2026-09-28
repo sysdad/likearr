@@ -2,7 +2,7 @@
 
 Real, public cases a v5 dry run got wrong, with the candidates exactly as cached MusicBrainz
 searches list them (same artist, same title, album against single / EP / demo, different
-years). #23 made the earliest first-release date pick
+years). The earliest first-release date was picked
 among them, so every one of these went to an earlier single, EP or demo once v5 re-resolved it.
 
 Jimmy Eat World's search was not cached; its fixture is built from the v5 dry run's report
@@ -172,7 +172,7 @@ def test_a_saved_album_resolves_to_the_album_not_a_same_titled_earlier_single_ep
 
 
 def test_a_saved_ep_beats_the_same_artists_live_album_of_the_same_name() -> None:
-    """#166, R6: "X (Live)" folds to "X" and an Album outranks an EP, so the live album won. A
+    """A title "X (Live)" folds to "X" and an Album outranks an EP, so the live album won. A
     studio release titled exactly as Spotify prints it now comes before any live, demo or
     compilation release, and the type rank decides only what is left."""
     ep = rg("rg-ep", "Seesaw", primary=Ep, released="2014")

@@ -84,7 +84,7 @@ class LidarrArtistUnknown(LidarrMetadataError):
 
 
 class LidarrArtistExists(LidarrError):
-    """Lidarr refused an add because the artist is already there (issue #4).
+    """Lidarr refused an add because the artist is already there.
 
     Carries the artist Lidarr holds, so the caller can decide whose it is: one carrying likearr's
     tag is likearr's own add from a run that stopped before recording it; any other was added by
@@ -113,8 +113,8 @@ class MetadataLookup(Protocol):
         """Every distinct release group holding a release with this barcode, compared as a GTIN.
 
         Leading zeros carry no meaning in a barcode: Spotify pads its UPC to 13 or 14 digits where
-        MusicBrainz usually stores the 12-digit UPC-A, so both sides are compared with them dropped
-        (issue #150). Empty is "not found". Ordered with release groups holding an Official release
+        MusicBrainz usually stores the 12-digit UPC-A, so both sides are compared with them dropped.
+        Empty is "not found". Ordered with release groups holding an Official release
         first; which of several is meant is the resolver's call, never the adapter's.
         """
         ...
@@ -124,7 +124,7 @@ class MetadataLookup(Protocol):
         ...
 
     def recordings_for_isrc(self, isrc: str) -> Sequence[IsrcRecording]:
-        """The same answer as `release_groups_for_isrc`, per recording and with its title (#163).
+        """The same answer as `release_groups_for_isrc`, per recording and with its title.
 
         One ISRC can be filed on two different songs; this says which release groups came from
         which recording, from the same cached search and at no extra request.
@@ -143,7 +143,7 @@ class MetadataLookup(Protocol):
 
         Empty is "not found". Several can be one artist's releases sharing a title (an album and
         its lead single), which the resolver chooses between knowing what kind of Spotify intent
-        asked; or different MusicBrainz artists sharing both the name and the title (issue #32),
+        asked; or different MusicBrainz artists sharing both the name and the title,
         between which only evidence about the track itself (its ISRC) may choose - never a date.
         Ordered by earliest first-release date, then MBID, only for determinism.
         """
@@ -154,7 +154,7 @@ class MetadataLookup(Protocol):
         ...
 
     def search_artist_candidates(self, name: str) -> Sequence[tuple[str, str]]:
-        """Every artist whose name is exactly `name`, as (mbid, name), best-scored first (issue #152).
+        """Every artist whose name is exactly `name`, as (mbid, name), best-scored first.
 
         `search_artist` returns the top one of these and never says there were others; a caller
         that must not guess between namesakes checks for exactly one. Empty is "not found".
@@ -210,7 +210,7 @@ class ArtistLinks(Protocol):
 
 
 class CreditRelations(Protocol):
-    """What MusicBrainz knows that joins two differently-credited artists into one act (issue #14).
+    """What MusicBrainz knows that joins two differently-credited artists into one act.
 
     Separate from `MetadataLookup` for the reason `ReleaseLinkLookup` is: every existing lookup,
     the tests' fakes included, stays complete, and a caller that passes nothing gets the resolver
@@ -327,7 +327,7 @@ class LidarrPort(Protocol):
     def search_release_group(self, artist: str, title: str) -> ReleaseGroup | None: ...
 
     def search_release_group_candidates(self, artist: str, title: str) -> Sequence[ReleaseGroup]:
-        """Lidarr's name search, one hit per artist whose name and title both match (issue #42).
+        """Lidarr's name search, one hit per artist whose name and title both match.
 
         One artist's answer is exactly `search_release_group`'s. Several are same-named artists,
         which the resolver decides between exactly as it does for MusicBrainz's candidates."""
@@ -347,7 +347,7 @@ class LidarrPort(Protocol):
 
         Raise LidarrMetadataError when Lidarr's metadata server fails the add, its subclass
         LidarrArtistUnknown when that server does not know the artist yet, and LidarrArtistExists,
-        carrying the artist Lidarr holds, when the artist is already there (issue #4)."""
+        carrying the artist Lidarr holds, when the artist is already there."""
         ...
 
     def refresh_artist(self, artist: LidarrArtist, *, timeout_s: float = 300) -> None:
@@ -374,7 +374,7 @@ class HealthSink(Protocol):
     """True for a sink that never leaves the machine (stdout). A dry run publishes to local sinks
     only, never to a retained/remote one (MQTT, webhook): a hand-run dry-run applies nothing, and
     publishing it everywhere would overwrite the last real run's retained record and reset a
-    dead-man's-switch built on it (issue #19). See `adapters.health.publish_all`."""
+    dead-man's-switch built on it. See `adapters.health.publish_all`."""
 
     def publish(self, record: HealthRecord) -> None:
         """Best effort; must never raise into the caller (log instead)."""

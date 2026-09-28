@@ -94,7 +94,7 @@ API_BASE = "https://api.spotify.com/v1"
 ME_URL = f"{API_BASE}/me"
 
 READ_SCOPES = " ".join(SPOTIFY_READ_SCOPES)
-"""What a sign-in asks for by default (#161): read follows, the library, and playlists the user
+"""What a sign-in asks for by default: read follows, the library, and playlists the user
 owns or collaborates on. Every command but `promote-save` needs nothing more."""
 
 ALL_SCOPES = " ".join((*SPOTIFY_READ_SCOPES, *SPOTIFY_WRITE_SCOPES))
@@ -107,7 +107,7 @@ Changing either string does not invalidate a stored token: a refresh sends no sc
 scopes the token was granted at consent time, never more. So a token granted before a scope was
 added keeps working for everything it could already do, and gains the new scope only at the next
 Connect / `likearr auth`. Whatever needs a scope checks the stored token for it and says so
-(promote-save's write scopes; `can_read_collaborative` for collaborative playlists, #103); nothing
+(promote-save's write scopes; `can_read_collaborative` for collaborative playlists); nothing
 re-authorizes automatically.
 """
 
@@ -116,7 +116,7 @@ PAGE_LIMIT = 50
 
 TOTAL_TOLERANCE = 2
 """How far a source's entry count may sit from the ``total`` Spotify reported before the read is
-not trusted (#176). A like added or removed mid-read moves ``total``, and offset paging can skip or
+not trusted. A like added or removed mid-read moves ``total``, and offset paging can skip or
 repeat an entry when the library changes under it. Past this, ``schema_ok`` goes false and every
 unmonitor is held back this run."""
 
@@ -320,7 +320,7 @@ _SCOPE_NAME = re.compile(r"[a-z0-9-]{1,64}")
 
 def read_granted_scopes(token_file: Path) -> frozenset[str] | None:
     """The scope names the stored token was granted, for a process that must never refresh it (the
-    web server's Clean up checklist, #58). The same guarantees as `read_authorized_at`: no token
+    web server's Clean up checklist). The same guarantees as `read_authorized_at`: no token
     lock, nothing but scope names returned (each checked to look like one), and ``None`` - never
     an exception or a log line - for any problem at all."""
     try:
@@ -333,7 +333,7 @@ def read_granted_scopes(token_file: Path) -> frozenset[str] | None:
 
 
 def can_read_collaborative(granted: frozenset[str] | None) -> bool:
-    """Whether a token with these scopes may read a playlist the user collaborates on (#103).
+    """Whether a token with these scopes may read a playlist the user collaborates on.
 
     ``None`` (no token, or no scopes recorded) is ``False``: until a Connect grants
     `SPOTIFY_COLLABORATIVE_SCOPE`, a collaborative playlist someone else owns is not offered.
@@ -342,14 +342,14 @@ def can_read_collaborative(granted: frozenset[str] | None) -> bool:
 
 
 def lacks_collaborative(granted: frozenset[str] | None) -> bool:
-    """Whether a stored token (``None``: no token) predates `SPOTIFY_COLLABORATIVE_SCOPE` (#103):
+    """Whether a stored token (``None``: no token) predates `SPOTIFY_COLLABORATIVE_SCOPE`:
     what Settings and Status show their one-time "re-authorize for collaborative playlists" note on.
     """
     return granted is not None and not can_read_collaborative(granted)
 
 
 def asks_for_write_scopes(token_file: Path, *, promote_save: bool = False) -> bool:
-    """Whether a sign-in should ask for `ALL_SCOPES` rather than `READ_SCOPES` (#161).
+    """Whether a sign-in should ask for `ALL_SCOPES` rather than `READ_SCOPES`.
 
     Always when the user opted in (`promote_save`). Otherwise only when the token being replaced
     already has every write scope: re-authorizing replaces the token, and a routine re-auth every
@@ -443,7 +443,7 @@ def _pkce_challenge(verifier: str) -> str:
 
 
 def _check_https_redirect(redirect_uri: str) -> None:
-    """Validate a direct-callback redirect URI (issue #79): https, a real host, no query/fragment.
+    """Validate a direct-callback redirect URI: https, a real host, no query/fragment.
 
     Used only when the web UI's `[ui] public_url` is configured and https; the loopback check
     above governs every other path (the CLI, and the web UI's default paste-back mode).
@@ -542,12 +542,12 @@ class SpotifyAuth:
     ) -> tuple[str, str, str]:
         """Return ``(url, code_verifier, state)`` for the PKCE authorization step.
 
-        The consent screen asks for `READ_SCOPES`, or `ALL_SCOPES` with `include_write` (#161):
+        The consent screen asks for `READ_SCOPES`, or `ALL_SCOPES` with `include_write`:
         callers decide that with `asks_for_write_scopes`.
 
         `redirect_uri` is the CLI's and the web UI's paste-back mode's default: the configured
         loopback URI (`[spotify] redirect_uri`), checked with `_check_loopback_redirect` exactly
-        as before. Passing one overrides it - the web UI's direct-callback mode (issue #79) passes
+        as before. Passing one overrides it - the web UI's direct-callback mode passes
         its ``https://<public_url>/spotify/callback``, checked with `_check_https_redirect`
         instead. Either way this is the one place a PKCE authorize URL is built; `exchange_code`
         must be called with the same `redirect_uri`, since Spotify requires an exact match.
@@ -602,7 +602,7 @@ class SpotifyAuth:
         Binds the exact host/port from ``redirect_uri``, answers the first callback carrying
         ``expected_state`` (the one `build_authorize_url` issued) with a short 'you can close this
         tab' page, and gives up after ``timeout_s``. A callback with no state or another one is
-        answered 400 and the wait goes on (#171), so nothing else on this machine can end it.
+        answered 400 and the wait goes on, so nothing else on this machine can end it.
         """
         host, port, _path = _check_loopback_redirect(redirect_uri)
         captured: dict[str, str] = {}
@@ -610,7 +610,7 @@ class SpotifyAuth:
         class _Handler(BaseHTTPRequestHandler):
             # Bounds each connection's reads: the server now keeps waiting after a refused
             # callback, so a local client that connects and sends nothing must not hold
-            # `handle_request` past the deadline (#171).
+            # `handle_request` past the deadline.
             timeout = LOOPBACK_READ_TIMEOUT_S
 
             def do_GET(self) -> None:  # http.server's required spelling
@@ -938,11 +938,11 @@ def _not_owned_message(playlist_id: str, detail: str, *, auth: SpotifyAuth) -> s
     """The one message a playlist you don't own gets, whichever way Spotify said no.
 
     Shared by both detection paths - a 200 with zero items whose metadata reports tracks, and a
-    403 straight from ``GET /playlists/{id}/items`` (issue #103, item 1) - so a hand-added
+    403 straight from ``GET /playlists/{id}/items`` - so a hand-added
     playlist never reads like a token or scope failure. ``detail`` names which one happened;
     the diagnosis and the workaround stay identical either way. When the stored token predates
-    `SPOTIFY_COLLABORATIVE_SCOPE`, it adds that a playlist you collaborate on needs a re-auth
-    (#103, item 3), since that is the one case a re-authorization fixes.
+    `SPOTIFY_COLLABORATIVE_SCOPE`, it adds that a playlist you collaborate on needs a re-auth,
+    since that is the one case a re-authorization fixes.
     """
     message = (
         f"spotify: playlist {playlist_id} is not owned by you; {detail}. Remove it from "
@@ -1047,8 +1047,8 @@ def authorized_request(
         not_owned_playlist_id: set only by the playlist-items read. A 403 here means the same
             thing a 200-with-zero-items does elsewhere - the playlist is not owned by the
             authorized user - so it is worth its own plain message instead of the generic "Spotify
-            refused the request" (issue #103, item 1: the Get Playlist Items reference documents
-            403 for a non-owner, non-collaborator).
+            refused the request" (the Get Playlist Items reference documents 403 for a
+            non-owner, non-collaborator).
 
     Returns:
         The decoded JSON, or ``{}`` for a body-less success (Spotify's writes answer 200 or 204
@@ -1453,7 +1453,7 @@ def _reported_total(block: Mapping[str, Any]) -> int | None:
 
 
 def _check_total(context: str, read: int, total: int | None, warnings: list[str]) -> None:
-    """Degrade the run when a source's entry count and Spotify's reported total disagree (#176).
+    """Degrade the run when a source's entry count and Spotify's reported total disagree.
 
     A warning, not a ``SchemaError``: ``schema_ok`` then goes false and the diff's ``schema`` guard
     refuses every unmonitor this run, while adds still go ahead. Raising would stop every run,

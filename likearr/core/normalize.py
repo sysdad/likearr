@@ -182,7 +182,7 @@ def _fold(text: str) -> str:
 
     Any character `str.isalnum` accepts survives, in any script: an ASCII-only fold dropped the
     letters that do not decompose (``ø``, ``ł``) and the non-Latin half of a mixed-script string,
-    so "MØ" equalled "M" and "Часть 1" equalled "Глава 1" (issue #166). The MusicBrainz adapter's
+    so "MØ" equalled "M" and "Часть 1" equalled "Глава 1". The MusicBrainz adapter's
     own normaliser folds through `fold_title` too, so the two sides cannot drift apart.
     """
     decomposed = unicodedata.normalize("NFKD", text)
@@ -220,7 +220,7 @@ def normalize_title(title: str) -> str:
 
 
 def _too_short_for_a_credit(head: str) -> bool:
-    """True when what precedes a bare ``feat``/``ft`` is one short word or a number (issue #166).
+    """True when what precedes a bare ``feat``/``ft`` is one short word or a number.
 
     Then the word is part of the title, not a featured credit: "A Feat of Clay" and "50 Ft
     Queenie" are whole titles, and splitting them left "a" and "50", which equal any track titled
@@ -236,7 +236,7 @@ def fold_title(title: str) -> str:
     The literal comparison :func:`normalize_title` is too generous for: it drops every qualifier,
     so ``"All Over (Bear//Face Remix)"`` and ``"All Over"`` both become ``"all over"``, which is
     right for "is this the same release" and wrong for "which of these did Spotify name". The
-    resolver uses this to prefer a release whose title is the one Spotify printed (issue #89).
+    resolver uses this to prefer a release whose title is the one Spotify printed.
 
     >>> fold_title("All Over (Bear//Face Remix)")
     'all over bear face remix'
@@ -377,8 +377,8 @@ def has_remix_marker(text: str) -> bool:
     too, because then the remix is what the user actually liked.
 
     MusicBrainz's ``Remix`` secondary type is the primary signal and is checked separately; this
-    exists because the type is very often simply not set. Every example in issue #15 - "Grease
-    (The Remix EP)", "The Feeling (Remixes)" - is typed ``EP`` with **no** secondary types at
+    exists because the type is very often simply not set. Real examples - "Grease
+    (The Remix EP)", "The Feeling (Remixes)" - are typed ``EP`` with **no** secondary types at
     all, which is exactly why they beat the real album on size and why the type check alone
     changes nothing.
 
@@ -414,7 +414,7 @@ def credits_match(a: str, b: str) -> bool:
     :func:`strip_bare_featuring` on each side.
 
     Full equality, never containment: ``"John Mayer"`` does not match ``"John Mayer Trio"``. The
-    MusicBrainz adapter's name-search credit gate and the resolver's relationship join (issue #14)
+    MusicBrainz adapter's name-search credit gate and the resolver's relationship join
     both use this one definition, so the two cannot drift apart.
 
     >>> credits_match("Branford Marsalis Quartet", "The Branford Marsalis Quartet")

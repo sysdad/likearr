@@ -19,8 +19,8 @@
 {%- else %}<span class="pill">{{ label or m.state }}</span>{% endif -%}
 {%- endmacro %}
 
-{# The Status banner's Spotify re-authorization line (#138): `note` is one of the keys
-   `reauth_banner_note` returns - "no-token" is #118's wording, unchanged. #}
+{# The Status banner's Spotify re-authorization line: `note` is one of the keys
+   `reauth_banner_note` returns, unchanged. #}
 {% macro reauth_sentence(reauth, note) -%}
 {%- if note == "no-token" -%}
 Spotify is not connected. Connect it in <a href="/settings#spotify">Settings</a>.

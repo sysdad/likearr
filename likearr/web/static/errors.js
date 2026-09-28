@@ -1,4 +1,4 @@
-// likearr web UI (#129): a visible banner for any hx-post that fails - the service is down, a
+// likearr web UI: a visible banner for any hx-post that fails - the service is down, a
 // proxy returns 5xx, or the request never reaches the server at all. Without this, the control
 // (a radio, a select) shows the value the person just picked while nothing was actually saved,
 // and the only way to notice is that the page around it never changed.

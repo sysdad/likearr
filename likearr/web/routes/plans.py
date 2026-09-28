@@ -1,9 +1,8 @@
 """Check for changes and Apply changes: the plan pages' routes - starting a dry run, reviewing
-its plan section by section, applying it, and "Not this one" (#30).
+its plan section by section, applying it, and "Not this one".
 
-Split out of `likearr.web.app` (#154); `create_app` mounts `ROUTES` where these routes always
-stood in its list, and passes `AFTER` to `_Web` for the file count and names after a check
-(#266).
+Split out of `likearr.web.app`; `create_app` mounts `ROUTES` where these routes always
+stood in its list, and passes `AFTER` to `_Web` for the file count and names after a check.
 """
 
 from __future__ import annotations
@@ -48,14 +47,14 @@ from likearr.web.plans import (
 )
 
 log = logging.getLogger("likearr.web.app")
-"""Under the app's own name, so log lines read as they did before the split (#154)."""
+"""Under the app's own name, so log lines read as they did before the split."""
 
 
 PLAN_HISTORY_ROWS = 200
 """Enough runs to know whether an apply has landed since any plan still worth showing (a week)."""
 
 
-# ---------------------------------------------------------------- plans (#30)
+# ---------------------------------------------------------------- plans
 
 PLAN_ESTIMATE = timedelta(minutes=15)
 """A dry run's length when there is no earlier plan to go by. Minutes on a warm cache; up to an hour
@@ -125,7 +124,7 @@ def _plan_page_context(web: _Web, config: Config, error: str = "") -> dict[str, 
         "shrink_known": last is not None,
         "shrinks_accepted": last is not None and last.accept_shrink,
         # No check ever recorded, so a check here would hit MusicBrainz cold at 1 request a
-        # second for every song (issue #120). Misses a user who wiped `mb_cache` or bumped the
+        # second for every song. Misses a user who wiped `mb_cache` or bumped the
         # resolver, which is rare; that trade is deliberate, not an oversight.
         "first_check": last is None,
         "next_fire": fire,
@@ -476,7 +475,7 @@ def plan_apply_page(request: Request) -> Response:
         return web.render(request, "plan_apply.html", {"config_error": str(exc)}, 409)
     state = _plan_state_now(web, config, meta, diff)
     context = _apply_context(web, meta, diff, state)
-    # From a name collision's "Accept as known" (#54): the box ticked and the reason spelled out.
+    # From a name collision's "Accept as known": the box ticked and the reason spelled out.
     # Still a submit away: nothing is applied, and nothing accepted, without the button.
     context["accept_preset"] = request.query_params.get("accept_health") == "1" and bool(diff.name_collisions)
     return web.render(request, "plan_apply.html", context)
@@ -548,7 +547,7 @@ async def plan_deny(request: Request) -> Response:
         return PlainTextResponse("not a release this plan monitors", status_code=400)
     reasons = monitored[release].reasons
     if not deniable(reasons):
-        # The button is not drawn on such a row (#153); a stale page or a hand-made post still
+        # The button is not drawn on such a row; a stale page or a hand-made post still
         # must not write a refusal that changes nothing.
         request.session["flash"] = f"Not this one can't stop {release}: {deny_note(reasons)}"
         return RedirectResponse(f"/plan/{found[0].id}", status_code=303)

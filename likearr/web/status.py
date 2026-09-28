@@ -7,7 +7,7 @@ without a server. Three rules from the design shape it:
   dry runs included, and a UI dry run five minutes ago must not look like it changed anything.
   A skipped, stale or failed apply changed nothing either, so none of them is "last applied" -
   unless it failed part-way, having changed some of Lidarr: that one is, and says how far it got
-  ("stopped part-way: 12 of 40 changes made", #54).
+  ("stopped part-way: 12 of 40 changes made").
 - **What moved, not what stands.** The chronic counts (hundreds of unmapped songs on a
   large library, every run) are what the health change detection exists to look past,
   so the page spells out the ``*_new`` counts and the new conditions, never the totals.
@@ -99,7 +99,7 @@ class RunSummary:
     tone: str
     """``ok``, ``warn``, ``bad`` or ``quiet`` - the page's colour, and nothing else."""
     run_id: int = 0
-    """The `runs` row id (`RunRow.id`); 0 when built without one. What `/runs/<id>` (#76) links to
+    """The `runs` row id (`RunRow.id`); 0 when built without one. What `/runs/<id>` links to
     for this run's full "What changed"."""
     conditions: list[str] = field(default_factory=list)
     newly: list[str] = field(default_factory=list)
@@ -159,13 +159,13 @@ class StatusView:
     """Lidarr's Wanted > Missing page, for the "waiting for a download" note. Empty without a
     `lidarr_url` (same rule as `collision_cards`): a bare path would open on the likearr UI itself."""
     tagged_without_state: int = 0
-    """From the newest run that planned (#175): artists carrying likearr's Lidarr tag that the state
+    """From the newest run that planned: artists carrying likearr's Lidarr tag that the state
     database has no record of. A run that failed before it read Lidarr does not hide it, and a
     record from before the field existed reads as 0."""
 
 
 def lost_state_sentence(count: int, tag: str) -> str:
-    """Status's line for #175's lost-state warning, or ``""`` when there is nothing to say."""
+    """Status's line for the lost-state warning, or ``""`` when there is nothing to say."""
     if count <= 0:
         return ""
     artists = "1 artist" if count == 1 else f"{count} artists"
@@ -194,7 +194,7 @@ def ago(now: datetime, then: datetime) -> str:
 
 
 _MESSAGE_TRUNCATE_CHARS = 120
-"""#142: history's Message column holds whatever the run wrote - up to a raw JSON body with a
+"""History's Message column holds whatever the run wrote - up to a raw JSON body with a
 Spotify URL twice over, hundreds of characters on one row. The full text still reaches the
 page, in the `title` attribute next to this - only what's shown inline is capped."""
 
@@ -220,7 +220,7 @@ _NEW_ITEMS_NONE = '"Monitor New Albums: None"'
 def _headline(record: HealthRecord) -> str:
     counts = record.counts
     monitored, unmonitored, added = counts.get("monitored", 0), counts.get("unmonitored", 0), counts.get("added", 0)
-    none_set = counts.get("new_items_none", 0)  # #172: said only when there are some
+    none_set = counts.get("new_items_none", 0)  # Said only when there are some
     if record.status is RunStatus.SKIPPED:
         return "Skipped: another run was already in progress."
     if record.status is RunStatus.PAUSED:
@@ -231,7 +231,7 @@ def _headline(record: HealthRecord) -> str:
         if not record.dry_run and record.changes_made:
             if record.changes_planned is not None and record.changes_made >= record.changes_planned:
                 # Everything planned reached Lidarr (a batch it applied but then answered with an
-                # error, #174) - not "part-way", the confirmation was what failed.
+                # error) - not "part-way", the confirmation was what failed.
                 return (
                     f"Finished: all {record.changes_planned} planned changes made, but confirming it "
                     f"failed. {_why_stopped(record)}"
@@ -353,11 +353,11 @@ def reauth_view(authorized_at: datetime | None, due: datetime | None, *, now: da
 
 
 def reauth_banner_note(reauth: ReauthView, *, has_token: bool) -> str:
-    """Which sentence, if any, the Status banner adds about Spotify re-authorization (#138).
+    """Which sentence, if any, the Status banner adds about Spotify re-authorization.
 
     The banner is the single place on the page that says whether something needs the user, so
     both its branches - the green "All good" and the amber "Needs attention" - call this to decide
-    whether a re-auth sentence belongs there, and which one. The rule (#138): a
+    whether a re-auth sentence belongs there, and which one. The rule: a
     due or expired token never becomes a *problem* - `health_glance` and its `problems` are
     unchanged by this, so Home Assistant's amber stays in step with `HealthGlance.healthy`, and an
     expired token only turns the banner amber once a run actually fails.
@@ -367,7 +367,7 @@ def reauth_banner_note(reauth: ReauthView, *, has_token: bool) -> str:
     full sentence (the date and the Settings link are the template's job, not this pure function's
     - it has no timezone to format one with):
 
-    - "no-token": no token file at all. #118's wording.
+    - "no-token": no token file at all.
     - "unknown-date": a token file with no `authorized_at`: re-authorizing records it.
     - "due-soon": due within the warn window.
     - "overdue": due date has passed.
@@ -542,7 +542,7 @@ class ChecklistStep:
 
 def first_run_checklist(*, has_token: bool, published: bool) -> list[ChecklistStep] | None:
     """The three-step setup checklist Status shows in place of "No run has finished yet." on a
-    fresh install (#118): connect Spotify, set up Lidarr, check for changes - the same steps the
+    fresh install: connect Spotify, set up Lidarr, check for changes - the same steps the
     README's quick start walks through.
 
     Shown whenever a step is not done yet - no token file, or no run has ever published to the
@@ -635,8 +635,8 @@ class Coverage:
     unmatched: int
     """Couldn't be matched: the true misses. Nothing is monitored for them."""
     ambiguous: int
-    """Two different artists share the name and the title, and likearr would not guess which (#32).
-    Counted apart from `unmatched` so each line equals the Not added page's card for it (#60)."""
+    """Two different artists share the name and the title, and likearr would not guess which.
+    Counted apart from `unmatched` so each line equals the Not added page's card for it."""
     excluded: int
     """Left out by your settings (a remix, a compilation, a denied release)."""
     lookup_failed: int

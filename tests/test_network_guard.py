@@ -1,4 +1,4 @@
-"""The no-network guard itself (issue #137): every other test in the suite already relies on it
+"""The no-network guard itself: every other test in the suite already relies on it
 being active, so this is the one place that proves it actually blocks something."""
 
 from __future__ import annotations

@@ -25,7 +25,7 @@ _REDACT_PATTERNS = [
     re.compile(r"(?i)(access_token[\"']?\s*[:=]\s*[\"']?)[^\s\"',&]+"),
     re.compile(r"(?i)(refresh_token[\"']?\s*[:=]\s*[\"']?)[^\s\"',&]+"),
     # Spotify's authorization ``code`` query parameter: it is a one-time secret good for a token
-    # exchange, so an OAuth callback URL (issue #79's ``/spotify/callback``, and uvicorn's own
+    # exchange, so an OAuth callback URL (``/spotify/callback``, and uvicorn's own
     # access log line for it) must never carry it in the clear. Matched only as a query parameter
     # (preceded by ``?`` or ``&``), not the many unrelated things named "code" elsewhere.
     re.compile(r"(?i)([?&]code=)[^\s&'\"]+"),

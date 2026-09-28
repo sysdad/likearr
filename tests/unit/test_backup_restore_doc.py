@@ -1,10 +1,10 @@
-"""issue #115: `docs/DEPLOY.md`'s "Backup and restore" section names every file under `/data` (plus
+"""`docs/DEPLOY.md`'s "Backup and restore" section names every file under `/data` (plus
 the compose `.env` file) that the always-on service needs to survive a disk loss or a host move.
 
 Every file it lists is checked against the code that actually defines its path, the same way
 `test_docs_spotify.py` and `test_compose_example.py` check their own docs, so a path that moves in
-the code fails this test instead of silently going stale in the doc. Text-level checks confirm the
-things the issue called out explicitly: no leftover cron-timing or `sqlite3` CLI advice, and the
+the code fails this test instead of silently going stale in the doc. Text-level checks confirm
+there is no leftover cron-timing or `sqlite3` CLI advice, and that the
 two "restore from backup" pointers elsewhere in the docs link to this section.
 """
 

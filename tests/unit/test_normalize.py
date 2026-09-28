@@ -100,7 +100,7 @@ def test_two_non_latin_titles_do_not_collide() -> None:
 
 
 DIFFERENT_OUTSIDE_PLAIN_LATIN = [
-    # #166: letters that do not decompose, and the non-Latin half of a mixed-script string, used
+    # Letters that do not decompose, and the non-Latin half of a mixed-script string, used
     # to vanish from the fold, so each of these pairs compared equal
     ("MØ", "M"),
     ("Łona", "Ona"),
@@ -142,7 +142,7 @@ def test_a_title_of_punctuation_alone_still_keeps_a_distinguishing_form() -> Non
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [
-        # #166: a bare "feat"/"ft" word inside a title is not a credit when all that precedes it
+        # A bare "feat"/"ft" word inside a title is not a credit when all that precedes it
         # is one short word or a number
         ("A Feat of Clay", "a feat of clay"),
         ("50 Ft Queenie", "50 ft queenie"),
@@ -188,10 +188,10 @@ RELEASE_QUALIFIERS = [
     ("Game Winner - EP (Deluxe Edition)", "Game Winner"),
     ("Everything In Transit (Non-PA Release)", "Everything In Transit"),
     ("Break Our Fall (In Progress)", "Break Our Fall"),
-    # issue #21: a bare trailing qualifier with no bracket or " - " separator at all - the shape
+    # A bare trailing qualifier with no bracket or " - " separator at all - the shape
     # MusicBrainz stores "Kangaroo EP" in, undecorated.
     ("Kangaroo EP", "Kangaroo"),
-    # issue #21: added to the release-qualifier vocabulary for the Noelle/Superfly/Elf cases.
+    # Added to the release-qualifier vocabulary for the Noelle/Superfly/Elf cases.
     ("Noelle (Original Motion Picture Soundtrack)", "Noelle"),
     ("Superfly (Original Soundtrack)", "Superfly"),
     ("Elf (Music from the Major Motion Picture)", "Elf"),
@@ -258,8 +258,8 @@ def test_strip_bare_featuring_leaves_a_credit_without_one_alone() -> None:
 @pytest.mark.parametrize(
     "title",
     [
-        "Grease (The Remix EP)",  # issue #15, MBID 2f26958e-b86d-3b3c-8a15-57253046ea58
-        "The Feeling (Remixes)",  # issue #15, MBID d83c4c9b-e79a-4f6d-97f3-cda0045bd993
+        "Grease (The Remix EP)",  # MBID 2f26958e-b86d-3b3c-8a15-57253046ea58
+        "The Feeling (Remixes)",  # MBID d83c4c9b-e79a-4f6d-97f3-cda0045bd993
         "Uptown Funk (feat. Bruno Mars) [The Remixes]",
         "Blinding Lights - Chromatics Remix",
         "Some Song (Remixed)",

@@ -1,7 +1,7 @@
 """Helpers more than one part of the web app uses: the Status and job pages in `app`, the
 Settings and Plans routes in `routes`, and `_Web` in `context`.
 
-Split out of `likearr.web.app` (#154). Imports `context` only for type checking, never at run
+Split out of `likearr.web.app`. Imports `context` only for type checking, never at run
 time, so `context` can import this module.
 """
 
@@ -24,11 +24,11 @@ if TYPE_CHECKING:
 
 
 log = logging.getLogger("likearr.web.app")
-"""Under the app's own name, so log lines read as they did before the split (#154)."""
+"""Under the app's own name, so log lines read as they did before the split."""
 
 
 def _first_applied(config: Config) -> bool:
-    """Whether a hand apply has completed, so scheduled applies may go ahead (#111). A missing
+    """Whether a hand apply has completed, so scheduled applies may go ahead. A missing
     state database is a new install that has not, and is never created here: see healthz."""
     if not config.state_db.is_file():
         return False
@@ -50,7 +50,7 @@ def _names_of(fetched: Mapping[str, Any]) -> dict[str, str]:
 
 
 def _readable(entry: Mapping[str, Any]) -> bool:
-    """A `playlists --json` entry's ``readable`` (#103, item 3), else True, as the picker has
+    """A `playlists --json` entry's ``readable``, else True, as the picker has
     always read a bare entry."""
     value = entry.get("readable")
     return value if isinstance(value, bool) else True
@@ -59,7 +59,7 @@ def _readable(entry: Mapping[str, Any]) -> bool:
 def _not_owned_ids_of(fetched: Mapping[str, Any]) -> frozenset[str]:
     """Ids a `playlists --json` answer lists but marks not readable - followed, someone else's
     (a collaborative one only until the token may read it), or one of Spotify's own algorithmic
-    or editorial playlists. What the picker greys out and a settings save refuses (issue #103)."""
+    or editorial playlists. What the picker greys out and a settings save refuses."""
     return frozenset(
         str(p["id"]) for p in fetched["playlists"] if isinstance(p, dict) and p.get("id") and not _readable(p)
     )
@@ -67,7 +67,7 @@ def _not_owned_ids_of(fetched: Mapping[str, Any]) -> frozenset[str]:
 
 def _needs_reauth_ids_of(fetched: Mapping[str, Any]) -> frozenset[str]:
     """Ids a `playlists --json` answer marks ``needs_reauth``: collaborative playlists the stored
-    token cannot read until Spotify is re-authorized (#103, item 3)."""
+    token cannot read until Spotify is re-authorized."""
     return frozenset(
         str(p["id"])
         for p in fetched["playlists"]

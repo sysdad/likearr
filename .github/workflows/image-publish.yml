@@ -1,7 +1,7 @@
 name: image-publish
 # Publishes multi-arch images to GHCR. This is the ONLY workflow (and job) that can push there,
 # and its ONLY trigger is a `v*` tag push below - no branch push, no pull_request, no
-# workflow_dispatch, no schedule (issue #105, publish half). ci.yml's `docker` job builds the same
+# workflow_dispatch, no schedule. ci.yml's `docker` job builds the same
 # image on every PR and push to main, but never logs in and never pushes.
 on:
   push:
@@ -29,7 +29,7 @@ jobs:
       - name: Lowercase the repository owner
         id: owner
         # GHCR image paths must be all-lowercase; github.repository_owner can contain capitals,
-        # and this workflow has to work for whichever owner the repo lives under (#105).
+        # and this workflow has to work for whichever owner the repo lives under.
         run: |
           echo "name=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
 
@@ -54,7 +54,7 @@ jobs:
 
       - name: Build amd64 image for the smoke test
         # The same Dockerfile the push step below uses, built and tested BEFORE anything reaches
-        # GHCR, so a broken image never publishes (#105). A multi-platform build can't be
+        # GHCR, so a broken image never publishes. A multi-platform build can't be
         # `load`ed into the local daemon to run, so this is a single-arch (amd64, the runner's
         # native platform) build purely to smoke-test; its GHA cache is reused by the amd64 leg
         # of the push build below.
@@ -71,18 +71,18 @@ jobs:
           cache-from: type=gha,scope=docker-linux/amd64
           cache-to: type=gha,mode=max,scope=docker-linux/amd64
 
-      # Identical to ci.yml's amd64 smoke test (#105, #171): a broken published image is worse
+      # Identical to ci.yml's amd64 smoke test: a broken published image is worse
       # than a broken PR build, so this is not abbreviated.
       - name: Smoke test
         run: |
           set -euo pipefail
 
           workdir="$(mktemp -d)"
-          # No config.toml (#3): a first start writes one from the example baked into the image, so
+          # No config.toml: a first start writes one from the example baked into the image, so
           # this is the Compose quick start exactly - an empty /data and environment variables only.
           # Nothing here needs to be reachable: `/healthz` only requires the config to parse and
           # /data to exist and be writable.
-          # --user 1030:100 (#105) is an arbitrary uid/gid with no /etc/passwd
+          # --user 1030:100 is an arbitrary uid/gid with no /etc/passwd
           # entry in the image, so the bind mount has to be world-writable rather than owned by it.
           chmod -R a+rwX "${workdir}"
 
@@ -94,7 +94,7 @@ jobs:
           docker run --rm --user 1030:100 likearr:publish-smoke doctor --help
           echo "::endgroup::"
 
-          # #171: the code is root-owned, nothing under /app is world-writable, neither the default
+          # The code is root-owned, nothing under /app is world-writable, neither the default
           # user nor 1030:100 can write it, likearr itself ships precompiled, and the working directory
           # (/data) is not on sys.path. A published image is worse to get this wrong on than a PR
           # build, so this is the same check ci.yml's docker job runs, not a smaller version of it.

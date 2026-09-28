@@ -1,4 +1,4 @@
-"""Atomic, durable file writes (#158).
+"""Atomic, durable file writes.
 
 Every state and plan file likearr writes goes through `write_atomic`: a temp file beside the
 target, fsynced, renamed over it, then the directory fsynced. A reader sees the old file or the

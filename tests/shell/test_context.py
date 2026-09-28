@@ -17,7 +17,7 @@ FAKE_API_KEY = "fake-api-key-0000"
 
 @pytest.mark.usefixtures("preserve_root_logging")
 def test_the_lidarr_client_refuses_a_cross_origin_redirect(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Runs, Doctor and Lidarr setup all reach Lidarr through this one client (#171)."""
+    """Runs, Doctor and Lidarr setup all reach Lidarr through this one client."""
     seen: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -73,7 +73,7 @@ _LOADABLE = '[lidarr]\nroot_folder = "/music"\nquality_profile = "Standard"\n[st
 def test_doctor_without_a_lidarr_url_is_one_line_naming_the_variable(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Issue #3: read like the API key - the config loads, and building the Lidarr client refuses."""
+    """Read like the API key - the config loads, and building the Lidarr client refuses."""
     from likearr.models import EXIT_ERROR
     from likearr.shell import cli
 

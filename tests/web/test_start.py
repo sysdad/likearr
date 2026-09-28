@@ -14,7 +14,7 @@ from likearr.shell import cli
 from tests.web.app_support import CONFIG
 
 PASSWORD = "start-test-password-long-enough"
-"""Long enough for `start`'s minimum (issue #170), for every test that is not about the password."""
+"""Long enough for `start`'s minimum, for every test that is not about the password."""
 
 
 @pytest.fixture
@@ -83,7 +83,7 @@ def test_start_refuses_a_password_shorter_than_the_minimum(
     uvicorn_calls: list[dict[str, Any]],
     value: str,
 ) -> None:
-    """A one-character password used to start the service and log in (issue #170)."""
+    """A one-character password used to start the service and log in."""
     monkeypatch.setenv("LIKEARR_UI_PASSWORD", value)
 
     assert cli.main(["start", "-c", str(config_path)]) == EXIT_ERROR
@@ -155,7 +155,7 @@ def test_start_logs_the_allowed_host_list(
     uvicorn_calls: list[dict[str, Any]],
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """`docker compose logs` is where a stuck user looks next after a refused Host (issue #169)."""
+    """`docker compose logs` is where a stuck user looks next after a refused Host."""
     import likearr.web.server as server_module
 
     monkeypatch.setenv("LIKEARR_UI_PASSWORD", PASSWORD)
@@ -178,7 +178,7 @@ def test_start_turns_the_scheduler_on(
     no_context: None,
     uvicorn_calls: list[dict[str, Any]],
 ) -> None:
-    """`likearr start` runs the scheduler (issue #68 phase 2); tests turn it off by default so a
+    """`likearr start` runs the scheduler; tests turn it off by default so a
     background thread is never running behind a test that never asked for it."""
     import likearr.web.server as server_module
     from likearr.web.app import WebSettings as _WebSettings
@@ -233,7 +233,7 @@ def test_start_on_an_empty_data_dir_writes_the_config_and_serves_any_ipv4_addres
     no_context: None,
     uvicorn_calls: list[dict[str, Any]],
 ) -> None:
-    """Issue #3: the README's Compose block - environment variables and an empty `/data` - and
+    """The README's Compose block - environment variables and an empty `/data` - and
     nothing else. The first start writes config.toml from the example and serves; the next start
     reads that file unchanged."""
     from starlette.testclient import TestClient
@@ -303,7 +303,7 @@ def test_start_refuses_a_removed_key_naming_its_variable(
     line: str,
     env: str,
 ) -> None:
-    """An upgraded install that has not moved its settings yet does not start (#3)."""
+    """An upgraded install that has not moved its settings yet does not start."""
     monkeypatch.setenv("LIKEARR_UI_PASSWORD", PASSWORD)
     path = tmp_path / "config.toml"
     path.write_text(line)

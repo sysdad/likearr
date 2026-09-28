@@ -308,7 +308,7 @@ def _lookup_hit(rg: str, title: str, artist_mbid: str, artist: str = "Jungle") -
 
 @respx.mock
 def test_search_candidates_keep_two_same_named_artists_apart(lidarr: LidarrClient) -> None:
-    """Issue #42: the first name match used to win, which is a guess between two artists called
+    """The first name match used to win, which is a guess between two artists called
     "Jungle". Every artist whose name and title match comes back, each with its first hit."""
     respx.get(f"{V1}/album/lookup").mock(
         return_value=httpx.Response(
@@ -350,7 +350,7 @@ def test_search_candidates_for_one_artist_are_exactly_the_old_answer(lidarr: Lid
     assert lidarr.search_release_group_candidates("", "Fake Album") == ()
 
 
-# ---------------------------------------------------------------- issue #5: non-Latin names
+# ---------------------------------------------------------------- non-Latin names
 
 # Invented names. Each pair shares a title in one script under two different artists.
 NON_LATIN_STRANGERS = [
@@ -366,7 +366,7 @@ NON_LATIN_STRANGERS = [
 def test_search_candidates_refuse_a_same_titled_album_by_another_non_latin_artist(
     lidarr: LidarrClient, title: str, wanted: str, stranger: str
 ) -> None:
-    """Issue #5: an ASCII-only fold turned every non-Latin name into "", so any two such artists
+    """An ASCII-only fold turned every non-Latin name into "", so any two such artists
     compared equal and the fallback handed back a stranger's same-titled album."""
     respx.get(f"{V1}/album/lookup").mock(
         return_value=httpx.Response(200, json=[_lookup_hit("rg-stranger", title, "artist-stranger", stranger)])
@@ -497,7 +497,7 @@ def test_add_artist_handles_already_exists(lidarr: LidarrClient) -> None:
         lidarr.add_artist(
             ARTIST_MBID, "Fake Band", root_folder="/music", quality_profile_id=2, metadata_profile_id=1, tag_ids=[]
         )
-    assert caught.value.artist.id == 7, "carries the artist Lidarr holds, for apply to judge by its tag (#4)"
+    assert caught.value.artist.id == 7, "carries the artist Lidarr holds, for apply to judge by its tag"
     assert not isinstance(caught.value, LidarrMetadataError), "not an outage"
     assert listing.call_count == 1
 
@@ -517,7 +517,7 @@ def test_add_artist_reraises_other_400s(lidarr: LidarrClient) -> None:
 @respx.mock
 @pytest.mark.parametrize("status", [500, 503])
 def test_add_artist_maps_a_server_side_error_to_a_metadata_failure(lidarr: LidarrClient, status: int) -> None:
-    """Issue #173: Lidarr answers a SkyHook outage on POST /artist with a 5xx. That skips the artist."""
+    """Lidarr answers a SkyHook outage on POST /artist with a 5xx. That skips the artist."""
     respx.post(f"{V1}/artist").mock(return_value=httpx.Response(status, text="skyhook is down"))
     with pytest.raises(LidarrMetadataError) as caught:
         lidarr.add_artist(
@@ -534,7 +534,7 @@ LIDARR_NOT_FOUND = [
         "severity": "error",
     }
 ]
-"""Lidarr 3.1's 400 for an MBID its metadata server (SkyHook) does not know yet (rig B, #173)."""
+"""Lidarr 3.1's 400 for an MBID its metadata server (SkyHook) does not know yet (rig B)."""
 
 
 @respx.mock
@@ -952,7 +952,7 @@ def test_set_artists_monitored_batches(lidarr: LidarrClient) -> None:
 
 
 def test_likearr_never_posts_a_lidarr_search_command() -> None:
-    """likearr monitors; it never searches (#146). A grep, not a claim: Lidarr's own AlbumSearch,
+    """likearr monitors; it never searches. A grep, not a claim: Lidarr's own AlbumSearch,
     MissingAlbumSearch and ArtistSearch command names must never appear anywhere under `likearr/`.
     The only command names posted today are RefreshArtist (`refresh_artist`, above) and
     RescanFolders (`rescan_artist`), and `add_artist`'s `addOptions.searchForMissingAlbums` is
@@ -970,7 +970,7 @@ def test_likearr_never_posts_a_lidarr_search_command() -> None:
     assert hits == []
 
 
-# ---------------------------------------------------------------------------- redirects (#171)
+# ---------------------------------------------------------------------------- redirects
 
 
 def _redirecting_lidarr(

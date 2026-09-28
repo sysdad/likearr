@@ -90,8 +90,7 @@ def runner(tmp_path: Path, fake_cli: list[str]) -> Iterator[JobRunner]:
     runner = JobRunner(tmp_path / "ui" / "jobs", fake_cli, lock_path=tmp_path / "likearr.lock")
     yield runner
     # Most tests already join every job they start (`_finish`, `cancel` + `_finish`, or their own
-    # `shutdown`); this is the safety net for the rest, and for whatever the next test adds
-    # (issue #137).
+    # `shutdown`); this is the safety net for the rest, and for whatever the next test adds.
     runner.shutdown(timeout=5)
 
 
@@ -217,7 +216,7 @@ def test_a_child_that_reports_the_run_lock_held_is_busy_not_failed(runner: JobRu
 
 
 def test_busy_comes_from_the_exit_code_never_from_words_in_the_log(runner: JobRunner) -> None:
-    """#54: the phrase "holds the lock" in a failed child's log no longer reads as busy."""
+    """The phrase "holds the lock" in a failed child's log no longer reads as busy."""
     meta = runner.start("run", ["says-lock-fails"])
     _finish(runner, meta.id)
 
@@ -252,7 +251,7 @@ def test_the_lock_check_releases_the_lock_before_the_child_starts(runner: JobRun
     assert runner.get(meta.id).state is JobState.DONE  # type: ignore[union-attr]
 
 
-# ---------------------------------------------------------------- submit_scheduled (issue #68 phase 2)
+# ---------------------------------------------------------------- submit_scheduled
 
 
 def test_submit_scheduled_starts_at_once_when_the_slot_is_free(runner: JobRunner) -> None:
@@ -342,9 +341,9 @@ def test_a_scheduled_fire_queues_rather_than_skips_when_our_own_job_holds_the_ru
 ) -> None:
     """The run lock is genuinely held (a real `flock`, not a fake), but by a job *this* JobRunner
     started (a UI "run" job) - not by something external (the host cron line). It must queue
-    behind that job, not be misread as an external collision and skipped at once (issue #68's
-    lock-probe fix): probing while the slot is busy would see the lock held either way, so the
-    probe only ever runs when the slot is free.
+    behind that job, not be misread as an external collision and skipped at once: probing while
+    the slot is busy would see the lock held either way, so the probe only ever runs when the
+    slot is free.
     """
     holder = runner.start("run", ["hold-lock", str(tmp_path / "likearr.lock"), "0.3"])
 
@@ -459,7 +458,7 @@ def test_shutdown_waits_for_a_job_that_must_drain(runner: JobRunner) -> None:
     assert runner.get(meta.id).state is JobState.DONE  # type: ignore[union-attr]
 
 
-# ------------------------------------------------------- scheduled shutdown by phase (issue #68 phase 3)
+# ------------------------------------------------------- scheduled shutdown by phase
 
 
 def _wait_for_phase(runner: JobRunner, meta: JobMeta, timeout: float = 2.0) -> None:
@@ -805,7 +804,7 @@ def test_a_job_can_name_the_plan_it_applies(runner: JobRunner) -> None:
     assert runner.get(meta.id).plan_id == "2026-09-23T17-00-00Z-a1b2c3"  # type: ignore[union-attr]
 
 
-# ---------------------------------------------------------------- #38 review: pruning, cancel, session
+# ---------------------------------------------------------------- pruning, cancel, session
 
 
 def test_pruning_never_removes_a_plan_that_may_still_be_applied_nor_the_one_being_applied(
@@ -887,7 +886,7 @@ def test_an_after_callback_runs_once_the_slot_is_free_and_may_start_the_next_job
     assert runner.get(started[0]).kind == "playlists"  # type: ignore[union-attr]
 
 
-# ---------------------------------------------------------------- a job that outlives the server (#30)
+# ---------------------------------------------------------------- a job that outlives the server
 
 
 def _plant_running(root: Path, job_id: str, *, pid: int, pid_start: str, argv: list[str], kind: str = "apply") -> Path:

@@ -51,16 +51,16 @@ SCHEMA_VERSION = 8
 Purely additive - a v1 file gains two empty tables and reads as "no baseline yet", which is the
 first-run path, so an upgraded deployment re-baselines silently instead of alarming.
 
-3: `gap_refreshes`, the per-artist backoff on the freshness refreshes from issue #8. Additive in
+3: `gap_refreshes`, the per-artist backoff on the freshness refreshes. Additive in
 the same way - a v2 file gains one empty table and reads as "never refreshed for a gap", so the
 first run after the upgrade refreshes normally and the backoff starts from there.
 
-4: `lidarr_negative_cache`, which Lidarr metadata search terms/lookups fail server-side, from
-issue #18. Additive in the same way - a v3 file gains one empty table and reads as "nothing
+4: `lidarr_negative_cache`, which Lidarr metadata search terms/lookups fail server-side.
+Additive in the same way - a v3 file gains one empty table and reads as "nothing
 cached yet", so the first run after the upgrade asks Lidarr about every term exactly as before.
 
-5: `health_baseline_meta.rules`, the `ExclusionRules.token` a baseline was collected under
-(issue #15). The first change here that is a **column** rather than a table, so
+5: `health_baseline_meta.rules`, the `ExclusionRules.token` a baseline was collected under.
+The first change here that is a **column** rather than a table, so
 `CREATE TABLE IF NOT EXISTS` is no longer the whole migration - see `_ensure_schema`. Still
 additive, and additive in both directions: an older file gains the column at its default `''`,
 which is also the token of a default configuration, so an upgraded deployment keeps comparing
@@ -69,17 +69,17 @@ against a v5 file still works, because every read names its columns and every wr
 `rules`, which the default fills in. That matters because this is the version a rollback would
 cross.
 
-6: `scheduler_state`, one row recording the in-service scheduler's last fire time (issue #68 phase
-2). Additive, a new table only: an older file gains it empty, which reads as "never fired before",
+6: `scheduler_state`, one row recording the in-service scheduler's last fire time. Additive, a
+new table only: an older file gains it empty, which reads as "never fired before",
 and the scheduler's own first-start rule (no catch-up with no record) makes that the correct answer
 rather than a false missed-fire.
 
 7: `scheduler_state.cancelled`, a column recording whether the last fire was cancelled by a
-redeploy while still planning (issue #68 phase 3). A v6 file gains it at its default `0`, which
+redeploy while still planning. A v6 file gains it at its default `0`, which
 reads as "not cancelled" - the same as any fire that ran to completion - so an upgrade never
 invents a missed fire that never happened.
 
-8: `first_apply`, one row recording when a hand `run --apply` first completed (issue #111).
+8: `first_apply`, one row recording when a hand `run --apply` first completed.
 Scheduled applies are held until it exists, so a new install's first plan is always reviewed
 before anything unattended applies one. A table of its own, not a column on `scheduler_state`:
 that row's existence means "the scheduler has fired", which the missed-fire catch-up reads, so a
@@ -200,7 +200,7 @@ class RunRow:
 
     record: HealthRecord
     id: int = 0
-    """The `runs` row id; 0 for a `RunRow` built without one (tests). What `/runs/<id>` (#76)
+    """The `runs` row id; 0 for a `RunRow` built without one (tests). What `/runs/<id>`
     reads, and what a job history entry is matched to by `run_id_in_job`."""
     guards: tuple[str, ...] = ()
     """The fired guards' messages, in the diff's order. Empty for a run with no diff."""
@@ -320,12 +320,12 @@ def resolution_from_json(raw: str) -> Resolution:
         source_release_group=_release_group_from_json(d.get("source_release_group")),
         scope=d.get("scope", "album"),
         followed=None if (followed := d.get("followed")) is None else bool(followed),
-        # A row written before #100 has no token and reads as the defaults, so under a non-default
+        # An older row has no token and reads as the defaults, so under a non-default
         # `[rules]` it re-resolves once and is written back with the live token.
         rules=str(d.get("rules") or ""),
-        # A row written before #271 records none, so it is reused until something else moves it.
+        # An older row records none, so it is reused until something else moves it.
         denied_skipped=frozenset(str(m) for m in d.get("denied_skipped") or ()),
-        # A row written before #165 has no check time; `_due` starts its clock on the next run.
+        # An older row has no check time; `_due` starts its clock on the next run.
         checked_at=datetime.fromisoformat(checked_at) if (checked_at := d.get("checked_at")) else None,
     )
 
@@ -516,7 +516,7 @@ class SqliteState:
                 self._conn.execute("UPDATE schema_version SET version = ?", (SCHEMA_VERSION,))
 
     def _mark_applied_if_it_ever_applied(self) -> None:
-        """The v8 data step (#111): an install upgraded from before the first-apply gate existed has
+        """The v8 data step: an install upgraded from before the first-apply gate existed has
         already had its first plan applied if it owns any release or has a health baseline - only
         an apply writes either - so its schedule keeps running. The time is the migration's own;
         the real first apply's was never recorded. A file with neither is left unset, and its
@@ -888,7 +888,7 @@ class SqliteState:
         diff). What Home Assistant's retained record shows.
 
         ``skip_idle`` also passes over `paused` and `skipped` runs, which say nothing about the
-        library: what a `notify = "problems"` webhook compares this run against (#112), so a
+        library: what a `notify = "problems"` webhook compares this run against, so a
         paused tick between an error and the next run neither hides the error nor fakes a recovery.
         """
         idle = "AND status NOT IN ('paused', 'skipped')" if skip_idle else ""
@@ -907,7 +907,7 @@ class SqliteState:
         JSON but not decoded into a `Diff` - `shell.diff_io.diff_from_run_dict` does that, to keep
         this adapter free of the shell's own diff format. `None` when no run has this id.
 
-        For the Status page's "What changed" and `/runs/<id>` (#76): read-only.
+        For the Status page's "What changed" and `/runs/<id>`: read-only.
         """
         row = self._conn.execute(
             f"SELECT id, record_json, diff_json, {_RUN_FACTS} AS facts FROM runs WHERE id = ?", (run_id,)
@@ -921,7 +921,7 @@ class SqliteState:
     def run_id_in_job(self, started: float, finished: float, *, grace_s: float = 30) -> int | None:
         """The one applied run a finished job published, or `None` - never the nearest guess.
 
-        Job history keeps no recorded run id (#76), but it needs none: the job runner runs one job
+        Job history keeps no recorded run id, but it needs none: the job runner runs one job
         at a time, and a run's record is published by that job's own child, so it falls inside
         the job's lifetime (`grace_s` past `finished` covers the child stamping `ts` moments
         before it exits). Dry runs, and `skipped`/`paused` records (published by a *different*
@@ -958,7 +958,7 @@ class SqliteState:
 
     def scheduled_fire_cancelled(self) -> bool:
         """Whether the last recorded fire (`last_scheduled_fire`) was cancelled by a redeploy
-        while still planning (issue #68 phase 3), and so still needs to run. `False` with no row
+        while still planning, and so still needs to run. `False` with no row
         yet, matching `last_scheduled_fire`."""
         row = self._conn.execute("SELECT cancelled FROM scheduler_state WHERE id = 1").fetchone()
         return bool(row["cancelled"]) if row is not None else False
@@ -972,7 +972,7 @@ class SqliteState:
             self._conn.execute("UPDATE scheduler_state SET cancelled = 1 WHERE id = 1")
 
     def first_apply_at(self) -> datetime | None:
-        """When a hand `run --apply` first completed, if one ever has (issue #111). `None` holds every
+        """When a hand `run --apply` first completed, if one ever has. `None` holds every
         scheduled run (`shell.run.run_command`), and the Status and Settings pages say so."""
         row = self._conn.execute("SELECT applied_at FROM first_apply WHERE id = 1").fetchone()
         return datetime.fromisoformat(row["applied_at"]) if row is not None else None

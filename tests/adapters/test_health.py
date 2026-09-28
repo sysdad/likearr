@@ -93,7 +93,7 @@ def test_webhook_sink_swallows_failure() -> None:
     assert True
 
 
-# ---------------------------------------------------------------- webhook as a notification (#112)
+# ---------------------------------------------------------------- webhook as a notification
 
 
 def test_the_webhook_body_adds_title_body_and_type_and_keeps_every_record_key() -> None:
@@ -197,7 +197,7 @@ def test_a_problems_webhook_posts_only_what_is_worth_a_notification(notify: bool
 
 @pytest.mark.parametrize("status", [RunStatus.PAUSED, RunStatus.SKIPPED])
 def test_a_problems_webhook_never_posts_a_paused_or_skipped_run_even_unasked(status: RunStatus) -> None:
-    """The CLI's no-state-database path (#111) publishes `paused` with the default `notify=True`."""
+    """The CLI's no-state-database path publishes `paused` with the default `notify=True`."""
     sink = WebhookSink(WebhookSinkConfig(url=HOOK, notify="problems"))
 
     with respx.mock:
@@ -335,7 +335,7 @@ def test_publish_all_calls_every_sink() -> None:
     sink2.publish.assert_called_once_with(record)
 
 
-# ---------------------------------------------------------------- dry runs stay local (issue #19)
+# ---------------------------------------------------------------- dry runs stay local
 
 
 def test_a_dry_run_reaches_only_local_sinks() -> None:

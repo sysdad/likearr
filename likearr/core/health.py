@@ -216,11 +216,11 @@ LIDARR_METADATA_OUTAGE_MIN_ATTEMPTS = 10
 """The fewest Lidarr metadata lookups a run must have actually attempted before a failure ratio
 means anything.
 
-A normal run attempts on the order of a hundred (issue #18's review of #5): well under class A's jump
+A normal run attempts on the order of a hundred: well under class A's jump
 threshold (`guards.unmapped_ratio_amber` x intents, which runs to the hundreds), so a total
 `api.lidarr.audio` outage could not trip rule 9 - the exact gap this constant closes. A handful of
 attempts proves nothing either way, so this floor keeps a quiet run (or one where every failing
-term is already negative-cached, see issue #18) from reading as an outage on one unlucky lookup.
+term is already negative-cached) from reading as an outage on one unlucky lookup.
 """
 
 LIDARR_METADATA_OUTAGE_RATIO = 0.5
@@ -230,7 +230,7 @@ outage.
 Deliberately not the class-A jump ratio (`guards.unmapped_ratio_amber`, tuned for a *regression*
 against last run's intents): this is a same-run failure rate with no baseline to compare against,
 so it needs its own, much coarser bar. Half is comfortably above the couple-of-terms-in-a-hundred
-chronic rate a healthy run carries (issue #18) and comfortably below the ~100% a real
+chronic rate a healthy run carries and comfortably below the ~100% a real
 `api.lidarr.audio` outage produces.
 """
 
@@ -240,7 +240,7 @@ def lidarr_metadata_outage(attempts: int, failures: int) -> bool:
 
     Class C: this-run only, no identity, no baseline - a real `api.lidarr.audio` outage must alarm
     on a first run same as any other. `attempts` counts only lookups genuinely asked of Lidarr this
-    run; a term skipped because it is still inside its negative-cache TTL (issue #18) is not an
+    run; a term skipped because it is still inside its negative-cache TTL is not an
     attempt and must not count toward either number, or a library with many chronically-failing
     terms would look like an outage on a day when nothing changed.
     """
@@ -323,7 +323,7 @@ def next_baseline(
     return HealthBaseline(fingerprint=fingerprint, identities=identities)
 
 
-# ---------------------------------------------------------------------------- notifications (#112)
+# ---------------------------------------------------------------------------- notifications
 
 PROBLEM_STATUSES = frozenset({RunStatus.ERROR, RunStatus.GUARDED, RunStatus.DEGRADED, RunStatus.STALE})
 """The statuses a `notify = "problems"` webhook tells a person about. `paused` and `skipped` are
@@ -333,7 +333,7 @@ _IDLE_STATUSES = frozenset({RunStatus.PAUSED, RunStatus.SKIPPED})
 
 
 def should_notify(status: RunStatus, message: str, previous: tuple[RunStatus, str] | None) -> bool:
-    """Whether this run is news to someone waiting on a notification (option B on #112).
+    """Whether this run is news to someone waiting on a notification.
 
     `previous` is the status and message of the last run the webhook could have been sent, skipping
     `paused` and `skipped` ticks, which say nothing about the library (`None` when there is none).

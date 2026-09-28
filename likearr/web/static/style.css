@@ -6,7 +6,7 @@
   --bg: #f6f6f3; --fg: #1c1c1a; --muted: #686862; --line: #e1e1dc; --panel: #ffffff; --panel-2: #fafaf8;
   --accent: #2e5ea8; --accent-fg: #ffffff; --accent-soft: #e8eef8;
   --ok: #2c7a4b; --ok-soft: #e6f3eb; --warn: #9a5800; --warn-soft: #fbf0df; --bad: #b3261e; --bad-soft: #fbe7e5;
-  /* Spotify's own brand green and text colour (#86): fixed by their brand guideline, not part of
+  /* Spotify's own brand green and text colour: fixed by their brand guideline, not part of
      the light/dark system - unlike --accent, this one doesn't change with the theme. */
   --spotify-green: #1ed760; --spotify-fg: #000000;
   /* space: 4 8 12 16 24 32 */
@@ -69,7 +69,7 @@ button.small, .button.small { padding: var(--s1) var(--s3); font-size: var(--t-x
 button:disabled, button:disabled:hover { opacity: .55; cursor: not-allowed; border-color: var(--line); filter: none; }
 .actions { display: flex; flex-wrap: wrap; gap: var(--s3); align-items: center; margin: var(--s4) 0; }
 
-/* ---- the Spotify connect button (#86): brand green pill, black text, the icon unaltered with
+/* ---- the Spotify connect button: brand green pill, black text, the icon unaltered with
    its own clear space from the button's own padding and gap - never resized or recoloured. */
 .spotify-button { display: inline-flex; align-items: center; gap: var(--s2); border-radius: 999px; background: var(--spotify-green); border-color: var(--spotify-green); color: var(--spotify-fg); font-weight: 700; }
 .spotify-button:hover { border-color: var(--spotify-green); filter: brightness(1.05); }
@@ -150,7 +150,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 table.counts { width: auto; min-width: 22rem; }
 td.msg { color: var(--muted); font-size: var(--t-sm); }
 .nowrap { white-space: nowrap; }
-/* A long Doctor detail or run message must not push the page wider than the viewport (#142):
+/* A long Doctor detail or run message must not push the page wider than the viewport:
    a fieldset's browser-default min-width (its widest child's content) and an unbroken long
    string (a path, a URL) both do that unless told they may break. */
 td, dd, .help { overflow-wrap: anywhere; }
@@ -163,7 +163,7 @@ ul.jobs { padding-left: var(--s5); }
 /* ---- forms */
 /* min-width: 0 overrides the browser default (min-content: as wide as its widest child needs,
    a long Doctor detail among them), which is what was pushing Settings wider than the phone
-   it's on (#142) even with the table and .help wrap rules above in place. */
+   it's on even with the table and .help wrap rules above in place. */
 fieldset { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); margin: 0 0 var(--s4); padding: var(--s2) var(--s4) var(--s4); min-width: 0; }
 legend { font-weight: 600; padding: 0 var(--s1); }
 .field { margin: var(--s3) 0; }
@@ -219,7 +219,7 @@ table.plan-rows td { font-size: var(--t-sm); }
   .lookup dl.facts { gap: 0; }
 }
 
-/* ---- action error banner (#129): a failed hx-post (service down, 5xx, a proxy error), drawn by
+/* ---- action error banner: a failed hx-post (service down, 5xx, a proxy error), drawn by
    errors.js. Fixed to the top so it is seen regardless of scroll position; one element, reused
    and re-filled by later failures rather than stacked. */
 .hx-error-banner { position: fixed; top: var(--s3); left: 50%; transform: translateX(-50%); z-index: 100;

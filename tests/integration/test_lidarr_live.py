@@ -356,7 +356,7 @@ def test_adding_the_same_artist_twice_reports_the_existing_one(
     client: LidarrClient, artist_mbid: str, root_folder: str
 ) -> None:
     """Lidarr answers the second POST with a 400; the adapter raises `LidarrArtistExists` carrying
-    the artist Lidarr holds, tag included, so apply can tell its own add from someone else's (#4)."""
+    the artist Lidarr holds, tag included, so apply can tell its own add from someone else's."""
     _prepare(client, root_folder)
     lean = client.ensure_metadata_profile(Profile.LEAN, "Lean")
     tag = client.ensure_tag("likearr")

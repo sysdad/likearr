@@ -20,7 +20,7 @@ documentation only), so a browser save has to be as careful as a hand edit:
 **The allowlist governs reading as well as writing.** The page renders these keys and nothing
 else: no path, no URL, no MusicBrainz contact, no ``[health]`` block, and never an environment
 value. Secrets never live in the TOML at all (see `likearr.config`), but the page does not rely
-on that. The one exception is `LIBRARY_KEYS` (#3): `[lidarr] root_folder` and `quality_profile`
+on that. The one exception is `LIBRARY_KEYS`: `[lidarr] root_folder` and `quality_profile`
 are picked from Lidarr's own lists, not typed, so they have their own small form and
 `plan_library`, and go through the same `write_config` as everything else.
 
@@ -80,7 +80,7 @@ __all__ = [
 ]
 
 SCHEDULE_PREVIEW_COUNT = 5
-"""How many upcoming fires the Settings page's schedule preview shows (issue #86)."""
+"""How many upcoming fires the Settings page's schedule preview shows."""
 
 PAUSED_REASON_LIMIT = 200
 """Matches `config._schedule`'s own limit on `[schedule] paused_reason`."""
@@ -362,7 +362,7 @@ def parse_form(form: Mapping[str, Sequence[str]]) -> tuple[dict[tuple[str, str],
     """Turn posted form data into typed values for the allowlisted keys, and per-field errors.
 
     Every other posted name is ignored, so a crafted form cannot reach a key the page does not
-    render. Range checks are left to `parse_config`, which is the one place they live (issue #110).
+    render. Range checks are left to `parse_config`, which is the one place they live.
     A number must still be finite and within `_NUMBER_LIMIT` here, before it is written: ``float()``
     takes "nan" and "inf", and a NaN guard compares false with everything, so it would slip past the
     loosening confirm. `parse_config` refuses both too, so neither can reach the file either way.
@@ -492,7 +492,7 @@ def _added_removed(old: tuple[str, ...], new: tuple[str, ...]) -> tuple[list[str
 
 
 def _deny_moves(change: Change) -> str:
-    """Which songs a `deny_releases` change re-resolves, per direction (issue #271).
+    """Which songs a `deny_releases` change re-resolves, per direction.
 
     An added entry moves the songs whose answer is that release; a removed one moves the songs the
     resolver kept off it (`Resolution.denied_skipped`), which can go back to it now. `plan_save`
@@ -548,7 +548,7 @@ def _confirmations(changes: Sequence[Change], playlist_names: Mapping[str, str])
 
 def plan_pause(text: str, reason: str, *, base_dir: Path, now: datetime) -> SaveCheck:
     """`[schedule] enabled = false`, with `paused_reason` and `paused_at`. Saves at once - no
-    confirm - because pausing only ever removes an unattended apply, never adds one (issue #68).
+    confirm - because pausing only ever removes an unattended apply, never adds one.
     """
     was_enabled = parse_config(tomllib.loads(text), base_dir=base_dir).schedule.enabled
     reason = " ".join(reason.split())[:PAUSED_REASON_LIMIT]
@@ -569,11 +569,11 @@ def plan_pause(text: str, reason: str, *, base_dir: Path, now: datetime) -> Save
 
 
 LIBRARY_KEYS = ("root_folder", "quality_profile")
-"""The `[lidarr]` keys a first start leaves unset and Settings picks from Lidarr's lists (#3)."""
+"""The `[lidarr]` keys a first start leaves unset and Settings picks from Lidarr's lists."""
 
 
 def plan_library(text: str, chosen: Mapping[str, str], *, base_dir: Path) -> SaveCheck:
-    """Set `[lidarr] root_folder` and `quality_profile` from `chosen` (#3), each only when given and
+    """Set `[lidarr] root_folder` and `quality_profile` from `chosen`, each only when given and
     different. No confirm: nothing is added to Lidarr until a plan is reviewed and applied."""
     before = parse_config(tomllib.loads(text), base_dir=base_dir).lidarr
     doc = tomlkit.parse(text)
@@ -597,7 +597,7 @@ def plan_library(text: str, chosen: Mapping[str, str], *, base_dir: Path) -> Sav
 
 def plan_resume(text: str, *, base_dir: Path) -> SaveCheck:
     """`[schedule] enabled = true`. Always needs the second confirm (`SaveCheck.confirm`): it turns
-    unattended applies back on, the same class of change as loosening a guard (issue #68).
+    unattended applies back on, the same class of change as loosening a guard.
     """
     was_enabled = parse_config(tomllib.loads(text), base_dir=base_dir).schedule.enabled
     doc = tomlkit.parse(text)
@@ -619,7 +619,7 @@ def plan_resume(text: str, *, base_dir: Path) -> SaveCheck:
 
 
 def plan_cleanup(text: str, enabled: bool, *, base_dir: Path) -> SaveCheck:
-    """`[prune] enabled` (#148). Saves at once, no confirm, either way: turning Clean up on only
+    """`[prune] enabled`. Saves at once, no confirm, either way: turning Clean up on only
     shows a review page and lets Settings offer promote-save's Spotify write access; nothing moves
     and nothing reaches Spotify until a command is run by hand. The ledger and old prune jobs are
     never touched."""
@@ -789,9 +789,9 @@ def write_config(path: Path, new_text: str, *, expected_hash: str, now: datetime
     if file_hash(current) != expected_hash:
         raise SaveConflict(f"{path.name} changed since this page was opened")
 
-    # No world bits on the file or its backups (#171): config.toml can hold a capability URL
+    # No world bits on the file or its backups: config.toml can hold a capability URL
     # ([health.webhook] url). Group bits stay, so a host user in the container's group can still
-    # edit it by hand (#107). A 0600 file stays 0600.
+    # edit it by hand. A 0600 file stays 0600.
     old = os.stat(path)
     mode = old.st_mode & 0o770
     backup = _write_backup(path, current, mode=mode, now=now, times_ns=(old.st_atime_ns, old.st_mtime_ns))

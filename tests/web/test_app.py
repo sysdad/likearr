@@ -73,7 +73,7 @@ def test_a_page_without_a_session_goes_to_the_login_form(client: TestClient) -> 
 
 
 def test_an_unknown_url_is_styled_and_404s_when_logged_in(client: TestClient) -> None:
-    """#142: no route matches `/no-such-page` at all - Starlette's own answer is a bare
+    """No route matches `/no-such-page` at all - Starlette's own answer is a bare
     `text/plain` "Not Found" (9 bytes, no nav, no viewport tag), which renders far too wide on a
     phone. `exception_handlers[404]` swaps in `missing.html` instead."""
     _login(client)
@@ -118,7 +118,7 @@ def test_the_wrong_password_is_refused(client: TestClient) -> None:
 
 
 def test_login_names_the_setting_the_password_comes_from(client: TestClient) -> None:
-    """#142: a fresh install's login page was one password field with no hint - a nicety for
+    """A fresh install's login page was one password field with no hint - a nicety for
     whoever is handed only the URL, not the person who set LIKEARR_UI_PASSWORD."""
     page = client.get("/login").text
 
@@ -126,7 +126,7 @@ def test_login_names_the_setting_the_password_comes_from(client: TestClient) -> 
 
 
 def test_the_right_password_sets_a_strict_http_only_session_cookie(client: TestClient) -> None:
-    """`strict`, kept that way for every route: Spotify's direct-callback mode (#79) does not
+    """`strict`, kept that way for every route: Spotify's direct-callback mode does not
     depend on this cookie reaching `/spotify/callback` at all - that one route is exempted from
     the login gate instead and authorizes itself with a single-use server-side `state` - so there
     is no reason to loosen the cookie that gates every other page. See `create_app`'s middleware
@@ -267,7 +267,7 @@ def test_every_response_carries_the_security_headers(client: TestClient) -> None
 
 
 def test_errors_js_is_served_as_javascript_without_a_login(client: TestClient) -> None:
-    """No `hx-post` page can show its failed-action banner (#129) if the script that draws it
+    """No `hx-post` page can show its failed-action banner if the script that draws it
     needs a session that just expired - and the CSP (`default-src 'self'`) is satisfied by any
     same-origin static file, so a passing status code here is what "passes the CSP" means for a
     script that adds no inline content of its own."""
@@ -279,7 +279,7 @@ def test_errors_js_is_served_as_javascript_without_a_login(client: TestClient) -
 
 
 def test_icon_svg_is_served_without_a_login(client: TestClient) -> None:
-    """The login page needs its icon too (issue #141), and `/static/` is already open
+    """The login page needs its icon too, and `/static/` is already open
     (`auth._OPEN_PREFIX`) - this just confirms the file is actually there and answers 200."""
     response = client.get("/static/icon.svg")
 
@@ -295,7 +295,7 @@ def test_apple_touch_icon_is_served_without_a_login(client: TestClient) -> None:
 
 
 def test_favicon_ico_answers_with_and_without_a_session(client: TestClient) -> None:
-    """Browsers still probe `/favicon.ico` directly (issue #141): logged out, that must not 303
+    """Browsers still probe `/favicon.ico` directly: logged out, that must not 303
     to `/login` (it needs `/favicon.ico` in `auth._OPEN_PATHS`), and logged in it must not 404."""
     logged_out = client.get("/favicon.ico", follow_redirects=False)
     assert logged_out.status_code == 200
@@ -308,7 +308,7 @@ def test_favicon_ico_answers_with_and_without_a_session(client: TestClient) -> N
 
 
 def test_every_page_head_has_the_icon_links_and_theme_colors(client: TestClient) -> None:
-    """Issue #141's acceptance: every page, including `/login`, carries the icon link, the
+    """Every page, including `/login`, carries the icon link, the
     apple-touch-icon link and both light/dark `theme-color` meta tags."""
     login_page = client.get("/login").text
     _login(client)
@@ -323,7 +323,7 @@ def test_every_page_head_has_the_icon_links_and_theme_colors(client: TestClient)
 
 
 def test_the_footer_shows_the_version_on_a_signed_in_page(client: TestClient) -> None:
-    """Issue #113's acceptance: every signed-in page shows the version in the footer."""
+    """Every signed-in page shows the version in the footer."""
     _login(client)
 
     page = client.get("/").text
@@ -377,7 +377,7 @@ def test_no_get_route_changes_anything(client: TestClient, data_dir: Path) -> No
 
 
 def test_the_status_page_has_its_own_tab_title(client: TestClient) -> None:
-    """Issue #141: Status was the only page falling back to the base `<title>likearr</title>`;
+    """Status was the only page falling back to the base `<title>likearr</title>`;
     every other page sets `X - likearr` (see `settings.html`)."""
     _login(client)
 
@@ -409,7 +409,7 @@ LOST_STATE_TEXT = (
 def test_status_warns_about_tagged_artists_the_state_database_has_no_record_of(
     client: TestClient, data_dir: Path
 ) -> None:
-    """#175: a run found likearr-tagged artists in Lidarr with no `owned_artists` row."""
+    """A run found likearr-tagged artists in Lidarr with no `owned_artists` row."""
     with SqliteState(data_dir / "state.sqlite") as state:
         state.record_run(_record(ts=int(NOW.timestamp()) - 60, tagged_without_state=2), None)
     _login(client)
@@ -439,7 +439,7 @@ def test_status_renders_a_last_run_recorded_before_the_lost_state_count(client: 
 
 
 def test_history_s_when_column_does_not_wrap(client: TestClient) -> None:
-    """#142: at 1440px every When cell wrapped to three or four lines, even on rows with no
+    """At 1440px every When cell wrapped to three or four lines, even on rows with no
     message - `nowrap` on the cell is the fix; kept to one line at any width."""
     _login(client)
 
@@ -449,7 +449,7 @@ def test_history_s_when_column_does_not_wrap(client: TestClient) -> None:
 
 
 def test_history_rows_link_to_their_run_page(client: TestClient, data_dir: Path) -> None:
-    """#128: every history row's When cell used to be plain text, so a paused or failed run had
+    """Every history row's When cell used to be plain text, so a paused or failed run had
     no way to be opened. Every row with a run id now links to `/runs/<id>`."""
     with SqliteState(data_dir / "state.sqlite") as state:
         rows = state.run_history(limit=10)
@@ -494,13 +494,13 @@ def test_status_shows_the_spotify_reauth_date(client: TestClient) -> None:
 
     # Authorized 2026-09-20 00:00 UTC, so due 2027-03-20 00:00 UTC: 20:00 the evening before in New York.
     assert "due by Fri 19 Mar 20:00 EDT" in page
-    # 177 days out: well outside the warn window, so the banner still says nothing needs you (#138).
+    # 177 days out: well outside the warn window, so the banner still says nothing needs you.
     assert "nothing needs you" in page
 
 
 def _set_authorized_at(data_dir: Path, authorized_at: datetime) -> None:
     """Rewrites the fixture's token file so `reauth_due` (six months later, same day/time) lands
-    on a chosen date - the way each #138 banner scenario is set up below."""
+    on a chosen date - the way each banner scenario is set up below."""
     (data_dir / "spotify-token.json").write_text(
         json.dumps(
             {
@@ -514,7 +514,7 @@ def _set_authorized_at(data_dir: Path, authorized_at: datetime) -> None:
 
 
 def test_status_banner_shows_the_reauth_date_when_it_is_due_soon(client: TestClient, data_dir: Path) -> None:
-    """#138: a re-authorization due within the warn window is the banner's business, not a loose
+    """A re-authorization due within the warn window is the banner's business, not a loose
     line underneath it that a green "nothing needs you" headline could contradict."""
     _set_authorized_at(data_dir, datetime(2026, 4, 13, 18, 0, tzinfo=UTC))  # due 2026-10-13, in 20 days
     _login(client)
@@ -540,7 +540,7 @@ def test_status_banner_says_nothing_needs_you_well_before_the_warn_window(client
 def test_status_banner_says_reauth_was_due_for_an_expired_token_and_stays_green(
     client: TestClient, data_dir: Path
 ) -> None:
-    """#138: an expired token stays out of `glance.problems`, so the
+    """An expired token stays out of `glance.problems`, so the
     banner keeps mirroring Home Assistant - it names the date that passed but does not turn amber
     on its own. Confirmed here: the last published run in `data_dir` is OK, so the banner is still
     "All good.", not amber, even though the token is 10 days overdue."""
@@ -574,7 +574,7 @@ def test_status_banner_lists_the_run_problem_and_the_reauth_sentence_together(
 
 
 def test_status_with_no_token_says_not_connected_not_the_unknown_date_hint(client: TestClient, data_dir: Path) -> None:
-    """#118: a new install has no token file at all - the hint for a token missing only its date
+    """A new install has no token file at all - the hint for a token missing only its date
     does not apply to it."""
     (data_dir / "spotify-token.json").unlink()
     _login(client)
@@ -588,8 +588,8 @@ def test_status_with_no_token_says_not_connected_not_the_unknown_date_hint(clien
 
 def test_status_with_a_token_missing_its_date_points_to_settings(client: TestClient, data_dir: Path) -> None:
     """A token file exists (so `likearr auth` was already run), it just predates the
-    `authorized_at` field. Re-authorizing from Settings records the date (#162: the CLI back-fill
-    is gone), so both the banner and the Spotify row send the user there, and to no command."""
+    `authorized_at` field. Re-authorizing from Settings records the date, so both the banner and
+    the Spotify row send the user there, and to no command."""
     (data_dir / "spotify-token.json").write_text(
         json.dumps(
             {
@@ -626,7 +626,7 @@ def test_status_shows_projected_wanted_from_the_diff(client: TestClient, data_di
     assert "a guard held" in page
 
 
-# ---------------------------------------------------------------- what changed (#76)
+# ---------------------------------------------------------------- what changed
 
 
 def _run76_diff() -> Any:
@@ -697,8 +697,8 @@ def test_status_shows_the_resolver_change_note(client: TestClient, data_dir: Pat
 
     page = client.get("/").text
 
-    # It says the run couldn't be compared, not that matching caused every change (#76 review:
-    # the live 12:20 run mixed matching, Spotify edits and a MusicBrainz reclassification).
+    # It says the run couldn't be compared, not that matching caused every change (the live 12:20
+    # run mixed matching, Spotify edits and a MusicBrainz reclassification).
     assert "likearr&#39;s matching changed since the run before this one" in page
     assert "not from your Spotify." not in page
 
@@ -727,7 +727,7 @@ def test_status_labels_a_part_way_apply_as_the_plan_it_was_attempting(client: Te
 
 
 def test_status_does_not_call_a_fully_landed_apply_part_way(client: TestClient, data_dir: Path) -> None:
-    """#174: every planned change reached Lidarr and only confirming it failed - the run page must
+    """Every planned change reached Lidarr and only confirming it failed - the run page must
     not say "stopped part-way: 3 of 3" or "not everything in it reached Lidarr"."""
     with SqliteState(data_dir / "state.sqlite") as state:
         state.record_run(
@@ -752,7 +752,7 @@ def test_status_does_not_call_a_fully_landed_apply_part_way(client: TestClient, 
 
 
 def test_status_names_the_artists_set_to_none_in_what_changed(client: TestClient, data_dir: Path) -> None:
-    """#172: an applied run's "Monitor New Albums" write is shown by name, like every other change."""
+    """An applied run's "Monitor New Albums" write is shown by name, like every other change."""
     from likearr.models import PrimaryType, ReleaseGroup, Resolution, ResolutionStatus
     from tests.adapters.test_state_sqlite import _diff
 
@@ -823,14 +823,14 @@ def test_run_page_shows_every_row_and_needs_no_login_redirect_for_htmx(client: T
     assert f"Run #{row.id}" in page.text
     assert "Track 2" in page.text and "Track 3" in page.text and "Track 4" in page.text
     assert "Show all" not in page.text  # the full page needs no cap
-    assert "Applied:" in page.text  # the run record itself, not only its diff (#128)
+    assert "Applied:" in page.text  # the run record itself, not only its diff
     assert "What changed" in page.text
 
 
 def test_run_page_shows_the_run_record_with_no_what_changed_section_when_there_is_no_diff(
     client: TestClient, data_dir: Path
 ) -> None:
-    """#128: a failure before the check ran, or a config-stale refusal, stores no diff - the run
+    """A failure before the check ran, or a config-stale refusal, stores no diff - the run
     page must still exist and show the run's status, message and guards, just no "What changed"."""
     with SqliteState(data_dir / "state.sqlite") as state:
         state.record_run(
@@ -857,7 +857,7 @@ def test_run_page_shows_the_run_record_with_no_what_changed_section_when_there_i
 def test_run_page_links_to_the_job_whose_window_contains_it(
     client: TestClient, data_dir: Path, planned_diff: Path
 ) -> None:
-    """#128 item 3: the reverse of a job's own "What changed" link - the run page links back to
+    """The reverse of a job's own "What changed" link - the run page links back to
     a kept apply or scheduled job whose window contains it."""
     _login(client)
     plan_id = _start_plan(client)
@@ -876,7 +876,7 @@ def test_run_page_links_to_the_job_whose_window_contains_it(
 
 
 def test_run_page_shows_no_job_link_when_no_kept_job_matches(client: TestClient, data_dir: Path) -> None:
-    """#128 item 3: a run from before the UI (host cron), or whose job was pruned, gets no link."""
+    """A run from before the UI (host cron), or whose job was pruned, gets no link."""
     with SqliteState(data_dir / "state.sqlite") as state:
         state.record_run(_record(ts=int(NOW.timestamp()) - 60, dry_run=False), None)
         (row,) = state.run_history(limit=1)
@@ -911,7 +911,7 @@ def test_run_page_404s_for_a_missing_or_non_numeric_id(client: TestClient) -> No
 
 def test_a_missing_run_says_no_such_run_not_no_such_job(client: TestClient) -> None:
     """`missing.html` is shared with job pages, whose default wording ("no such job... only the
-    newest 20 are kept") is wrong for a run: runs are not capped the same way (#142)."""
+    newest 20 are kept") is wrong for a run: runs are not capped the same way."""
     _login(client)
 
     page = client.get("/runs/999999").text
@@ -952,7 +952,7 @@ def test_a_finished_apply_job_links_to_its_run(client: TestClient, data_dir: Pat
     assert client.get(f"/runs/{row.id}").status_code == 200
 
 
-# ---------------------------------------------------------------- /jobs (#128)
+# ---------------------------------------------------------------- /jobs
 
 
 def _seed_kept_job(data_dir: Path, n: int, *, kind: str = "plan") -> str:
@@ -979,7 +979,7 @@ def _seed_kept_job(data_dir: Path, n: int, *, kind: str = "plan") -> str:
 
 
 def test_jobs_page_lists_every_kept_job_past_the_top_five_newest_first(client: TestClient, data_dir: Path) -> None:
-    """#128: Status only ever shows the newest 5 jobs; `/jobs` lists every one the runner still
+    """Status only ever shows the newest 5 jobs; `/jobs` lists every one the runner still
     keeps (seeded here well past 5, up to what `KEEP_JOBS` allows)."""
     ids = [_seed_kept_job(data_dir, i) for i in range(8)]
     _login(client)
@@ -994,7 +994,7 @@ def test_jobs_page_lists_every_kept_job_past_the_top_five_newest_first(client: T
 
 
 def test_status_links_to_every_job_from_its_recent_jobs(client: TestClient, data_dir: Path) -> None:
-    """#128: Status shows the newest few jobs and links the full list."""
+    """Status shows the newest few jobs and links the full list."""
     _seed_kept_job(data_dir, 0)
     _login(client)
 
@@ -1077,7 +1077,7 @@ def test_phase_says_resolving_once_sources_are_read() -> None:
 
 
 def test_phase_says_applying_once_the_apply_marker_is_in_the_log() -> None:
-    """Issue #119: `_phase` never said this before - the whole add-and-refresh loop of an apply
+    """`_phase` never said this before - the whole add-and-refresh loop of an apply
     used to still show the "resolving against MusicBrainz" wording of the plan that preceded it."""
     from likearr.web.app import _phase
 
@@ -1086,7 +1086,7 @@ def test_phase_says_applying_once_the_apply_marker_is_in_the_log() -> None:
 
 
 def test_phase_says_reading_lidarr_once_resolving_is_over(caplog: pytest.LogCaptureFixture) -> None:
-    """Issue #267: once `shell.plan.plan` logs its post-resolve marker, the job page should stop
+    """Once `shell.plan.plan` logs its post-resolve marker, the job page should stop
     saying "resolving against MusicBrainz" - that work is done - and stop implying a resolve ETA
     is still coming."""
     from likearr.web.app import _phase
@@ -1136,7 +1136,7 @@ def test_progress_line_is_empty_when_the_log_has_no_progress_line_yet() -> None:
 
 
 def test_progress_line_drops_the_stale_eta_once_resolving_is_over() -> None:
-    """Issue #267: the post-resolve marker is itself a `progress:` line, so once it is the newest
+    """The post-resolve marker is itself a `progress:` line, so once it is the newest
     one in the log the page shows it - no numbers, no ETA - instead of the last resolve line, which
     could otherwise sit on screen, ETA included, all through the Lidarr-read-and-diff work after
     resolving."""
@@ -1156,7 +1156,7 @@ def test_progress_line_drops_the_stale_eta_once_resolving_is_over() -> None:
 def test_the_job_page_shows_the_newest_progress_line_while_a_run_is_in_progress(
     data_dir: Path, fake_cli: list[str]
 ) -> None:
-    """Issue #119: the job page already polls every 2s and already shows the log tail - this is
+    """The job page already polls every 2s and already shows the log tail - this is
     the phase paragraph picking up the newest `progress:` line from it."""
     job_id = "2026-09-23T17-00-00Z-a1b2c3"
     job_dir = data_dir / "ui" / "jobs" / job_id
@@ -1199,7 +1199,7 @@ def test_the_job_page_shows_the_newest_progress_line_while_a_run_is_in_progress(
 def test_a_finished_apply_shows_the_summary_outside_details_and_the_json_only_inside(
     client: TestClient, data_dir: Path, planned_diff: Path
 ) -> None:
-    """#97 (comment): the readable 'likearr applied:' summary stays in view; the raw run-record
+    """The readable 'likearr applied:' summary stays in view; the raw run-record
     JSON line the health stdout sink prints after it moves into the Technical log."""
     _login(client)
     job_id = _start_plan(client)
@@ -1252,7 +1252,7 @@ def test_status_labels_a_guarded_run_s_blocked_unmonitors(client: TestClient, da
     assert "EP 2" in page  # the blocked plan is still shown, by name
 
 
-# ---------------------------------------------------------------- pause / resume (issue #68)
+# ---------------------------------------------------------------- pause / resume
 
 
 def test_status_shows_paused_instead_of_the_next_run(client: TestClient, data_dir: Path) -> None:
@@ -1266,13 +1266,13 @@ def test_status_shows_paused_instead_of_the_next_run(client: TestClient, data_di
 
     assert "Paused" in page
     assert "maintenance window" in page
-    assert "18:20 EDT" not in page  # the false "next run" #68 exists to remove
+    assert "18:20 EDT" not in page  # the "next run" time, which must not show while paused
 
 
 def test_paused_by_hand_with_no_timestamp_says_off_in_config_not_an_unknown_time(
     client: TestClient, data_dir: Path
 ) -> None:
-    """A hand edit to config.toml (not the UI's pause action) leaves no `paused_at` (#142): before,
+    """A hand edit to config.toml (not the UI's pause action) leaves no `paused_at`: before,
     Settings and Status said "since an unknown time", which reads like a fault rather than a setting
     someone chose."""
     config_path = data_dir / "config.toml"
@@ -1289,7 +1289,7 @@ def test_paused_by_hand_with_no_timestamp_says_off_in_config_not_an_unknown_time
     assert "an unknown time" not in status_page
 
 
-# ---------------------------------------------------------------- live schedule preview (#86)
+# ---------------------------------------------------------------- live schedule preview
 
 
 def test_status_labels_run_now_as_run_and_apply_with_a_review_first_note(client: TestClient) -> None:
@@ -1335,7 +1335,7 @@ def test_run_now_while_paused_flashes_and_starts_no_job(client: TestClient, data
         assert state.last_scheduled_fire() is None, "Run now must not record a fire while paused"
 
 
-# ---------------------------------------------------------------- the first reviewed apply (#111)
+# ---------------------------------------------------------------- the first reviewed apply
 
 
 def _run_now_button(page: str) -> str:
@@ -1419,7 +1419,7 @@ def test_run_now_starts_the_fixed_scheduled_job(client: TestClient, data_dir: Pa
 def test_a_redeploy_shutdown_during_planning_marks_the_fire_cancelled_for_catchup(
     data_dir: Path, fake_cli: list[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Issue #68 phase 3: the fake CLI never prints the apply-phase marker, so `shutdown` cancels
+    """The fake CLI never prints the apply-phase marker, so `shutdown` cancels
     it as still planning; `_after_scheduled` (wired as the `scheduled` after-callback) must then
     mark the fire cancelled so the missed-fire catch-up re-fires it."""
     monkeypatch.setenv("LIKEARR_LIDARR_API_KEY", API_KEY_SENTINEL)
@@ -1453,7 +1453,7 @@ def test_a_redeploy_shutdown_during_planning_marks_the_fire_cancelled_for_catchu
 def test_the_server_refuses_to_start_on_an_old_ui_cron_key(
     data_dir: Path, fake_cli: list[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """#162: the `[ui] cron_*` aliases are gone, so a leftover one is an unknown `[ui]` key and
+    """The `[ui] cron_*` aliases are gone, so a leftover one is an unknown `[ui]` key and
     `likearr start` names it rather than firing on a default schedule nobody chose."""
     from likearr.config import ConfigError
 
@@ -1542,7 +1542,7 @@ def test_explain_runs_as_a_job_and_shows_the_answer(client: TestClient) -> None:
     page = client.get(f"/jobs/{job_id}").text
     assert "Radiohead" in page
 
-    # #142: the job's own poll swaps all of #job (outerHTML) on every trigger; the live region
+    # The job's own poll swaps all of #job (outerHTML) on every trigger; the live region
     # wrapping it in job.html must sit outside that so it stays the same element across polls.
     assert page.count('role="status"') == 1
     assert page.index('role="status"') < page.index('id="job"')
@@ -1940,7 +1940,7 @@ def test_a_background_poll_does_not_swallow_the_saved_message(client: TestClient
     assert "Saved rules.singles_fallback_days" in client.get("/settings").text
 
 
-# ---------------------------------------------------------------- PR #33 review and security findings
+# ---------------------------------------------------------------- security findings
 
 
 def test_an_oversized_body_is_refused_by_its_declared_length(client: TestClient) -> None:
@@ -1995,7 +1995,7 @@ def test_cancel_answers_at_once_and_the_page_says_it_is_stopping(
     assert "Cancelled." in _wait_for_job(client, job_id)
 
 
-# ---------------------------------------------------------------- name collisions (#29)
+# ---------------------------------------------------------------- name collisions
 
 
 def test_status_shows_a_collision_card_with_honest_advice(client: TestClient, data_dir: Path) -> None:
@@ -2033,7 +2033,7 @@ def test_status_shows_a_collision_card_with_honest_advice(client: TestClient, da
     assert "can't hold two artists with the same name" in page
 
 
-# ---------------------------------------------------------------- the confirm is bound to what it showed (#34 review)
+# ---------------------------------------------------------------- the confirm is bound to what it showed
 
 
 def test_the_last_run_is_parsed_once_per_version_of_the_file(
@@ -2388,7 +2388,7 @@ def test_status_health_reaches_back_past_many_dry_runs(client: TestClient, data_
 
 
 def test_status_with_no_run_at_all_needs_attention(client: TestClient, data_dir: Path) -> None:
-    """#118: `data_dir` already has a token, so "No run has finished yet." is replaced by the
+    """`data_dir` already has a token, so "No run has finished yet." is replaced by the
     first-run checklist (its "Check for changes" step is the same news, as a link)."""
     (data_dir / "state.sqlite").unlink()
     _login(client)
@@ -2403,7 +2403,7 @@ def test_status_with_no_run_at_all_needs_attention(client: TestClient, data_dir:
 
 
 def test_status_with_an_empty_run_history_says_so_without_a_0(client: TestClient, data_dir: Path) -> None:
-    """#118: a state database that exists but holds no runs yet (distinct from no database at
+    """A state database that exists but holds no runs yet (distinct from no database at
     all, covered elsewhere) used to read "Last 0 runs" and "in the last 0 runs" - both odd on a
     fresh install."""
     (data_dir / "state.sqlite").unlink()
@@ -2417,7 +2417,7 @@ def test_status_with_an_empty_run_history_says_so_without_a_0(client: TestClient
     assert "No runs yet" in page
 
 
-# ---------------------------------------------------------------- failed job page: reason + remedy (#127)
+# ---------------------------------------------------------------- failed job page: reason + remedy
 
 
 def test_a_failed_plan_shows_the_reason_and_connect_spotify(
@@ -2575,7 +2575,7 @@ def test_an_unknown_plan_or_section_is_a_404(client: TestClient, planned_diff: P
     assert client.get("/plan/2026-09-22T14-03-11Z-a1b2c3").status_code == 404
 
 
-# ---------------------------------------------------------------- apply (#30)
+# ---------------------------------------------------------------- apply
 
 
 def test_a_superseded_plan_cannot_be_applied(client: TestClient, data_dir: Path, planned_diff: Path) -> None:
@@ -2595,7 +2595,7 @@ def test_a_superseded_plan_cannot_be_applied(client: TestClient, data_dir: Path,
     assert 'name="plan_token"' not in page
 
 
-# ---------------------------------------------------------------- "Not this one" (#30)
+# ---------------------------------------------------------------- "Not this one"
 
 
 def test_not_this_one_refuses_the_release_through_the_settings_confirm(
@@ -2631,7 +2631,7 @@ def test_not_this_one_refuses_the_release_through_the_settings_confirm(
 def test_not_this_one_is_not_offered_where_it_changes_nothing(
     client: TestClient, data_dir: Path, planned_diff: Path, kinds: tuple[str, ...], note: str
 ) -> None:
-    """#153: a saved album overrides `deny_releases`, so its row says where the choice lives instead,
+    """A saved album overrides `deny_releases`, so its row says where the choice lives instead,
     and a post for it anyway is refused with the same words and writes nothing."""
     _plan_monitoring(planned_diff, kinds=kinds)
     _login(client)
@@ -2651,7 +2651,7 @@ def test_not_this_one_is_not_offered_where_it_changes_nothing(
 def test_not_this_one_is_offered_on_a_followed_artists_release(
     client: TestClient, data_dir: Path, planned_diff: Path
 ) -> None:
-    """#153, option B: a deny now takes a release out of a followed artist's catalogue."""
+    """A deny now takes a release out of a followed artist's catalogue."""
     _plan_monitoring(planned_diff, kinds=("followed",))
     _login(client)
     job_id = _start_plan(client)
@@ -2661,7 +2661,7 @@ def test_not_this_one_is_offered_on_a_followed_artists_release(
     assert confirm.status_code == 200 and "Confirm this change" in confirm.text
 
 
-# ---------------------------------------------------------------- #38 adversarial review
+# ---------------------------------------------------------------- adversarial review
 
 
 def test_a_reviewable_plan_survives_twenty_jobs_after_it_and_still_applies(
@@ -2695,7 +2695,7 @@ def test_the_nav_says_what_each_page_is_for_and_marks_the_current_one(client: Te
     page = client.get("/plan").text
 
     nav = page[page.index("<nav>") : page.index("</nav>")]
-    # The brand link now also carries the decorative icon.svg mark (#141) ahead of its text.
+    # The brand link now also carries the decorative icon.svg mark ahead of its text.
     labels = re.findall(r'<a href="([^"]+)"[^>]*>(?:<img[^>]*>)?([^<]+)</a>', nav)
     assert labels == [
         ("/", "likearr"),
@@ -2713,7 +2713,7 @@ def test_the_nav_says_what_each_page_is_for_and_marks_the_current_one(client: Te
 def test_a_running_job_stays_grouped_with_log_out_not_among_the_page_links(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A long job title must never push Log out onto its own row (#88): the running indicator
+    """A long job title must never push Log out onto its own row: the running indicator
     renders compact, inside the right-hand group with Log out, with the full name in `title`."""
     monkeypatch.setenv("FAKE_RUN_SLEEP", "1")
     _login(client)
@@ -2773,7 +2773,7 @@ def test_no_page_uses_an_inline_style_the_csp_would_refuse(
         assert "<style" not in page, url
 
 
-# ---------------------------------------------------------------- prune review (#31)
+# ---------------------------------------------------------------- prune review
 
 
 def test_a_prune_page_for_a_job_that_is_not_one_is_a_404(client: TestClient, planned_diff: Path) -> None:
@@ -2784,7 +2784,7 @@ def test_a_prune_page_for_a_job_that_is_not_one_is_a_404(client: TestClient, pla
     assert client.get("/prune/not-a-job").status_code == 404
 
 
-# ---------------------------------------------------------------- #43 review: two tabs, stale exports, expiry
+# ---------------------------------------------------------------- two tabs, stale exports, expiry
 
 
 def test_a_prune_review_is_kept_30_days_from_its_last_use(client: TestClient, data_dir: Path) -> None:
@@ -2847,7 +2847,7 @@ def test_a_check_is_followed_by_a_names_fetch_when_names_are_missing(
 def test_with_no_token_nothing_starts_a_names_fetch(
     data_dir: Path, fake_cli: list[str], planned_diff: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """#118: `names_needed` is false with no Spotify token, so a fresh install's empty names cache
+    """`names_needed` is false with no Spotify token, so a fresh install's empty names cache
     never starts a "Spotify playlist names" job that could only fail with "no token file ... - run
     `likearr auth` first" - not at start, not after a check, not after a settings save."""
     (data_dir / "spotify-token.json").unlink()
@@ -2869,7 +2869,7 @@ def test_with_no_token_nothing_starts_a_names_fetch(
 def test_a_reauth_that_grants_the_collaborative_scope_makes_names_needed_again(
     client: TestClient, data_dir: Path
 ) -> None:
-    """#103 item 3: the last listing greyed out a collaborative playlist for want of
+    """The last listing greyed out a collaborative playlist for want of
     playlist-read-collaborative. Once the token has it, that answer is stale: `names_needed` says
     re-list, so the picker and a settings save stop refusing the playlist."""
     web = _web_of(client)
@@ -3055,7 +3055,7 @@ def _record_saved_last_run(data_dir: Path) -> str:
 
 
 def test_not_this_one_from_look_up_is_refused_for_a_saved_album(client: TestClient, data_dir: Path) -> None:
-    """#153: the server refuses it too, with the reason, and writes nothing."""
+    """The server refuses it too, with the reason, and writes nothing."""
     _login(client)
     release = _record_saved_last_run(data_dir)
     before = (data_dir / "config.toml").read_text()
@@ -3076,7 +3076,7 @@ def test_a_live_check_card_has_no_not_this_one(client: TestClient) -> None:
     assert "Not this one" not in final
 
 
-# ---------------------------------------------------------------- files on disk behind an unmonitor (#30)
+# ---------------------------------------------------------------- files on disk behind an unmonitor
 
 
 def test_a_job_adopted_after_a_restart_says_so_and_offers_no_cancel(data_dir: Path, fake_cli: list[str]) -> None:
@@ -3108,7 +3108,7 @@ def test_a_job_adopted_after_a_restart_says_so_and_offers_no_cancel(data_dir: Pa
     assert f'action="/jobs/{job_id}/cancel"' not in page
 
 
-# ---------------------------------------------------------------- #54: the collision card's actions
+# ---------------------------------------------------------------- the collision card's actions
 
 
 def _collision_on_status(data_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -3156,7 +3156,7 @@ def test_a_collision_card_offers_check_again_and_not_this_one_for_each_wanted_re
 def test_a_collision_card_offers_no_not_this_one_for_a_saved_album(
     client: TestClient, data_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """#153: the card lists only releases "Not this one" can stop."""
+    """The card lists only releases "Not this one" can stop."""
     _collision_on_status(data_dir, monkeypatch)
     release = _record_saved_last_run(data_dir)
     _login(client)
@@ -3170,7 +3170,7 @@ def test_a_collision_card_offers_no_not_this_one_for_a_saved_album(
 def test_accept_as_known_opens_the_apply_confirm_with_accept_health_ticked(
     client: TestClient, data_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """With `[health.mqtt]` configured (issue #139), the collisions card and the apply confirm's
+    """With `[health.mqtt]` configured, the collisions card and the apply confirm's
     accept banner still name Home Assistant."""
     _collision_on_status(data_dir, monkeypatch)
     _enable_mqtt(data_dir)
@@ -3203,7 +3203,7 @@ def test_accept_as_known_opens_the_apply_confirm_with_accept_health_ticked(
 def test_accept_as_known_says_status_not_home_assistant_without_mqtt(
     client: TestClient, data_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """No `[health.mqtt]` in the fixture config (issue #139): the collisions card and the apply
+    """No `[health.mqtt]` in the fixture config: the collisions card and the apply
     confirm's accept banner name Status, never Home Assistant."""
     _collision_on_status(data_dir, monkeypatch)
     _login(client)
@@ -3248,7 +3248,7 @@ def test_accept_as_known_is_only_offered_for_a_check_that_reports_the_collision(
 def test_status_and_settings_say_to_re_authorize_for_collaborative_playlists_only_when_needed(
     client: TestClient, data_dir: Path, monkeypatch: pytest.MonkeyPatch, scope: str, noted: bool
 ) -> None:
-    """#103 item 3: a token from before likearr asked for playlist-read-collaborative keeps working,
+    """A token from before likearr asked for playlist-read-collaborative keeps working,
     so this is a note on Status and Settings, never a problem that turns the banner amber."""
     monkeypatch.setenv("LIKEARR_SPOTIFY_CLIENT_ID", "fake-client-id")
     token = data_dir / "spotify-token.json"

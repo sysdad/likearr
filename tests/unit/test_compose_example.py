@@ -1,5 +1,6 @@
-"""`deploy/compose.example.yaml`: the service split introduced by issue #68 phase 4, and the
-README quick start that pastes a minimal single-service block derived from it (issue #104).
+"""`deploy/compose.example.yaml`: the service split between the always-on `likearr` service and
+the one-shot `likearr-cli` service, and the README quick start that pastes a minimal
+single-service block derived from it.
 
 No YAML library is in the dev deps, so this checks the file's shape at the text level: the
 `likearr` service is always-on with no profile and no library mount, and `likearr-cli` is the
@@ -65,7 +66,7 @@ def test_no_reference_to_the_old_likearr_ui_service_name() -> None:
     assert "likearr-ui" not in _text()
 
 
-# Issue #104: the README quick start has to run as written with no clone. It pastes a minimal
+# The README quick start has to run as written with no clone. It pastes a minimal
 # single-service block as compose.yaml at the repo root, so every relative path in it resolves
 # from there, same as the full deploy/compose.example.yaml this file otherwise checks.
 
@@ -118,7 +119,7 @@ def _quick_start_yaml_block() -> str:
 
 def test_the_readme_quick_start_service_agrees_with_compose_example() -> None:
     """The README's Quick start pastes its own minimal single-service block rather than the full
-    deploy/compose.example.yaml (issue #104); hand-maintained separately, the two must still agree
+    deploy/compose.example.yaml; hand-maintained separately, the two must still agree
     on the image tag and the settings that protect a run in progress, or one has silently drifted."""
     block = _quick_start_yaml_block()
     assert block.strip(), "README.md's Quick start has no ```yaml block"
@@ -139,7 +140,7 @@ def test_the_readme_quick_start_service_agrees_with_compose_example() -> None:
 
 
 def test_each_service_defaults_to_a_pinned_published_image() -> None:
-    """Issue #105: the default is `image:` (a version-pinned GHCR pull), not a build from source."""
+    """The default is `image:` (a version-pinned GHCR pull), not a build from source."""
     for name, block in _service_blocks().items():
         lines = [line.strip() for line in block.splitlines()]
         images = [line for line in lines if line.startswith("image:")]
@@ -155,7 +156,7 @@ def test_each_service_defaults_to_a_pinned_published_image() -> None:
 
 
 def test_each_services_build_alternative_is_commented_but_still_points_at_the_dockerfile() -> None:
-    """The `build: .` route from before #105 is kept, commented out, for people who prefer it."""
+    """The `build: .` route is kept, commented out, for people who prefer it."""
     for name, block in _service_blocks().items():
         assert "# build:" in block, name
         match = re.search(r"#\s*build:\s*\n\s*#\s*context:\s*(\S+)", block)
@@ -189,7 +190,7 @@ def test_the_example_ui_password_is_empty_so_an_unedited_copy_fails_closed() -> 
 
 
 def test_the_quick_start_is_compose_only_with_no_config_file_to_write() -> None:
-    """Issue #3: the Compose block and `docker compose up -d` are the whole install. No clone, no
+    """The Compose block and `docker compose up -d` are the whole install. No clone, no
     fetched or edited config.toml - `likearr start` writes it on a first start - and the Lidarr URL
     is an environment variable in the block and in env.example alike."""
     commands = _quick_start_commands()
@@ -217,14 +218,14 @@ def test_ignore_files_cover_the_env_file_and_the_data_dir() -> None:
         assert entries & {"likearr-data/", "likearr-data"}, ignore
 
 
-# Issue #107: the healthcheck moves into the image, and both services document the uid/gid build
+# The healthcheck moves into the image, and both services document the uid/gid build
 # args the image already takes.
 
 DOCKERFILE_PATH = REPO_ROOT / "Dockerfile"
 
 
 def test_the_image_code_is_root_owned_and_precompiled() -> None:
-    """#171: the runtime user must not be able to rewrite its own code, so nothing is copied into
+    """The runtime user must not be able to rewrite its own code, so nothing is copied into
     the final stage with --chown; and since that means no process can write a .pyc there, likearr
     (installed editable, which UV_COMPILE_BYTECODE skips) is compiled in the builder. CI's image
     smoke test checks the built image; this pins the Dockerfile lines that make it so."""

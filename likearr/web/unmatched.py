@@ -1,4 +1,4 @@
-"""The Unmatched page (#60): what the last run monitors nothing for, one row per release, by reason.
+"""The Unmatched page: what the last run monitors nothing for, one row per release, by reason.
 
 The page used to print one bullet per song - hundreds of them under "Couldn't be matched" on a
 large library - which no one could act on. This module turns the same last-run facts into rows a

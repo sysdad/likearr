@@ -61,7 +61,7 @@ def auth_command(
 ) -> int:
     """`likearr auth`: run the Spotify PKCE flow and write the token file.
 
-    The consent screen asks to read only (#161), unless `promote_save` (``--promote-save``) opts
+    The consent screen asks to read only, unless `promote_save` (``--promote-save``) opts
     into the write scopes `promote-save` needs, or the token being replaced already has them
     (`asks_for_write_scopes`: a routine re-auth keeps what you approved before).
 
@@ -103,7 +103,7 @@ def auth_command(
         emit(f"FAIL  {exc}")
         return EXIT_ERROR
 
-    if returned_state != state:  # a missing state fails too, as in the web flow (#171)
+    if returned_state != state:  # a missing state fails too, as in the web flow
         emit("FAIL  the 'state' parameter did not match; the callback did not come from this run")
         return EXIT_ERROR
 
@@ -178,8 +178,8 @@ def playlists_command(ctx: Context, *, as_json: bool = False) -> int:
     ``playlists`` is sorted by name (casefolded), then id. ``owned`` is false for a playlist this
     account can see but does not own - followed, someone else's, or one of Spotify's own
     algorithmic or editorial playlists. ``readable`` is what a run can read and the picker offers:
-    owned, or one you collaborate on once the token has ``playlist-read-collaborative`` (#103,
-    item 3). ``needs_reauth`` marks a collaborative one the stored token predates: re-authorizing,
+    owned, or one you collaborate on once the token has ``playlist-read-collaborative``.
+    ``needs_reauth`` marks a collaborative one the stored token predates: re-authorizing,
     not copying it, makes it readable. ``configured`` is
     ``[spotify].playlists`` in config order, and ``missing`` is the configured ids Spotify does not
     list at all (a deleted playlist, or the wrong id), in the same order - a configured id that is
@@ -265,7 +265,7 @@ def playlists_command(ctx: Context, *, as_json: bool = False) -> int:
                 f"{NOT_OWNED_REASON}; {NOT_OWNED_WORKAROUND}."
             )
     # A token without playlist-read-collaborative may not be shown someone else's collaborative
-    # playlist at all (#103, item 3), so a missing id may only need a re-authorization.
+    # playlist at all, so a missing id may only need a re-authorization.
     hint = ""
     if missing:
         try:
@@ -411,7 +411,7 @@ def _adopt_plan(ctx: Context, *, keep_file: Path | None, out: Path, now: datetim
     if not result.mb_ok:
         # First, before the table: a degraded resolve can leave out more than the catalogues held
         # below (a saved album whose lookup failed looks unwanted too), and the reader must know
-        # before reading a single row (#6).
+        # before reading a single row.
         emit("WARNING: MusicBrainz failed during this plan, so what the sources want is incomplete.")
         emit("WARNING: releases it could not look up may be planned for unmonitor although a source wants them.")
         emit("WARNING: re-run `likearr adopt` later, once MusicBrainz answers, and review that plan instead.")
@@ -461,7 +461,7 @@ def _adopt_plan(ctx: Context, *, keep_file: Path | None, out: Path, now: datetim
             count = f"{len(items)} album{'' if len(items) == 1 else 's'}"
             emit(f"  {_artist_label(view, mbid)} ({count}): {items[0].reason}")
     # Adopt only records ownership. The next `likearr run` then sets "Monitor New Albums" to None on
-    # every artist holding a claimed or kept release (#172), so the write is stated here, where the
+    # every artist holding a claimed or kept release, so the write is stated here, where the
     # decision is made.
     held = {record.key.artist_mbid for record in (*adoption.claim, *adoption.keep_as_manual)}
     names = sorted(

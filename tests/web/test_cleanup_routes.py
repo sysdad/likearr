@@ -2,7 +2,7 @@
 deciding and exporting, the carried-over decisions and the ledger, always-kept albums in words,
 and the read-only previews and finish checklist.
 
-Split out of `test_app.py` with the routes themselves (#154); the shared fixtures are in
+Split out of `test_app.py` with the routes themselves; the shared fixtures are in
 `conftest.py`, the fake CLI and the other shared helpers in `app_support.py`.
 """
 
@@ -36,7 +36,7 @@ from tests.web.app_support import (
     _web_of,
 )
 
-# ---------------------------------------------------------------- prune review (#31)
+# ---------------------------------------------------------------- prune review
 
 
 def test_the_prune_page_builds_the_report_as_a_job_and_starts_nothing_by_itself(
@@ -228,7 +228,7 @@ def test_the_downloads_are_attachments_of_the_current_decisions(client: TestClie
     assert client.get(f"/prune/{job_id}/download/..%2Fmeta.json").status_code == 404
 
 
-# ---------------------------------------------------------------- #43 review: two tabs, stale exports, expiry
+# ---------------------------------------------------------------- two tabs, stale exports, expiry
 
 
 def test_a_stale_second_tab_gets_409_and_cannot_undo_a_keep(
@@ -322,7 +322,7 @@ def test_a_revision_that_is_not_a_small_number_is_a_stale_tab(client: TestClient
         assert response.status_code == 409
 
 
-# ---------------------------------------------------------------- #55: Clean up carries decisions over
+# ---------------------------------------------------------------- Clean up carries decisions over
 
 
 @pytest.fixture
@@ -488,7 +488,7 @@ def test_a_review_started_before_the_ledger_keeps_its_choices_and_its_exports_go
     _login(client)
     job_id = _build_prune(client)
     job_dir = data_dir / "ui" / "jobs" / job_id
-    # A draft and an export from before #55: Big Band promoted.
+    # An older draft and export: Big Band promoted.
     (job_dir / "prune-draft.json").write_text(json.dumps({"artists": {BIG: "promote"}, "revs": {BIG: 3}}))
     (job_dir / "decisions.json").write_text("{}")
     (job_dir / "review-data.json").write_text("{}")
@@ -611,7 +611,7 @@ def test_the_net_effect_is_rendered_with_the_card_once_a_decision_is_picked(
     assert 'class="note effects"' not in _card(undone.text, QUEEN)
 
 
-# ---------------------------------------------------------------- #64: always kept, in words
+# ---------------------------------------------------------------- always kept, in words
 
 
 def _aretha_report(data_dir: Path, monkeypatch: pytest.MonkeyPatch, *, song: str, playlist: str) -> str:
@@ -737,7 +737,7 @@ def test_the_names_and_the_last_run_are_read_only_when_a_row_needs_them() -> Non
     assert (web.names_reads, web.config_reads) == (1, 1)
 
 
-# ---------------------------------------------------------------- #58: finish the clean up
+# ---------------------------------------------------------------- finish the clean up
 
 
 @pytest.fixture
@@ -838,7 +838,7 @@ def test_export_previews_the_move_spotify_and_lidarr_read_only(
 def test_each_preview_starts_only_once_the_step_before_it_has_finished(
     data_dir: Path, fake_cli: list[str], prune_report: Path, promote_plan: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The chain's own order (#266 moved it): the move, then Spotify, then the Lidarr checks.
+    """The chain's own order: the move, then Spotify, then the Lidarr checks.
     `_preview_jobs` sorts by kind, so this reads the jobs' times, from a clock that moves a second
     a read (job times are to the second)."""
     monkeypatch.setenv("LIKEARR_LIDARR_API_KEY", API_KEY_SENTINEL)
@@ -973,7 +973,7 @@ def test_a_token_without_the_write_scopes_gets_the_auth_command(
 def test_in_callback_mode_a_token_without_the_write_scopes_also_gets_a_button(
     data_dir: Path, fake_cli: list[str], prune_report: Path, promote_plan: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """#161: with `[ui] public_url` set, the missing-write-scope hint also offers a button that
+    """With `[ui] public_url` set, the missing-write-scope hint also offers a button that
     starts Settings' connect flow with promote-save's write scopes."""
     monkeypatch.setenv("LIKEARR_LIDARR_API_KEY", API_KEY_SENTINEL)
     (data_dir / "config.toml").write_text(CONFIG.replace(*_PUBLIC_URL))
@@ -1017,7 +1017,7 @@ def test_the_clean_up_page_allows_one_click_write_access_only_at_the_public_url(
     base_url: str,
     form_action: str,
 ) -> None:
-    """#11: the page holding "Authorize write access on Spotify" is the document whose form-action
+    """The page holding "Authorize write access on Spotify" is the document whose form-action
     the browser checks on each hop of that POST's redirect, so it widens exactly as Settings does:
     at the `public_url` origin only."""
     monkeypatch.setenv("LIKEARR_LIDARR_API_KEY", API_KEY_SENTINEL)
@@ -1101,7 +1101,7 @@ def test_preview_again_while_a_preview_runs_keeps_the_running_chain(
     assert "7 files" in _finished_previews(client, job_id)
 
 
-# ---------------------------------------------------------------- #63 review: each binding check is load-bearing
+# ---------------------------------------------------------------- each binding check is load-bearing
 
 
 def _spotify_plan_dir(data_dir: Path) -> Path:
@@ -1225,7 +1225,7 @@ def test_the_page_says_where_the_command_prefix_comes_from(
     )
 
 
-# ---------------------------------------------------------------- Clean up off (#148)
+# ---------------------------------------------------------------- Clean up off
 
 
 def test_with_clean_up_off_the_nav_has_no_clean_up_link(client: TestClient, data_dir: Path) -> None:

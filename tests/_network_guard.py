@@ -2,7 +2,7 @@
 test spawns.
 
 Nothing in the suite talks to the network today - every Spotify, MusicBrainz and Lidarr call goes
-through a fake or a `respx` mock - but nothing enforced that (issue #137). A test that forgets a
+through a fake or a `respx` mock - but nothing enforced that. A test that forgets a
 mock should fail loudly with "network disabled in tests", not quietly reach Spotify (whose Dev
 Mode quota was exhausted on 2026-09-23), MusicBrainz, or someone's real Lidarr.
 

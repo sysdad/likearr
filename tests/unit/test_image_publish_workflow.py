@@ -1,4 +1,4 @@
-"""`.github/workflows/image-publish.yml`: the publish half of issue #105.
+"""`.github/workflows/image-publish.yml`: the image-publish workflow.
 
 The merge gate for this workflow is a review confirming its only trigger is a `v*` tag push -
 these tests pin that in code too, along with the other safety properties the ruling called out:
@@ -84,7 +84,7 @@ def test_the_smoke_test_runs_before_the_push_step() -> None:
 
 
 def test_the_smoke_test_matches_cis_user_and_checks() -> None:
-    # Same non-root uid/gid ruling (#105) and the same two commands ci.yml's build-only job runs.
+    # Same non-root uid/gid ruling and the same two commands ci.yml's build-only job runs.
     text = _text()
     assert "--user 1030:100" in text
     assert "likearr:publish-smoke --help" in text
@@ -92,7 +92,7 @@ def test_the_smoke_test_matches_cis_user_and_checks() -> None:
 
 
 def test_the_smoke_test_includes_cis_root_owned_and_precompiled_check() -> None:
-    # #171's check (ci.yml's docker job) has to run here too: a published image skipping it would
+    # ci.yml's docker job check has to run here too: a published image skipping it would
     # mean the security hardening it verifies is never re-checked on the path that reaches GHCR.
     text = _text()
     assert "image code is root-owned and precompiled" in text

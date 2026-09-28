@@ -1,6 +1,6 @@
 """What a run reports: the health record it always publishes, and the summary a human reads.
 
-These only format and publish. Split out of `shell.run` (#156).
+These only format and publish. Split out of `shell.run`.
 """
 
 from __future__ import annotations
@@ -96,7 +96,7 @@ def _record_from_plan(
 
     `executed` is the reviewed diff an apply actually carried out, when it differs from `result`'s
     own (fresh, just-rebuilt) plan - the same distinction `_assess` and `_record_for_explain`
-    already make. The fallback guard message must come from it too (issue #182): a plan made with
+    already make. The fallback guard message must come from it too: a plan made with
     `--accept-shrink` carries no shrink guard, but the fresh plan rebuilt inside `apply()` still
     shows one, so reading `result.diff` here would tell the operator to accept a shrink they just
     accepted.
@@ -207,7 +207,7 @@ def _publish(ctx: Context, record: HealthRecord, *, diff: Diff | None, local_onl
 
 
 def _is_news(ctx: Context, record: HealthRecord) -> bool:
-    """`should_notify` for this record, against the last published run before it (#112).
+    """`should_notify` for this record, against the last published run before it.
 
     Read before `record_run` stores this one, so "previous" is really the one before. `paused` and
     `skipped` runs are passed over: they say nothing about the library. A failed read counts as
@@ -347,7 +347,7 @@ def print_name_collisions(diff: Diff) -> None:
     one) and the number of releases that went unmonitored, so the cost of each skip is visible
     at a glance.
 
-    The advice is only what Lidarr can actually do (issue #32). It used to suggest adding the
+    The advice is only what Lidarr can actually do. It used to suggest adding the
     artist "under a distinct name", which Lidarr cannot hold: `Artist.ApplyChanges` never copies
     the name, so a refresh puts MusicBrainz's back, and an import with two same-named artists
     throws `MultipleArtistsFoundException`.

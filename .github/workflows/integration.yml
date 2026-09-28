@@ -1,7 +1,7 @@
 name: integration
-# Advisory only: catches Lidarr API drift (linked to #11, #7, #8, #18) without ever blocking a
+# Advisory only: catches Lidarr API drift without ever blocking a
 # merge, because it depends on services likearr does not control (Lidarr's own metadata server).
-# See #135 for the decision record. Do not add this as a required status check.
+# Do not add this as a required status check.
 on:
   schedule:
     - cron: "14 3 * * *"
@@ -26,7 +26,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # The version verified live for likearr today (see #135). Pinned by digest, not tag,
+          # The version verified live for likearr today. Pinned by digest, not tag,
           # so a retag upstream can't silently change what this leg runs.
           - variant: pinned
             image: linuxserver/lidarr@sha256:044d616beb43c5e7810991242c6a9c42b93ff238c8c0850684939634ea751208

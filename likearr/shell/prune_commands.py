@@ -36,7 +36,7 @@ __all__ = [
     "prune_stage_command",
 ]
 
-# The name the prune log lines carried before the #155 split, so their output is unchanged.
+# The name the prune log lines carried before the split, so their output is unchanged.
 log = logging.getLogger("likearr.shell.commands")
 
 PRUNE_TOP_N = 20
@@ -67,7 +67,7 @@ def prune_report_command(ctx: Context, *, out: Path = Path("prune.json"), now: d
             for r in result.resolve_result.artist_resolutions.values()
             if r.artist_name and (r.status is not ResolutionStatus.RESOLVED or not r.artist_mbid)
         ),
-        # The songs a protected row names by title, not by id (#64).
+        # The songs a protected row names by title, not by id.
         tracks=result.snapshot.tracks,
     )
     write_atomic(out, json.dumps(_prune_to_dict(report), indent=2) + "\n", mode=0o600)
@@ -144,7 +144,7 @@ PRUNE_CHECKS_VERSION = 1
 
 
 def prune_checks_command(ctx: Context, *, out: Path | None = None, now: datetime | None = None) -> int:
-    """`likearr prune-checks`: what to check in Lidarr before `prune-stage --apply` (#58). Read-only.
+    """`likearr prune-checks`: what to check in Lidarr before `prune-stage --apply`. Read-only.
 
     - **Import lists with automatic add**: they would add back an artist the stage removes.
     - **The command queue**: a rescan or refresh still running while files move out can import
@@ -241,7 +241,7 @@ def prune_stage_command(
     with ``deleteFiles=false`` (the files are already elsewhere); a partial stage triggers a
     RescanArtist so Lidarr notices what left.
 
-    The mount is checked first, preview and apply alike (#58): the root folder must be visible
+    The mount is checked first, preview and apply alike: the root folder must be visible
     at Lidarr's path and the holding folder on its filesystem, so a wrong mount is caught by the
     preview rather than by the first file of a real move. `check_mount=False` is for the web UI's
     preview, which has no library mount; it is refused with `do_apply`. `out` writes the preview's
@@ -299,7 +299,7 @@ def prune_stage_command(
 
     # `--apply` takes the run lock from here on: this is where the world gets read (the
     # freshness check, and `_lidarr_plan`'s ownership read below) and then acted on, so it is the
-    # window a concurrent run could invalidate (#181). The preview never takes it - the web UI's
+    # window a concurrent run could invalidate. The preview never takes it - the web UI's
     # `prune-preview` job must keep working while a run is going.
     with run_lock(ctx.lock_path) if do_apply else contextlib.nullcontext():
         if do_apply:
@@ -395,7 +395,7 @@ def _plan_after(
 
 
 JOURNAL = "moves.jsonl"
-"""One line per file, written and flushed to disk as each move happens (#58): a stage that stops
+"""One line per file, written and flushed to disk as each move happens: a stage that stops
 part-way leaves an exact record of what moved. ``manifest.json`` gathers the same when it ends."""
 
 
@@ -544,7 +544,7 @@ def _stage_summary(
     mount_checked: bool,
     now: datetime,
 ) -> dict[str, Any]:
-    """What a `prune-stage` preview found, for the web UI (#58): the totals, the Lidarr plan, and
+    """What a `prune-stage` preview found, for the web UI: the totals, the Lidarr plan, and
     the sha256 of the decisions file it read, so the page shows it only beside that export."""
     digest = ""
     if decisions is not None:
@@ -581,7 +581,7 @@ def _check_root_visible(root_folder: str) -> None:
 
 
 def _check_mount(holding: Path, root_folder: str, moves: Sequence[Move], *, mountinfo: str | None = None) -> None:
-    """Refuse a mount that would fail part-way through a real move (#58), before a move is listed:
+    """Refuse a mount that would fail part-way through a real move, before a move is listed:
 
     - the root folder is visible at Lidarr's own path;
     - the holding folder is on the root folder's filesystem, and - where ``/proc/self/mountinfo``

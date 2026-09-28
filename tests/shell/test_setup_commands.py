@@ -79,7 +79,7 @@ def test_doctor_warns_rather_than_crashing_without_a_token(
 def test_doctor_warns_about_the_example_contact_placeholder(
     tmp_path: Path, sink: CapturingSink, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """#110, option B: the load accepts the example's `you@example.com`, Doctor names it."""
+    """The load accepts the example's `you@example.com`, Doctor names it."""
     source, lookup, lidarr = followed_world()
     config = make_config(tmp_path, musicbrainz=MusicBrainzConfig(contact=PLACEHOLDER_CONTACT))
     with make_context(tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink, config=config) as ctx:
@@ -103,7 +103,7 @@ def test_doctor_says_nothing_about_a_real_contact(
 def test_doctor_names_the_browser_path_when_no_token_file_exists(
     tmp_path: Path, sink: CapturingSink, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """#118: distinct from `test_doctor_warns_rather_than_crashing_without_a_token` (Spotify not
+    """Distinct from `test_doctor_warns_rather_than_crashing_without_a_token` (Spotify not
     configured at all) - here Spotify *is* configured, but `likearr auth` was never run. A new
     user reads this before they know the CLI exists, so it names Settings, not just the CLI."""
     source, lookup, lidarr = followed_world()
@@ -158,7 +158,7 @@ def test_doctor_fails_on_a_missing_root_folder(
 
 
 def _unset_library(tmp_path: Path, **unset: str):
-    """A config as a first start leaves it (#3): no root folder, no quality profile, or neither."""
+    """A config as a first start leaves it: no root folder, no quality profile, or neither."""
     config = make_config(tmp_path)
     return make_config(tmp_path, lidarr=replace(config.lidarr, **unset))
 
@@ -395,7 +395,7 @@ def test_doctor_folds_case_and_punctuation_before_comparing(
 def test_doctor_fails_on_an_unmonitored_artist_holding_a_monitored_release(
     tmp_path: Path, sink: CapturingSink, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Lidarr never searches or lists as wanted an album whose artist is unmonitored (#11)."""
+    """Lidarr never searches or lists as wanted an album whose artist is unmonitored."""
     source, lookup, lidarr = followed_world()
     lidarr.seed(lidarr_artist("artist-1", id=1, name="Test Artist", monitored=False))
     with make_context(tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink) as ctx:
@@ -421,7 +421,7 @@ def test_doctor_passes_when_every_artist_holding_a_monitored_release_is_monitore
     assert "PASS  unmonitored artists" in capsys.readouterr().out
 
 
-# --------------------------------------------------------------------------- doctor: lost state (#175)
+# --------------------------------------------------------------------------- doctor: lost state
 
 
 def test_doctor_fails_when_lidarr_has_tagged_artists_and_the_state_database_has_none(
@@ -612,7 +612,7 @@ def test_doctor_passes_every_spotify_page_that_answers(
 def test_setup_profiles_json_lists_lidarrs_root_folders_and_quality_profiles(
     tmp_path: Path, sink: CapturingSink, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Issue #3: Settings picks `[lidarr] root_folder` and `quality_profile` from these lists."""
+    """Settings picks `[lidarr] root_folder` and `quality_profile` from these lists."""
     source, lookup, lidarr = followed_world()
     lidarr.root_folder_paths = ["/music", "/audiobooks"]
     lidarr.quality_profiles = {"Standard": 1, "Lossless": 2}

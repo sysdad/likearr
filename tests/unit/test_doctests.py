@@ -1,4 +1,4 @@
-"""The examples in the core's docstrings are tests too (#166).
+"""The examples in the core's docstrings are tests too.
 
 pytest collects only `tests/`, so a doctest that stopped being true would never fail CI. Running
 them here keeps `testpaths` as it is and covers exactly the modules whose examples are the spec.

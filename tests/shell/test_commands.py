@@ -89,7 +89,7 @@ def test_adopt_plans_only_and_writes_a_plan_file(
 def test_adopt_plan_says_the_next_run_sets_monitor_new_albums_to_none_on_the_artists_it_will_own(
     tmp_path: Path, sink: CapturingSink, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """#172: adopt only records ownership, and the next run then sets "Monitor New Albums" to None
+    """Adopt only records ownership, and the next run then sets "Monitor New Albums" to None
     on every artist holding a claimed or kept release. The plan says so, by name."""
     ctx, lidarr, _source, _lookup = _adopt_world(tmp_path, sink=sink)
     lidarr.artists["artist-1"] = replace(lidarr.artists["artist-1"], monitor_new_items="all")
@@ -145,7 +145,7 @@ def test_adopt_plan_says_nothing_about_monitor_new_albums_when_every_artist_is_o
 
 
 def test_adopt_apply_alone_is_not_the_first_reviewed_apply(tmp_path: Path, sink: CapturingSink) -> None:
-    """Issue #111: `adopt --apply` claims what Lidarr already monitors; it is not a reviewed run of
+    """`adopt --apply` claims what Lidarr already monitors; it is not a reviewed run of
     the plan, so scheduled applies stay held after it."""
     ctx, _lidarr, _source, _lookup = _adopt_world(tmp_path, sink=sink, first_applied=False)
     plan_path = tmp_path / "adopt.json"
@@ -335,7 +335,7 @@ def test_read_keep_file_ignores_comments_and_blank_lines(tmp_path: Path) -> None
 
 
 class _UnreadCatalogue(FakeLookup):
-    """A lookup whose catalogue browse for one artist raises `error` (issue #6)."""
+    """A lookup whose catalogue browse for one artist raises `error`."""
 
     def __init__(self, artist_mbid: str, error: Exception) -> None:
         super().__init__()
@@ -384,7 +384,7 @@ def _unread_world(tmp_path: Path, *, sink: CapturingSink, error: Exception) -> t
 def test_adopt_holds_back_the_albums_of_an_artist_whose_catalogue_was_not_read(
     tmp_path: Path, sink: CapturingSink, capsys: pytest.CaptureFixture[str], error: Exception, reason: str
 ) -> None:
-    """Issue #6: none of the artist's releases reached the desired set, so every hand-monitored
+    """None of the artist's releases reached the desired set, so every hand-monitored
     album of theirs looked unwanted and was planned for unmonitor. They are held instead, in the
     printed plan and in the plan file, and `--apply` leaves them monitored."""
     ctx, lidarr = _unread_world(tmp_path, sink=sink, error=error)
@@ -442,7 +442,7 @@ def test_adopt_does_not_warn_when_the_resolve_was_healthy(
 
 
 def test_an_adopt_plan_file_without_held_releases_still_reads(tmp_path: Path) -> None:
-    """A plan written before #6 has no `held` field; it reads as holding nothing."""
+    """An older plan file has no `held` field; it reads as holding nothing."""
     from likearr.shell.adopt_io import read_adopt_plan
 
     path = tmp_path / "adopt.json"
@@ -674,7 +674,7 @@ def test_auth_refuses_a_callback_with_no_state(
     monkeypatch: pytest.MonkeyPatch,
     manual: bool,
 ) -> None:
-    """#171: a code with no state used to pass; the web flow already refused it."""
+    """A code with no state used to pass; the web flow already refused it."""
     monkeypatch.setattr("builtins.input", lambda _prompt: "http://127.0.0.1:8765/callback?code=fake-code")
     with make_context(tmp_path, sink=sink) as ctx:
         ctx.auth = _NoStateAuth(ctx.config.spotify, httpx.Client())
@@ -688,7 +688,7 @@ def test_auth_refuses_a_callback_with_no_state(
 def test_auth_manual_asks_a_new_user_for_read_scopes_only(
     tmp_path: Path, sink: CapturingSink, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """#161: no token file yet - a new user - so the consent screen asks to read, nothing more,
+    """No token file yet - a new user - so the consent screen asks to read, nothing more,
     and says how to add promote-save's write access."""
     code, out = _auth_printing_the_url(tmp_path, sink, capsys, monkeypatch, token_scope=None, manual=True)
 
@@ -712,7 +712,7 @@ def test_auth_manual_promote_save_asks_for_the_write_scopes_too(
 def test_auth_keeps_the_write_scopes_a_token_file_already_has(
     tmp_path: Path, sink: CapturingSink, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """#161 decision (a): a plain re-authorization never quietly drops write access you approved."""
+    """A plain re-authorization never quietly drops write access you approved."""
     code, out = _auth_printing_the_url(
         tmp_path, sink, capsys, monkeypatch, token_scope=" ".join([*READ, *WRITE]), manual=True
     )
@@ -907,7 +907,7 @@ def test_playlists_json_includes_unowned_entries_marked_not_owned(
     tmp_path: Path, sink: CapturingSink, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """A followed, collaborative or Spotify-owned playlist is listed too - just not selectable,
-    because Development Mode returns no items for it (issue #103, item 1)."""
+    because Development Mode returns no items for it."""
     library = FakeLibrary(playlists=[MINE], unowned_playlists=[NOT_MINE])
     with playlists_context(tmp_path, sink, configured=(MINE.id,), library=library) as ctx:
         code = commands.playlists_command(ctx, as_json=True)
@@ -970,7 +970,7 @@ def test_playlists_table_lists_unowned_entries_separately_with_the_reason(
 def test_playlists_json_marks_a_collaborative_playlist_readable_or_needing_a_reauth(
     tmp_path: Path, sink: CapturingSink, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """#103 item 3: someone else's collaborative playlist is readable once the token has
+    """Someone else's collaborative playlist is readable once the token has
     playlist-read-collaborative, and marked needs_reauth before that - the web picker offers the
     first and says "re-authorize" for the second."""
     library = FakeLibrary(playlists=[MINE], unowned_playlists=[SHARED, SHARED_BEFORE_REAUTH])
@@ -1013,7 +1013,7 @@ def test_playlists_table_lists_a_collaborative_playlist_as_readable_and_an_old_o
 def test_a_missing_playlist_suggests_a_reauth_only_when_the_token_lacks_the_collaborative_scope(
     tmp_path: Path, sink: CapturingSink, capsys: pytest.CaptureFixture[str], scopes: frozenset[str], hinted: bool
 ) -> None:
-    """#103 item 3: a token without playlist-read-collaborative may not be shown someone else's
+    """A token without playlist-read-collaborative may not be shown someone else's
     collaborative playlist at all, so "deleted, or the wrong id" alone would mislead."""
     library = FakeLibrary(scopes=scopes, playlists=[MINE])
     with playlists_context(tmp_path, sink, configured=("pl-gone-000000000000000",), library=library) as ctx:

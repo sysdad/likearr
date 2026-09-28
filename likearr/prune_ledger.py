@@ -1,4 +1,4 @@
-"""The Clean up ledger (#55): what earlier reviews decided, per album and per artist.
+"""The Clean up ledger: what earlier reviews decided, per album and per artist.
 
 A prune report is rebuilt from scratch every time, and on its own it remembers nothing: a report
 can list over a thousand albums, most of them kept in an earlier review.

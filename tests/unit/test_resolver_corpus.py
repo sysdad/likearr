@@ -352,7 +352,7 @@ def test_resolution_over_real_data_is_repeatable(
 
 
 def test_the_relationship_rule_changes_no_other_answer_in_the_corpus(corpus: Corpus) -> None:
-    """Issue #14 in miniature, the replay's claim, in two halves over every recorded track.
+    """The relationship rule's claim, in miniature, in two halves over every recorded track.
 
     As Spotify credits it (MusicBrainz's own credit), the name search resolves it and the rule is
     never reached. Under a credit MusicBrainz does not hold, with no ISRC, the rule *is* reached,
@@ -391,7 +391,7 @@ def test_the_relationship_rule_changes_no_other_answer_in_the_corpus(corpus: Cor
 def _unmapped_spotify_album(name: str, artists: tuple[str, ...]):
     """A Spotify album as a *track* carries one: no barcode, because Spotify never sends the UPC.
 
-    This is the shape behind issue #1. Every liked and playlist track that a run left UNMAPPED at
+    This is a shape recorded across the corpus. Every liked and playlist track that a run left UNMAPPED at
     that step reached the resolver like this, which is why the
     detail on every one of them said "no barcode".
     """
@@ -453,14 +453,14 @@ def test_that_isrc_really_is_dominated_by_various_artists_compilations(corpus: C
 
 
 def test_a_release_musicbrainz_records_no_isrcs_for_stays_unmapped(corpus: Corpus) -> None:
-    """John Mayer - "TRY! - Live In Concert", the example in issue #1, which the ISRC does NOT fix.
+    """John Mayer - "TRY! - Live In Concert", which the ISRC does NOT fix.
 
     Spotify credits the album to "John Mayer"; MusicBrainz credits the release group to "John
     Mayer Trio", a different artist with a different MBID, and that credit mismatch alone is what
     makes the name search refuse a release group it has already found with a perfect score.
 
     The ISRC cannot rescue it, because MusicBrainz carries **no ISRC for any recording on Try!**
-    (see the corpus `_readme`). So without the relationship lookup (issue #14, next test) the track
+    (see the corpus `_readme`). So without the relationship lookup (see the next test) the track
     stays UNMAPPED at `track:album:search` - and the detail says the ISRC was tried and answered
     nothing, instead of stopping at "no barcode".
     """
@@ -478,7 +478,7 @@ def test_a_release_musicbrainz_records_no_isrcs_for_stays_unmapped(corpus: Corpu
 
 
 def test_try_resolves_under_john_mayer_trio_through_the_member_of_band_relationship(corpus: Corpus) -> None:
-    """Issue #14 on the real MBIDs: John Mayer is a `member of band` of John Mayer Trio, so the
+    """On the real MBIDs: John Mayer is a `member of band` of John Mayer Trio, so the
     release group the name search refused on the credit is taken under the Trio's credit.
 
     It is Album + Live, MusicBrainz knows no ISRC reaching it and the corpus holds no studio album
@@ -526,11 +526,11 @@ def test_the_corpus_records_the_try_credit_mismatch(corpus: Corpus) -> None:
     )
     joined = corpus.raw["artist_relations"][release.artist_mbid]
     assert [(r["type"], r["artist"]["id"]) for r in joined] == [("member of band", john_mayer[0])], (
-        "the Trio's recorded relationship to John Mayer is what issue #14's test rests on"
+        "the Trio's recorded relationship to John Mayer is what this test rests on"
     )
 
 
-# ------------------------------------ following the artist, on real data (issue #9)
+# ------------------------------------ following the artist, on real data
 
 
 def _smallest(corpus: Corpus, intent, *, artists=(), cache=None):
@@ -547,7 +547,7 @@ def _smallest(corpus: Corpus, intent, *, artists=(), cache=None):
 
 
 def test_following_the_weeknd_swaps_the_cached_single_for_after_hours(corpus: Corpus) -> None:
-    """Real data for issue #9: the same like, resolved before and after the follow.
+    """Real data: the same like, resolved before and after the follow.
 
     Under `liked_track_scope = "smallest"` a like on "Blinding Lights" resolves to the single,
     which is the smallest official release holding the song. Following The Weeknd then monitors
@@ -584,7 +584,7 @@ def test_following_the_weeknd_swaps_the_cached_single_for_after_hours(corpus: Co
     assert swapped.followed is True
 
 
-# ------------------------------------ opting out of box sets and remix EPs (issue #15)
+# ------------------------------------ opting out of box sets and remix EPs
 
 NO_COMPILATIONS = ExclusionRules(allow_compilation_fallback=False)
 NO_REMIXES = ExclusionRules(allow_remix_releases=False)
@@ -667,7 +667,7 @@ def test_the_smallest_scope_picks_the_remix_ep_on_real_data(corpus: Corpus) -> N
 def test_opting_out_of_remixes_refuses_the_grease_ep(corpus: Corpus) -> None:
     """There is no allowed release left - the soundtrack is Various Artists - so it is reported.
 
-    Even with `keep_remix_only_tracks` on, its default (issue #89): the song *has* a home that is
+    Even with `keep_remix_only_tracks` on, its default: the song *has* a home that is
     not a remix, the soundtrack, so it is not a remix-only song, only one likearr cannot monitor."""
     intent = _grease_like(corpus)
     lookup = _lookup(corpus, searches={("John Travolta", corpus.rg("grease_soundtrack").title): None})
@@ -709,7 +709,7 @@ def test_the_knocks_case_shows_what_the_opt_out_costs(corpus: Corpus) -> None:
     assert kept.status == ResolutionStatus.RESOLVED
     assert kept.release_group == ep
 
-    # Issue #89: it is the song's only release, so by default the opt-out keeps it after all ...
+    # It is the song's only release, so by default the opt-out keeps it after all ...
     remix_only = resolve_track(
         intent, lookup, now=NOW, pending_since=None, fallback_days=FALLBACK_DAYS, rules=NO_REMIXES
     )
@@ -751,7 +751,7 @@ def test_a_box_set_is_monitored_by_default_and_refused_when_opted_out(corpus: Co
 
 
 def test_one_song_two_albums_is_the_artist_credit_deciding_it(corpus: Corpus) -> None:
-    """Issue #15's 'related oddity', reproduced on real data.
+    """A related oddity, reproduced on real data.
 
     The same song, liked twice, landing on two different releases. Not a tie-break wobble: the
     two copies map to two different MusicBrainz artists for one performer, and each artist's

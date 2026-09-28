@@ -1,7 +1,7 @@
 """The Settings page's routes end to end (`likearr.web.routes.settings`): the settings form,
 pause and schedule, the playlist picker, Spotify connect, Lidarr setup and Doctor.
 
-Split out of `test_app.py` with the routes themselves (#154); the shared fixtures are in
+Split out of `test_app.py` with the routes themselves; the shared fixtures are in
 `conftest.py`, the fake CLI and the other shared helpers in `app_support.py`.
 """
 
@@ -42,7 +42,7 @@ from tests.web.app_support import (
     _wait_until,
 )
 
-# ---------------------------------------------------------------- pause / resume (issue #68)
+# ---------------------------------------------------------------- pause / resume
 
 
 def test_pausing_saves_at_once_no_confirm(client: TestClient, data_dir: Path) -> None:
@@ -98,7 +98,7 @@ def test_pausing_with_a_stale_file_hash_saves_nothing(client: TestClient, data_d
     assert (data_dir / "config.toml").read_text() == before
 
 
-# ---------------------------------------------------------------- schedule editing and Run now (issue #68 phase 2)
+# ---------------------------------------------------------------- schedule editing and Run now
 
 
 def test_settings_shows_a_schedule_preview(client: TestClient) -> None:
@@ -112,7 +112,7 @@ def test_settings_shows_a_schedule_preview(client: TestClient) -> None:
 
 
 def test_settings_says_scheduled_runs_are_enabled_without_the_cli_flags(client: TestClient) -> None:
-    """Issue #139: Settings speaks in plain language, not CLI flags or the Home Assistant amber
+    """Settings speaks in plain language, not CLI flags or the Home Assistant amber
     state - `likearr setup-profiles` and `run --scheduled --apply` are gone, and the guard field
     talks about Status, not amber."""
     _login(client)
@@ -189,7 +189,7 @@ def test_a_bad_cron_line_is_shown_inline_and_saves_nothing(client: TestClient, d
     assert (data_dir / "config.toml").read_text() == before
 
 
-# ---------------------------------------------------------------- live schedule preview (#86)
+# ---------------------------------------------------------------- live schedule preview
 
 
 def test_the_live_schedule_preview_shows_fires_in_the_typed_timezone(client: TestClient) -> None:
@@ -240,7 +240,7 @@ def test_the_live_schedule_preview_needs_login(client: TestClient) -> None:
     assert response.headers["location"] == "/login"
 
 
-# ---------------------------------------------------------------- the first reviewed apply (#111)
+# ---------------------------------------------------------------- the first reviewed apply
 
 
 def test_settings_says_scheduled_runs_start_after_the_first_reviewed_apply_until_one_has(
@@ -269,7 +269,7 @@ def test_settings_with_no_state_database_says_so_and_creates_none(client: TestCl
 
 
 def test_settings_has_three_save_buttons_one_per_editable_fieldset(client: TestClient) -> None:
-    """#95: Save reachable without scrolling past the other fieldsets - but still one form, one
+    """Save reachable without scrolling past the other fieldsets - but still one form, one
     `file_hash`, one save path, so any of the three submits every field."""
     _login(client)
 
@@ -319,7 +319,7 @@ def _field_div(page: str, name: str) -> str:
 
 
 def test_settings_shows_a_help_line_under_every_guard(client: TestClient) -> None:
-    """#130: the five Guards had no help text at all - a bare number under each label."""
+    """The five Guards had no help text at all - a bare number under each label."""
     _login(client)
 
     page = client.get("/settings").text
@@ -336,7 +336,7 @@ def test_settings_shows_a_help_line_under_every_guard(client: TestClient) -> Non
 
 
 def test_settings_no_longer_shows_the_flagged_jargon(client: TestClient) -> None:
-    """#130 (bar B19): "Release group MBIDs" and "catalogue gap this new" read as jargon."""
+    """The reworded help drops "Release group MBIDs" and "catalogue gap this new" jargon."""
     _login(client)
 
     page = client.get("/settings").text
@@ -348,7 +348,7 @@ def test_settings_no_longer_shows_the_flagged_jargon(client: TestClient) -> None
 def test_liked_track_scope_shows_sentence_labels_with_the_stored_values_as_option_values(
     client: TestClient,
 ) -> None:
-    """#130: the select shows a sentence per option, but `value` stays "album" / "smallest"."""
+    """The select shows a sentence per option, but `value` stays "album" / "smallest"."""
     _login(client)
 
     field = _field_div(client.get("/settings").text, "rules.liked_track_scope")
@@ -362,7 +362,7 @@ def test_liked_track_scope_shows_sentence_labels_with_the_stored_values_as_optio
 
 
 def test_saving_each_liked_track_scope_option_writes_the_same_stored_value(client: TestClient, data_dir: Path) -> None:
-    """#130: sentence labels in the dropdown must not change what gets written to config.toml.
+    """Sentence labels in the dropdown must not change what gets written to config.toml.
 
     Both options re-resolve every liked and playlist track (`_RE_RESOLVE`), so each save needs the
     usual second confirm - see `test_a_re_resolving_change_asks_first_then_saves`.
@@ -448,7 +448,7 @@ def test_an_invalid_value_is_shown_at_its_field_and_nothing_is_written(client: T
 def test_an_out_of_range_number_is_shown_at_its_field_and_nothing_is_written(
     client: TestClient, data_dir: Path, field: str, value: str
 ) -> None:
-    """#110: `parse_form` leaves ranges to `parse_config`, which now has them."""
+    """`parse_form` leaves ranges to `parse_config`, which now has them."""
     _login(client)
     form = _settings_form(client.get("/settings").text)
     form[field] = [value]
@@ -484,7 +484,7 @@ def test_a_re_resolving_change_asks_first_then_saves(client: TestClient, data_di
     assert 'playlists = ["pl-owned", "pl-gone"]' in text
 
 
-# ---------------------------------------------------------------- readable confirm, IDs on demand (#86)
+# ---------------------------------------------------------------- readable confirm, IDs on demand
 
 
 def test_the_confirm_page_reads_a_bool_change_as_on_off(client: TestClient) -> None:
@@ -604,7 +604,7 @@ def test_the_picker_falls_back_to_the_configured_ids(client: TestClient, monkeyp
 def test_the_picker_greys_out_a_non_owned_playlist_with_reason_and_workaround(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """issue #103, item 1: every `/me/playlists` entry is listed, but a followed, someone else's
+    """Every `/me/playlists` entry is listed, but a followed, someone else's
     (collaborative included) or Spotify-owned playlist is shown greyed out, disabled, with the
     plain reason and the workaround - and, since it is disabled, it cannot be submitted."""
     monkeypatch.setenv("FAKE_PLAYLISTS_UNOWNED", "1")
@@ -626,7 +626,7 @@ def test_a_hand_posted_non_owned_playlist_id_is_refused(
     client: TestClient, data_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The picker disables a non-owned checkbox, but the server refuses one anyway - crafted, or
-    posted from a stale page (issue #103, item 1)."""
+    posted from a stale page."""
     monkeypatch.setenv("FAKE_PLAYLISTS_UNOWNED", "1")
     _login(client)
     _wait_for_picker(client, client.post("/settings/playlists").text)
@@ -647,7 +647,7 @@ def test_a_hand_posted_non_owned_playlist_id_is_refused(
 def test_a_collaborative_playlist_is_offered_and_one_needing_a_reauth_says_so(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """#103 item 3: someone else's playlist you collaborate on is a normal checkbox once the token
+    """Someone else's playlist you collaborate on is a normal checkbox once the token
     may read it. One listed by a token from before likearr asked for collaborative playlists is
     greyed out with "re-authorize", not with "copy it into a playlist you own"."""
     monkeypatch.setenv("FAKE_PLAYLISTS_COLLAB", "1")
@@ -717,7 +717,7 @@ def test_a_configured_non_owned_playlist_survives_an_unrelated_save(
     client: TestClient, data_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """likearr never changes what you set without saying so: a save that touches something else
-    entirely must not silently drop a playlist that is configured but not owned (issue #103)."""
+    entirely must not silently drop a playlist that is configured but not owned."""
     monkeypatch.setenv("FAKE_PLAYLISTS_UNOWNED", "1")
     config_path = _configure_pl_discover(data_dir)
     _login(client)
@@ -920,7 +920,7 @@ def test_the_picker_keeps_the_selection_on_the_form_not_the_file(client: TestCli
     assert "pl-gone" not in final  # deselected on the form, and not a playlist Spotify lists
 
 
-# ---------------------------------------------------------------- PR #33 review and security findings
+# ---------------------------------------------------------------- security findings
 
 
 def test_a_huge_guard_value_is_a_field_error_not_a_crash(client: TestClient, data_dir: Path) -> None:
@@ -955,7 +955,7 @@ def test_a_fresh_answer_is_shown_when_settings_opens(client: TestClient) -> None
     assert "Road trip" in page
 
 
-# ---------------------------------------------------------------- the source confirm, end to end (#34 review)
+# ---------------------------------------------------------------- the source confirm, end to end
 
 
 def test_switching_a_source_on_asks_first_through_the_real_form(client: TestClient, data_dir: Path) -> None:
@@ -986,7 +986,7 @@ def test_swapping_one_playlist_for_another_asks_first(client: TestClient, data_d
     assert (data_dir / "config.toml").read_text() == CONFIG
 
 
-# ---------------------------------------------------------------- the confirm is bound to what it showed (#34 review)
+# ---------------------------------------------------------------- the confirm is bound to what it showed
 
 
 def test_confirmed_yes_alone_does_not_skip_the_confirm(client: TestClient, data_dir: Path) -> None:
@@ -1067,7 +1067,7 @@ def test_a_settings_save_that_adds_a_playlist_fetches_its_name_from_the_post(
 def test_connecting_spotify_fetches_names_once_the_token_exists(
     data_dir: Path, fake_cli: list[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """#118: gating `names_needed` on the token means a fresh Connect Spotify must itself ask for
+    """Gating `names_needed` on the token means a fresh Connect Spotify must itself ask for
     names - the next automatic trigger (a check, or a settings save) may be a while off."""
     (data_dir / "spotify-token.json").unlink()
     monkeypatch.setenv("LIKEARR_LIDARR_API_KEY", API_KEY_SENTINEL)
@@ -1100,7 +1100,7 @@ def test_connecting_spotify_fetches_names_once_the_token_exists(
     assert len(_jobs_of(data_dir, "playlists")) == 1
 
 
-# ---------------------------------------------------------------- Spotify connect (#79)
+# ---------------------------------------------------------------- Spotify connect
 
 
 SPOTIFY_CLIENT_ID = "spotify-client-id-SENTINEL"
@@ -1260,7 +1260,7 @@ def test_the_https_callback_mode_is_only_offered_when_a_public_url_is_configured
 def test_callback_mode_connect_at_another_address_links_to_spotify_instead(
     data_dir: Path, fake_cli: list[str], monkeypatch: pytest.MonkeyPatch, data: dict[str, str]
 ) -> None:
-    """#11: the UI opened at an address other than `public_url` (here the test client's own
+    """The UI opened at an address other than `public_url` (here the test client's own
     host, standing in for a LAN address) keeps the two-click flow. Chromium and WebKit browsers
     check form-action on each redirect of a form submission, and Spotify's last hop back to
     `<public_url>/spotify/callback` is another origin from there. So the answer is a page on this
@@ -1295,7 +1295,7 @@ _AT_PUBLIC_URL = "https://likearr.example.org"
 def test_callback_mode_connect_at_the_public_url_redirects_straight_to_spotify(
     data_dir: Path, fake_cli: list[str], monkeypatch: pytest.MonkeyPatch, data: dict[str, str]
 ) -> None:
-    """#11: opened at the `public_url` origin, one click reaches Spotify. The POST keeps its CSRF
+    """Opened at the `public_url` origin, one click reaches Spotify. The POST keeps its CSRF
     check and answers 303 to the authorize URL; the page that holds the form (Settings here) is
     the one whose `form-action` the browser checks each hop against, and it allows Spotify and the
     `public_url` origin its callback comes back to."""
@@ -1486,7 +1486,7 @@ def test_the_callback_hides_a_config_error_and_logs_it(
     data_dir: Path, fake_cli: list[str], monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     """The callback needs no login (and in direct-callback mode faces the internet), so a broken
-    config.toml answers 503 with no detail; the detail goes to the log, as `/healthz` does (#171).
+    config.toml answers 503 with no detail; the detail goes to the log, as `/healthz` does.
     Signed-in pages keep showing the full message."""
     monkeypatch.setenv("LIKEARR_LIDARR_API_KEY", API_KEY_SENTINEL)
     app = create_app(
@@ -1582,7 +1582,7 @@ def test_a_valid_state_from_an_unauthenticated_client_still_connects(
     assert on_disk["access_token"] == "at-cb"
 
 
-# ---------------------------------------------------------------- read scopes by default (#161)
+# ---------------------------------------------------------------- read scopes by default
 
 
 READ = ["user-follow-read", "user-library-read", "playlist-read-private", "playlist-read-collaborative"]
@@ -1652,7 +1652,7 @@ def test_connect_spotify_with_promote_save_asks_for_the_write_scopes_too(
 def test_re_authorize_keeps_the_write_scopes_the_token_already_has(
     client: TestClient, data_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """#161 decision (a): a plain Re-authorize never quietly drops write access you approved."""
+    """A plain Re-authorize never quietly drops write access you approved."""
     monkeypatch.setenv("LIKEARR_SPOTIFY_CLIENT_ID", SPOTIFY_CLIENT_ID)
     _set_token_scope(data_dir, " ".join([*READ, *WRITE]))
     _login(client)
@@ -1843,7 +1843,7 @@ def test_nothing_secret_appears_in_the_rendered_settings_page(
     assert "verifier" not in page.lower()
 
 
-# ---------------------------------------------------------------- Lidarr setup + Doctor in Settings (#80, #85)
+# ---------------------------------------------------------------- Lidarr setup + Doctor in Settings
 
 
 HX = {"HX-Request": "true"}
@@ -1936,7 +1936,7 @@ def test_doctor_polls_while_running_then_lists_failures_first(
     assert "every 2s" not in doctor
 
 
-# ---------------------------------------------------------------- #97.1: the nav pill on every poll
+# ---------------------------------------------------------------- the nav pill on every poll
 
 
 def test_a_running_poll_s_oob_nav_update_keeps_the_pill(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -2005,7 +2005,7 @@ def test_doctor_still_renders_when_config_does_not_load(client: TestClient, data
 
 
 def test_a_wrongly_typed_guard_shows_the_broken_config_view_not_a_500(client: TestClient, data_dir: Path) -> None:
-    """#110: a wrong type used to escape as a bare ValueError, which no handler caught."""
+    """A wrong type used to escape as a bare ValueError, which no handler caught."""
     _login(client)
     (data_dir / "config.toml").write_text(CONFIG + '\n[guards]\nmax_unmonitors_scheduled = "lots"\n')
 
@@ -2028,7 +2028,7 @@ def test_doctor_renders_before_the_first_run(client: TestClient, data_dir: Path)
 
 
 def test_the_doctor_panel_has_one_live_region_outside_the_polled_panel(client: TestClient) -> None:
-    """#142: the panel's own poll swaps all of `#doctor-panel` (outerHTML), including any
+    """The panel's own poll swaps all of `#doctor-panel` (outerHTML), including any
     `role="status"` inside it, so a screen reader may not reliably announce a live region that
     was itself just inserted along with its content. The wrapper in settings.html sits outside
     that swap and stays the same element across every poll."""
@@ -2071,7 +2071,7 @@ def test_lidarr_setup_preview_polls_then_shows_the_table_in_place(
 
 
 def test_the_lidarr_setup_panel_has_one_live_region_outside_the_polled_panel(client: TestClient) -> None:
-    """Same reasoning as the Doctor panel's (#142): the wrapper stays put while
+    """Same reasoning as the Doctor panel's: the wrapper stays put while
     `#lidarr-setup-panel` itself is swapped in full on every poll."""
     _login(client)
 
@@ -2188,7 +2188,7 @@ def test_lidarr_setup_apply_output_hides_a_secret_from_the_environment(
 
 
 def test_old_links_to_a_pruned_job_still_land_on_the_settings_section(client: TestClient) -> None:
-    """A bookmark to an #80 page whose job is long gone still lands on the section, not a bare 404."""
+    """A bookmark to a page whose job is long gone still lands on the section, not a bare 404."""
     _login(client)
 
     setup = client.get("/settings/lidarr-setup/20200101T000000Z-000000", follow_redirects=False)
@@ -2248,7 +2248,7 @@ def test_old_lidarr_setup_links_land_on_the_settings_section(client: TestClient,
     assert response.headers["location"] == "/settings#lidarr-setup"
 
 
-# ---------------------------------------------------------------- Clean up's switch (#148)
+# ---------------------------------------------------------------- Clean up's switch
 
 
 def _advanced(page: str) -> str:
@@ -2362,7 +2362,7 @@ def test_with_clean_up_off_settings_offers_no_promote_save_write_access(
 def test_with_clean_up_off_a_re_authorize_still_keeps_write_access_it_has(
     client: TestClient, data_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Switching Clean up off never quietly drops Spotify access already approved (#161 (a))."""
+    """Switching Clean up off never quietly drops Spotify access already approved."""
     monkeypatch.setenv("LIKEARR_SPOTIFY_CLIENT_ID", SPOTIFY_CLIENT_ID)
     _set_token_scope(data_dir, " ".join([*READ, *WRITE]))
     _clean_up_off(data_dir)
@@ -2371,7 +2371,7 @@ def test_with_clean_up_off_a_re_authorize_still_keeps_write_access_it_has(
     assert _asked_scopes(_paste_back_url(_connect_start(client))) == [*READ, *WRITE]
 
 
-# ---------------------------------------------------------------- Lidarr library, first start (#3)
+# ---------------------------------------------------------------- Lidarr library, first start
 
 
 UNSET_LIBRARY = CONFIG.replace('root_folder = "/music"\nquality_profile = "Standard"\n', "")

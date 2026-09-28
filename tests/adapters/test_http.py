@@ -75,7 +75,7 @@ def test_redact_ignores_short_literals() -> None:
 
 @pytest.mark.parametrize("ending", ["\n", "\r", "\r\n"])
 def test_redact_literals_also_catches_the_repr_escaped_form(ending: str) -> None:
-    """Issue #7: h11 refuses a header value ending in CR or LF, and its message quotes the value's
+    """H11 refuses a header value ending in CR or LF, and its message quotes the value's
     repr, where the line ending is two characters (a backslash and a letter), not a real one."""
     literal = SECRET + ending
     escaped = repr(literal.encode())[2:-1]
@@ -129,7 +129,7 @@ def _hops(*answers: httpx.Response) -> tuple[httpx.MockTransport, list[httpx.Req
 
 
 def test_a_default_client_still_follows_a_cross_origin_redirect() -> None:
-    """MusicBrainz and Spotify keep httpx's default; only Lidarr's client refuses (#171)."""
+    """MusicBrainz and Spotify keep httpx's default; only Lidarr's client refuses."""
     transport, seen = _hops(
         httpx.Response(302, headers={"Location": "https://mirror.test/ws/2"}), httpx.Response(200, json={})
     )
@@ -207,7 +207,7 @@ def test_a_pinned_client_passes_a_plain_response_and_a_malformed_location_throug
 
 
 def test_default_user_agent_names_the_real_version_and_repo() -> None:
-    """Issue #113: the URL once pointed at a repository that is not this one."""
+    """The URL once pointed at a repository that is not this one."""
     assert f"likearr/{__version__} (+https://github.com/sysdad/likearr)" == DEFAULT_USER_AGENT
     assert DEFAULT_USER_AGENT.endswith("(+https://github.com/sysdad/likearr)")
 

@@ -62,7 +62,7 @@ def test_an_album_with_files_that_nothing_wants_is_a_candidate() -> None:
 
 
 def test_a_row_says_whether_its_artist_is_followed_on_spotify() -> None:
-    """From the desired state `run` builds - the same read, no new Spotify call (#55)."""
+    """From the desired state `run` builds - the same read, no new Spotify call."""
     compilation = rg("rg-1", "Greatest Hits", secondary=frozenset({SecondaryType.COMPILATION}))
     view = _view(lidarr_album(compilation, files=10))
     followed = desired_state(followed={ARTIST})
@@ -209,7 +209,7 @@ def test_protection_survives_the_album_being_absent_from_lidarr_entirely() -> No
     assert [r.rg_mbid for r in report.protected] == ["rg-single"]
 
 
-# --------------------------------------------------------------------------- why, as data (#64)
+# --------------------------------------------------------------------------- why, as data
 
 THINK = track_intent("Think", spotify_album("Aretha Now"), spotify_id="t1", artists=("Aretha Franklin",))
 

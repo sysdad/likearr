@@ -19,7 +19,7 @@ dependencies = [
   "httpx>=0.27",
   "paho-mqtt>=2.0",
   # `likearr start`: the service (web UI, scheduler, job runner) - the whole product since the
-  # single-service cutover (#68), so every install needs it. htmx is vendored under
+  # single-service cutover, so every install needs it. htmx is vendored under
   # likearr/web/static, not a dependency.
   "itsdangerous>=2.2.0",
   "jinja2>=3.1.6",
@@ -58,7 +58,7 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["likearr"]
 
-# `likearr start` writes a first config.toml from the example (#3, `config.write_initial_config`),
+# `likearr start` writes a first config.toml from the example (`config.write_initial_config`),
 # so an installed package carries its own copy. A source checkout reads deploy/ directly.
 [tool.hatch.build.targets.wheel.force-include]
 "deploy/config.example.toml" = "likearr/config.example.toml"

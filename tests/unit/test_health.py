@@ -134,7 +134,7 @@ def test_a_liked_track_scope_change_re_baselines() -> None:
 
 
 def test_turning_on_an_opt_out_re_baselines_rather_than_reporting_a_jump() -> None:
-    """Issue #15: an opt-out unmaps mapped tracks on purpose, which is not a fault.
+    """An opt-out unmaps mapped tracks on purpose, which is not a fault.
 
     One switch can move well over 5% of a library of a few thousand intents in a single run, so without this
     the run that finally applies the user's preference is also the run that reports itself broken.
@@ -368,7 +368,7 @@ def test_a_previously_followed_artist_gaining_gaps_still_fires() -> None:
 
 
 def test_a_new_release_from_a_followed_artist_is_counted_but_never_a_regression() -> None:
-    """Issue #8: Lidarr's metadata lag on a brand-new album is normal, not a fault.
+    """Lidarr's metadata lag on a brand-new album is normal, not a fault.
 
     Its intent - the follow - existed last run, so left in `catalogue_gaps` every new release
     would count toward the jump. `catalogue_gaps_recent` is in neither class A nor class B, so it
@@ -495,7 +495,7 @@ def test_a_real_outage_degrades_even_on_a_first_run() -> None:
     assert out.conditions == ("spotify-schema", "mb-outage")
 
 
-# --------------------------------------------------------------------------- lidarr metadata outage (issue #18)
+# --------------------------------------------------------------------------- lidarr metadata outage
 
 
 def test_lidarr_metadata_outage_needs_the_attempt_floor() -> None:
@@ -514,12 +514,12 @@ def test_lidarr_metadata_outage_fires_once_both_bars_clear() -> None:
 
 
 def test_a_realistic_total_outage_trips_it() -> None:
-    """The scenario from issue #18: ~98 attempted, all failed - the regression jump cannot see it."""
+    """~98 attempted, all failed - the regression jump cannot see it."""
     assert lidarr_metadata_outage(98, 98) is True
 
 
 def test_two_chronic_terms_never_look_like_an_outage() -> None:
-    """The everyday shape (issue #18): 2 of ~80 lookups fail, every run, for ever."""
+    """The everyday shape: 2 of ~80 lookups fail, every run, for ever."""
     assert lidarr_metadata_outage(80, 2) is False
 
 
@@ -659,7 +659,7 @@ def test_an_intent_the_caller_could_not_determine_is_not_counted_as_a_regression
     assert out.status is RunStatus.OK
 
 
-# --------------------------------------------------------------------------- webhook notifications (#112)
+# --------------------------------------------------------------------------- webhook notifications
 
 OK, ERROR, GUARDED, DEGRADED, STALE = (
     RunStatus.OK,

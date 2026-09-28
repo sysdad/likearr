@@ -1,4 +1,4 @@
-"""The prune review (#31, #55): the report by artist, decisions, carried-over ones, the two exported files."""
+"""The prune review: the report by artist, decisions, carried-over ones, the two exported files."""
 
 from __future__ import annotations
 
@@ -76,7 +76,7 @@ REPORT = {
         _row(SMALL, "Small Band", RG[2], "Only", 100),
         _row(GUARDED, "Guarded", RG[3], "Loose", 50),
     ],
-    # A report from before #64: the protected row says why in `protected_reason` alone.
+    # An older report: the protected row says why in `protected_reason` alone.
     "protected": [
         _row(
             GUARDED,
@@ -306,7 +306,7 @@ def test_albums_moved_out_under_undecided_artists_are_counted(view) -> None:
     assert decisions_file(view, draft)["trash"] == [RG[2]]  # an explicit choice is still exported
 
 
-# ---------------------------------------------------------------- #55: why, follows, one-album saves
+# ---------------------------------------------------------------- why, follows, one-album saves
 
 QUEEN = "0383dadf-2a4e-4d10-a46a-e9e041da8eb3"
 LAWRENCE = "55555555-5555-5555-5555-555555555555"
@@ -467,7 +467,7 @@ def test_same_as_artist_says_what_it_resolves_to(view) -> None:
     assert label(dec(Draft(), view, GUARDED, "trash"), GUARDED, RG[4]) == "Same as artist: keep (always kept)"
 
 
-# ---------------------------------------------------------------- #55: carried over from earlier reviews
+# ---------------------------------------------------------------- carried over from earlier reviews
 
 OWN = ledger_source("this-job")
 
@@ -754,7 +754,7 @@ def test_save_all_counts_the_albums_set_to_keep(view) -> None:
     ]
 
 
-# ---------------------------------------------------------------- #64: why an album is always kept, in words
+# ---------------------------------------------------------------- why an album is always kept, in words
 
 ARETHA = "aaaaaaaa-0000-4000-8000-000000000064"
 RESPECT = "bbbbbbbb-0000-4000-8000-000000000064"

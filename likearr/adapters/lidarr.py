@@ -113,7 +113,7 @@ def _batched(items: Sequence[int], size: int = BATCH_SIZE) -> Iterable[Sequence[
 
 
 _ARTIST_UNKNOWN = "an artist with this id was not found"
-"""What Lidarr's 400 says when its metadata server does not know an MBID (Lidarr 3.1, issue #173).
+"""What Lidarr's 400 says when its metadata server does not know an MBID (Lidarr 3.1).
 
 Matched on the exact phrase, not on "not found": Lidarr says "not found" about other things
 likearr sends (a quality or metadata profile, a root folder), and those are likearr's own mistakes,
@@ -329,7 +329,7 @@ class LidarrClient:
         return [dict(raw) for raw in self._list("trackfile", params={"albumId": album_id}) if isinstance(raw, Mapping)]
 
     def import_lists(self) -> list[dict[str, Any]]:
-        """Import list resources (``GET /importlist``), for Clean up's pre-flight check (#58): one
+        """Import list resources (``GET /importlist``), for Clean up's pre-flight check: one
         with automatic add re-adds an artist `prune-stage` removes."""
         return [dict(raw) for raw in self._list("importlist") if isinstance(raw, Mapping)]
 
@@ -362,7 +362,7 @@ class LidarrClient:
         """Free-text fallback for Lidarr's metadata lookup. Conservative: both names must match.
 
         The first match, in Lidarr's order. `CompositeLookup` asks `search_release_group_candidates`
-        instead, because the first match of two same-named artists is a guess (issue #42).
+        instead, because the first match of two same-named artists is a guess.
         """
         found = self.search_release_group_candidates(artist, title)
         return found[0] if found else None
@@ -376,7 +376,7 @@ class LidarrClient:
         or refuses to, as it does for MusicBrainz's candidates.
 
         Names are compared with the core normaliser - `normalize_title` for the title, `credits_match`
-        for the artist - which keeps letters in every script (issue #5). This adapter used to fold
+        for the artist - which keeps letters in every script. This adapter used to fold
         to ASCII, so a name written wholly in Japanese, Cyrillic or Greek folded to "" and any two
         such artists compared equal. A side that still folds to "" matches nothing.
         """
@@ -422,7 +422,7 @@ class LidarrClient:
         Raises:
             LidarrArtistUnknown: Lidarr's metadata server does not know this MBID yet (a 400).
             LidarrArtistExists: the artist is already in Lidarr (a 400), carrying that artist.
-                Whether it is likearr's own is the caller's call, by its tag (issue #4).
+                Whether it is likearr's own is the caller's call, by its tag.
             LidarrMetadataError: Lidarr's metadata server failed the add (a 5xx or no answer).
             LidarrError: anything else, including a 400 about something likearr sent.
         """

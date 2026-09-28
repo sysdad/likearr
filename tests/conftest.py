@@ -1,5 +1,5 @@
 """Fixtures shared by the whole suite: no-network enforcement and a root-logging save/restore
-helper. See issue #137.
+helper.
 """
 
 from __future__ import annotations
@@ -57,7 +57,7 @@ def _network_guard_per_test(request: pytest.FixtureRequest) -> Iterator[None]:
 def _clear_likearr_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Clears every `LIKEARR_*` environment variable except `LIKEARR_TEST_*` (the ones the
     integration tests use), so no test reads the developer's shell - `LIKEARR_CONFIG` in
-    particular, which a CLI test with no `-c` would otherwise fall back to (issue #23).
+    particular, which a CLI test with no `-c` would otherwise fall back to.
 
     Runs before `_deployment_env` (taken as a parameter, not just declared above it, so the order
     holds regardless of fixture registration order): that fixture's own defaults are set on the
@@ -70,7 +70,7 @@ def _clear_likearr_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture(autouse=True)
 def _deployment_env(monkeypatch: pytest.MonkeyPatch, _clear_likearr_env: None) -> None:
-    """The env-only deployment settings (#3), the same for every test whatever the shell running
+    """The env-only deployment settings, the same for every test whatever the shell running
     the suite has set: a Lidarr URL the fixtures' fakes answer for, and no allowed hosts or
     MusicBrainz contact, so each test that cares sets its own."""
     monkeypatch.setenv("LIKEARR_LIDARR_URL", "http://lidarr:8686")
@@ -86,7 +86,7 @@ def preserve_root_logging() -> Iterator[None]:
     `StreamHandler` to whatever `sys.stderr` is at call time - capsys's own stream, in a test.
     That stream closes when the test ends; without this, the handler stays installed and every
     later log call - including one from a background thread that outlives the test - writes to a
-    closed file, printing "--- Logging error ---" for the rest of the run (issue #137).
+    closed file, printing "--- Logging error ---" for the rest of the run.
     """
     root = logging.getLogger()
     saved_handlers, saved_level = list(root.handlers), root.level

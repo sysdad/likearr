@@ -43,10 +43,10 @@ jobs:
       fail-fast: false
       matrix:
         platform: [linux/amd64, linux/arm64]
-    # Build only (#105): no registry login, no push, no tag trigger. Publishing to GHCR is a
-    # separate, held PR (issue #105 decision record). This just proves the image still builds for
-    # both architectures and that the running container is actually usable, so a change like #147
-    # (folding the [web] extra into core) can't ship a container that is missing a dependency.
+    # Build only: no registry login, no push, no tag trigger. Publishing to GHCR is handled by a
+    # separate workflow. This just proves the image still builds for both architectures and that
+    # the running container is actually usable, so a dependency change can't ship a container
+    # that is missing something it needs.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
@@ -61,12 +61,12 @@ jobs:
           push: false
           load: true
           tags: likearr:ci
-          # The footer and doctor show the commit the image was built from (#113).
+          # The footer and doctor show the commit the image was built from.
           build-args: |
             VCS_REF=${{ github.sha }}
           # Per-platform scope: an amd64 and an arm64 layer never share a cache entry, and this
           # keeps every PR build fast enough for a job in ci.yml rather than a path-filtered
-          # workflow (#105).
+          # workflow.
           cache-from: type=gha,scope=docker-${{ matrix.platform }}
           cache-to: type=gha,mode=max,scope=docker-${{ matrix.platform }}
       # Only on the runner's native platform: an emulated (QEMU) `docker run` of the arm64 leg
@@ -78,11 +78,11 @@ jobs:
           set -euo pipefail
 
           workdir="$(mktemp -d)"
-          # No config.toml (#3): a first start writes one from the example baked into the image, so
+          # No config.toml: a first start writes one from the example baked into the image, so
           # this is the Compose quick start exactly - an empty /data and environment variables only.
           # Nothing here needs to be reachable: `/healthz` only requires the config to parse and
           # /data to exist and be writable.
-          # --user 1030:100 (#105) is an arbitrary uid/gid with no /etc/passwd
+          # --user 1030:100 is an arbitrary uid/gid with no /etc/passwd
           # entry in the image, so the bind mount has to be world-writable rather than owned by it.
           chmod -R a+rwX "${workdir}"
 
@@ -94,7 +94,7 @@ jobs:
           docker run --rm --user 1030:100 likearr:ci doctor --help
           echo "::endgroup::"
 
-          # #171: the code is root-owned, nothing under /app is world-writable, neither the default
+          # The code is root-owned, nothing under /app is world-writable, neither the default
           # user nor 1030:100 can write it, likearr itself ships precompiled, and the working directory
           # (/data) is not on sys.path.
           echo "::group::image code is root-owned and precompiled"

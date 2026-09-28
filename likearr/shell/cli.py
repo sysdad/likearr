@@ -39,7 +39,7 @@ __all__ = ["build_parser", "main"]
 log = logging.getLogger(__name__)
 
 CLEANUP_COMMANDS = frozenset({"prune-report", "prune-stage", "prune-checks", "promote-save"})
-"""Clean up's commands (#148). They run whatever `[prune] enabled` says - typing one is already
+"""Clean up's commands. They run whatever `[prune] enabled` says - typing one is already
 opting in - but say once that the web UI's Clean up is off."""
 CLEANUP_OFF_WARNING = (
     "WARN  Clean up is off in config ([prune] enabled = false): this command runs anyway, "
@@ -385,7 +385,7 @@ def _start(args: argparse.Namespace) -> int:
         )
         return EXIT_ERROR
     config_path = Path(args.config).resolve()
-    # A first start with only Compose's environment and an empty volume (#3): no hand-written file.
+    # A first start with only Compose's environment and an empty volume: no hand-written file.
     if write_initial_config(config_path):
         emit(f"wrote a new config file at {config_path} from the example; finish setting up in the browser")
     return serve(config_path, host=args.host, port=args.port, password=password, verbose=args.verbose)
@@ -394,7 +394,7 @@ def _start(args: argparse.Namespace) -> int:
 def _held_without_state(args: argparse.Namespace) -> int | None:
     """`run --scheduled` on a new install, decided before `build_context` opens (and so creates)
     the state database: with no database there has been no reviewed apply, so the fire publishes
-    `paused` and stops (#111, `run.scheduled_run_without_state`). ``None`` to carry on as usual - a
+    `paused` and stops (`run.scheduled_run_without_state`). ``None`` to carry on as usual - a
     database exists, or the config does not load, which `build_context` then reports exactly as it
     always has."""
     try:
