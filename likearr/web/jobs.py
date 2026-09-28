@@ -384,8 +384,8 @@ class JobRunner:
         """Spawn ``cli + args`` as a new job and return its metadata straight away.
 
         Raises:
-            JobRefused: shutting down, another job is running, or (with `needs_run_lock`) a
-                scheduled run holds the run lock. Nothing was spawned.
+            JobRefused: shutting down, another job is running, or (with `needs_run_lock`) another
+                likearr command holds the run lock. Nothing was spawned.
         """
         with self._mutex:
             if self._draining:
@@ -829,15 +829,15 @@ class JobRunner:
         """Take the run lock without waiting and let go at once; refuse if it is taken.
 
         A child that finds the lock taken publishes a run-level error, which an apply sends to
-        retained MQTT. Checking here instead means a scheduled run in progress costs a retry and
-        nothing else. The window between this release and the child's own take is milliseconds;
+        retained MQTT. Checking here instead means a lock held elsewhere (a command started in a
+        shell, say) costs a retry and nothing else. The window between this release and the child's own take is milliseconds;
         a cron fire that lands in it is reported by the child as the collision it really was.
         """
         try:
             with run_lock(self._lock_path):
                 pass
         except LockHeld as exc:
-            raise JobRefused("a scheduled run is in progress; try again in a few minutes") from exc
+            raise JobRefused("another likearr command holds the run lock; try again when it finishes") from exc
 
     def _prune(self, *, protect: set[str]) -> None:
         """Keep the newest `KEEP_JOBS` job directories, the ones in `protect`, and older ones the

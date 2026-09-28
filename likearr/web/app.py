@@ -123,8 +123,8 @@ _STATE_TEXT = {
     JobState.RUNNING: "Running.",
     JobState.DONE: "Finished.",
     JobState.GUARDED: "Finished, and guards held some changes back.",
-    JobState.STALE: "Nothing was applied: Spotify or Lidarr changed since the plan was made. Re-plan.",
-    JobState.BUSY: "A scheduled run held the lock, so nothing ran. Try again in a few minutes.",
+    JobState.STALE: "Nothing was applied: Spotify or Lidarr changed since the check. Check again.",
+    JobState.BUSY: "Another likearr command held the run lock, so nothing ran. Try again when it finishes.",
     JobState.FAILED: "Failed. The log below says why.",
     JobState.CANCELLED: "Cancelled.",
     JobState.INTERRUPTED: "Interrupted: likearr stopped or restarted while this was running.",
@@ -132,8 +132,7 @@ _STATE_TEXT = {
 }
 
 _ADOPTED_TEXT = (
-    "Still running from before likearr restarted. likearr is watching it and records how it ends; "
-    "it can't be stopped from here."
+    "Still running from before likearr restarted. It can't be stopped from here; it ends on its own."
 )
 
 
@@ -223,8 +222,8 @@ async def logout(request: Request) -> Response:
 
 
 _RESOLVER_CHANGE_NOTE = (
-    "likearr's matching changed since the run before this one, so the two can't be compared: some "
-    "of these changes may come from that, not from anything you did on Spotify."
+    "likearr's matching changed since the run before this one, so some of these changes may come from "
+    "that, not from Spotify."
 )
 """Above the list, when the record's baseline says the resolver version changed: a plain
 answer to "did my Spotify change, or did likearr?", distinct from the terse `_BASELINE_NOTES` used
@@ -250,8 +249,8 @@ def _part_way_note(record: HealthRecord, diff: Diff) -> str:
         return ""
     if record.status is RunStatus.STALE:
         return (
-            "This run made no changes: the plan below is what it would have applied, not what happened - "
-            "the world had moved since it was planned, so it was refused."
+            "This run made no changes: Spotify or Lidarr changed since its check, so it was refused. The "
+            "list below is what it would have applied."
         )
     if record.status is RunStatus.GUARDED:
         blocked = sum(g.blocked_unmonitors for g in diff.guards)
@@ -271,7 +270,7 @@ def _part_way_note(record: HealthRecord, diff: Diff) -> str:
         planned = f" of {record.changes_planned}" if record.changes_planned is not None else ""
         return (
             f"This run stopped part-way: {record.changes_made}{planned} changes made. The list below is the "
-            "plan it was attempting - not everything in it reached Lidarr."
+            "plan it was attempting; not all of it reached Lidarr."
         )
     if record.lidarr_changed:
         return (
@@ -437,6 +436,7 @@ def status(request: Request) -> Response:
             "paused_reason": config.schedule.paused_reason,
             "last_fire_at": last_fire_at.astimezone(web.tz) if last_fire_at else None,
             "last_fire_job": last_fire_job,
+            "last_fire_failed": last_fire_job is not None and last_fire_job.state is JobState.FAILED,
             "last_fire_reason": last_fire_reason,
             "recent_jobs": jobs[:5],
             "ui_errors": config.ui.errors,

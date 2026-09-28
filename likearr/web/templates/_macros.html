@@ -25,11 +25,11 @@
 {%- if note == "no-token" -%}
 Spotify is not connected. Connect it in <a href="/settings#spotify">Settings</a>.
 {%- elif note == "unknown-date" -%}
-Spotify: the re-authorization date is unknown. Re-authorize from <a href="/settings">Settings</a> to record it.
+Spotify: the authorization date is unknown. Re-authorize from <a href="/settings#spotify">Settings</a> to record it.
 {%- elif note == "overdue" -%}
-Spotify: re-authorization was due {{ reauth.due | when }}. Re-authorize from <a href="/settings">Settings</a>, or run <code>likearr auth --manual</code>.
+Spotify: re-authorization was due {{ reauth.due | when }}. Re-authorize from <a href="/settings#spotify">Settings</a>.
 {%- elif note == "due-soon" -%}
-Spotify: re-authorize by {{ reauth.due | when }} from <a href="/settings">Settings</a>, or run <code>likearr auth --manual</code>.
+Spotify: re-authorize by {{ reauth.due | when }} from <a href="/settings#spotify">Settings</a>.
 {%- endif -%}
 {%- endmacro %}
 

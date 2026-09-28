@@ -206,11 +206,10 @@ def test_the_lost_state_count_comes_from_the_newest_run_that_planned() -> None:
 def test_the_lost_state_sentence() -> None:
     assert lost_state_sentence(0, "likearr") == ""
     assert lost_state_sentence(3, "likearr") == (
-        "This Lidarr has 3 artists tagged likearr that the state database has no record of. If you lost or "
-        "replaced the database, restore it from backup. Until you do, nothing likearr monitored before is "
-        "ever unmonitored."
+        "Lidarr has 3 artists tagged likearr that likearr's state database doesn't know. If you lost the "
+        "database, restore it from backup. Until then, likearr never unmonitors anything it monitored before."
     )
-    assert lost_state_sentence(1, "mine").startswith("This Lidarr has 1 artist tagged mine that ")
+    assert lost_state_sentence(1, "mine").startswith("Lidarr has 1 artist tagged mine that ")
 
 
 def test_projected_wanted_comes_from_the_newest_run_with_a_diff() -> None:
@@ -742,8 +741,8 @@ SKIPPED_JUNGLE = NameCollision(name="Jungle", wanted_mbid="w", existing_lidarr_i
             "spotify-schema",
             {},
             (),
-            "Spotify answered without some details likearr relies on, or returned fewer items than it reported, so "
-            "this run held back every unmonitor to be safe. If it happens again, Spotify has changed something.",
+            "Spotify's answer was incomplete, so this run held back every unmonitor. If it keeps happening, "
+            "Spotify has changed something.",
             "#last-applied",
         ),
     ],

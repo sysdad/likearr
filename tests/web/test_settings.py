@@ -253,8 +253,8 @@ def test_a_change_that_re_resolves_needs_a_second_confirm(config_path: Path, key
 
     assert check.errors == {}
     assert len(check.confirm) == 1
-    assert "re-resolves" in check.confirm[0]
-    assert "check for changes" in check.confirm[0]
+    assert "resolve" in check.confirm[0]
+    assert "Review changes before" in check.confirm[0]
 
 
 @pytest.mark.parametrize(
@@ -498,7 +498,7 @@ def test_refusing_a_release_says_what_actually_re_resolves(config_path: Path) ->
     (reason,) = check.confirm
     assert "every liked" not in reason
     assert "landed on" in reason
-    assert "check for changes" in reason
+    assert "Review changes before" in reason
 
 
 @pytest.mark.parametrize(
@@ -520,10 +520,7 @@ def test_a_number_out_of_any_sane_range_is_a_field_error(config_path: Path, name
 
 # ---------------------------------------------------------------- switching a source on
 
-SOURCE_WARNING = (
-    "the next scheduled run will monitor everything this resolves to, with no cap - check for changes first "
-    "(Review changes)"
-)
+SOURCE_WARNING = "with no cap. Review changes first"
 
 
 @pytest.mark.parametrize("key", ["spotify__followed_artists", "spotify__saved_albums", "spotify__liked_tracks"])
@@ -739,18 +736,18 @@ def _deny_confirm(old: tuple[str, ...], new: tuple[str, ...]) -> str:
 def test_adding_a_deny_entry_says_the_songs_on_it_re_resolve() -> None:
     text = _deny_confirm((), (MBID,))
 
-    assert "re-resolves the songs that landed on the release you added" in text
+    assert "changes what the songs that landed on the release you added resolve to" in text
     assert "removed" not in text
-    assert "check for changes" in text
+    assert "Review changes before" in text
 
 
 def test_removing_a_deny_entry_says_the_songs_kept_off_it_re_resolve() -> None:
     """Removing an entry now re-resolves what fell through from it, and says so."""
     text = _deny_confirm((MBID, _OTHER_MBID), ())
 
-    assert "re-resolves the songs that were kept off the releases you removed" in text
+    assert "changes what the songs that were kept off the releases you removed resolve to" in text
     assert "landed on" not in text
-    assert "check for changes" in text
+    assert "Review changes before" in text
 
 
 def test_a_deny_change_both_ways_names_both() -> None:

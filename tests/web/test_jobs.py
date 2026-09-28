@@ -236,7 +236,7 @@ def test_the_log_tail_is_redacted(runner: JobRunner) -> None:
 
 
 def test_a_run_job_is_not_spawned_while_the_run_lock_is_held(runner: JobRunner, tmp_path: Path) -> None:
-    with run_lock(tmp_path / "likearr.lock"), pytest.raises(JobRefused, match="scheduled run is in progress"):
+    with run_lock(tmp_path / "likearr.lock"), pytest.raises(JobRefused, match="another likearr command holds the run lock"):
         runner.start("run", ["ok"], needs_run_lock=True)
 
     assert not (tmp_path / "ui" / "jobs").exists() or not any((tmp_path / "ui" / "jobs").iterdir())
@@ -318,7 +318,7 @@ def test_submit_scheduled_is_skipped_at_once_when_the_run_lock_is_held_externall
             time.sleep(0.01)
     assert skipped is not None
     assert skipped.state is JobState.SKIPPED
-    assert "scheduled run is in progress" in (tmp_path / "ui" / "jobs" / skipped.id / "log.txt").read_text()
+    assert "another likearr command holds the run lock" in (tmp_path / "ui" / "jobs" / skipped.id / "log.txt").read_text()
 
 
 def test_a_ui_start_is_refused_while_a_scheduled_job_runs(runner: JobRunner) -> None:

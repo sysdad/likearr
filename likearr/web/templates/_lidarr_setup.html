@@ -50,7 +50,7 @@
         <td>
           {% if p.status == "ok" %}exists, matches (id {{ p.id }})
           {% elif p.status == "missing" %}will be created
-          {% else %}exists (id {{ p.id }}) but differs - kept as is, never overwritten:
+          {% else %}exists (id {{ p.id }}) but differs, kept as is:
             primary album types has {{ p.diff.actual_primary | join(", ") }}, likearr wants {{ p.diff.expected_primary | join(", ") }};
             secondary has {{ p.diff.actual_secondary | join(", ") }}, likearr wants {{ p.diff.expected_secondary | join(", ") }}
           {% endif %}
@@ -98,7 +98,7 @@
   <p class="warn">This writes to Lidarr:</p>
   <ul>{% for item in view.todo %}<li>{{ item }}</li>{% endfor %}</ul>
   {% if view.kept_as_is %}
-  <p class="note">It will not touch {{ view.kept_as_is | map(attribute="name") | join(", ") }} - a metadata profile that differs from what likearr expects (see above) is always kept as is; applying never edits one it finds already there.</p>
+  <p class="note">{{ view.kept_as_is | map(attribute="name") | join(", ") }} is kept as is.</p>
   {% endif %}
   <form method="post" action="/settings/lidarr-setup/{{ setup_job.id }}/apply" hx-post="/settings/lidarr-setup/{{ setup_job.id }}/apply">
     <input type="hidden" name="confirmed" value="yes">
@@ -109,17 +109,17 @@
   <p class="note">Applying will:</p>
   <ul>{% for item in view.todo %}<li>{{ item }}</li>{% endfor %}</ul>
   {% if view.kept_as_is %}
-  <p class="note">It will not touch {{ view.kept_as_is | map(attribute="name") | join(", ") }} - a metadata profile that already exists under that name is always kept as is, shown above.</p>
+  <p class="note">{{ view.kept_as_is | map(attribute="name") | join(", ") }} is kept as is.</p>
   {% endif %}
   <form method="post" action="/settings/lidarr-setup/{{ setup_job.id }}/apply" hx-post="/settings/lidarr-setup/{{ setup_job.id }}/apply">
     <button type="submit" class="primary">Apply</button>
   </form>
   {{ preview_form }}
   {% elif view.kept_as_is %}
-  <p class="note">Nothing to apply. {{ view.kept_as_is | map(attribute="name") | join(", ") }} differs from what likearr would create, as shown above, but is kept as is - likearr never edits a metadata profile it finds already there.</p>
+  <p class="note">Nothing to apply. {{ view.kept_as_is | map(attribute="name") | join(", ") }} differs but is kept as is.</p>
   {{ preview_form }}
   {% else %}
-  <p class="note">Nothing to do - Lidarr already matches what likearr expects.</p>
+  <p class="note">Nothing to do: Lidarr is set up.</p>
   {{ preview_form }}
   {% endif %}
   {% endif %}

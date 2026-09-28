@@ -412,10 +412,10 @@ def oom_note(meta: JobMeta) -> str:
         return ""
     if meta.kind == "apply" or (meta.kind == SCHEDULED_KIND and meta.phase == JOB_PHASE_APPLY):
         return (
-            "This ran out of memory and was stopped by the system (the container's memory limit) partway "
-            "through, so Lidarr may be partly changed. Check for changes again."
+            "This ran out of memory (the container's limit) and was stopped partway, so Lidarr may be "
+            "partly changed. Check for changes again."
         )
-    return "This ran out of memory and was stopped by the system (the container's memory limit). Nothing was changed."
+    return "This ran out of memory (the container's limit) and was stopped. Nothing was changed."
 
 
 _JOB_TITLES = {

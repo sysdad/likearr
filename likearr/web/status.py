@@ -170,9 +170,8 @@ def lost_state_sentence(count: int, tag: str) -> str:
         return ""
     artists = "1 artist" if count == 1 else f"{count} artists"
     return (
-        f"This Lidarr has {artists} tagged {tag} that the state database has no record of. If you lost or "
-        "replaced the database, restore it from backup. Until you do, nothing likearr monitored before is "
-        "ever unmonitored."
+        f"Lidarr has {artists} tagged {tag} that likearr's state database doesn't know. If you lost the "
+        "database, restore it from backup. Until then, likearr never unmonitors anything it monitored before."
     )
 
 
@@ -523,8 +522,8 @@ def condition_sentence(
         )
     if condition == "spotify-schema":
         return (
-            "Spotify answered without some details likearr relies on, or returned fewer items than it reported, so "
-            "this run held back every unmonitor to be safe. If it happens again, Spotify has changed something.",
+            "Spotify's answer was incomplete, so this run held back every unmonitor. If it keeps happening, "
+            "Spotify has changed something.",
             "#last-applied",
         )
     return CONDITION_TEXT.get(condition, condition), "#last-applied"

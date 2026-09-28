@@ -27,7 +27,6 @@ from tests.web.app_support import (
     _apply_form,
     _cache_names,
     _enable_mqtt,
-    _enable_webhook,
     _jobs,
     _jobs_of,
     _login,
@@ -42,53 +41,18 @@ from tests.web.app_support import (
 # ---------------------------------------------------------------- plans
 
 
-def _schedule_fires_soon(data_dir: Path) -> None:
-    """A schedule that fires 10 minutes after the fixture's fixed `NOW` (18:00 UTC): with no
-    earlier finished plan, `_estimate` falls back to the 15-minute `PLAN_ESTIMATE`, so `now +
-    estimate` (18:15) lands after this fire (18:10) and the plan page's overlap warning fires."""
+def test_the_plan_page_no_longer_warns_about_an_overlap_with_the_next_fire(client: TestClient, data_dir: Path) -> None:
+    """A check that may still run when the schedule fires is not warned about: a held lock is
+    reported by whichever run finds it."""
     config = data_dir / "config.toml"
     text = config.read_text().replace('cron = "20 */6 * * *"', 'cron = "10 18 * * *"')
     config.write_text(text.replace('timezone = "America/New_York"', 'timezone = "UTC"'))
-
-
-def test_the_plan_page_warns_about_an_overlap_without_naming_home_assistant(client: TestClient, data_dir: Path) -> None:
-    """No `[health.mqtt]` in the fixture config: the overlap warning names the health
-    status generically, not Home Assistant's retained record."""
-    _schedule_fires_soon(data_dir)
     _login(client)
 
     page = client.get("/plan").text
 
-    assert "may still be running then" in page
-    assert "the health status would show that skip, with no counts, until the next apply." in page
-    assert "Home Assistant" not in page
-
-
-def test_the_plan_page_names_home_assistant_in_the_overlap_warning_with_mqtt_configured(
-    client: TestClient, data_dir: Path
-) -> None:
-    _schedule_fires_soon(data_dir)
-    _enable_mqtt(data_dir)
-    _login(client)
-
-    page = client.get("/plan").text
-
-    assert "Home Assistant's retained record would show that skip, with no counts, until the next apply." in page
-
-
-def test_the_plan_page_warns_about_an_overlap_with_only_a_webhook_configured(
-    client: TestClient, data_dir: Path
-) -> None:
-    """With only `[health.webhook]` set, the neutral wording renders too: it never
-    claims a notification target that isn't there."""
-    _schedule_fires_soon(data_dir)
-    _enable_webhook(data_dir)
-    _login(client)
-
-    page = client.get("/plan").text
-
-    assert "the health status would show that skip, with no counts, until the next apply." in page
-    assert "Home Assistant" not in page
+    assert "The next scheduled run is" in page
+    assert "may still be running then" not in page
 
 
 def test_the_plan_page_offers_a_dry_run_with_the_shrink_choice(client: TestClient, data_dir: Path) -> None:
@@ -200,7 +164,7 @@ def test_a_dry_run_is_not_started_while_a_scheduled_run_holds_the_lock(
         response = client.post("/plan", data={})
 
     assert response.status_code == 409
-    assert "scheduled run is in progress" in response.text
+    assert "another likearr command holds the run lock" in response.text
 
 
 def test_the_review_page_reads_the_plan_in_plain_language(
@@ -298,7 +262,7 @@ def test_shrinks_accepted_at_the_last_plan_are_said_so(client: TestClient, data_
 
     page = client.get("/plan").text
 
-    assert "the shrink guards were skipped (accepted) at the last plan" in page
+    assert "The last check let shrinks through." in page
     assert "None fired" not in page
 
 
@@ -410,7 +374,7 @@ def test_an_apply_waits_for_a_scheduled_run(client: TestClient, data_dir: Path, 
         response = client.post(f"/plan/{job_id}/apply", data=form)
 
     assert response.status_code == 409
-    assert "scheduled run is in progress" in response.text
+    assert "another likearr command holds the run lock" in response.text
 
 
 def test_a_stale_apply_is_a_message_with_a_way_forward(
@@ -543,7 +507,7 @@ def test_an_apply_cannot_be_cancelled(
     refused = client.post(f"/jobs/{apply_id}/cancel")
 
     assert refused.status_code == 409
-    assert "An apply is not cancelled" in refused.text
+    assert "An apply can't be cancelled" in refused.text
     assert "Finished." in _wait_for_job(client, apply_id)
 
 
@@ -613,7 +577,6 @@ def test_starting_a_check_is_the_primary_action_and_accept_shrink_is_optional(cl
     assert '<button type="submit" class="primary">Check for changes</button>' in page
     advanced = page[page.index("<summary>Advanced (optional)</summary>") :]
     assert 'name="accept_shrink"' in advanced
-    assert "You don't need this to check." in advanced
     assert "--accept-" not in page  # CLI flags are not named on the label
 
 
@@ -631,8 +594,7 @@ def test_apply_is_the_one_required_action_and_accept_health_is_optional_and_unti
     assert page.index("Apply these changes</button>") < page.index("<summary>Advanced (optional)</summary>")
     tag = re.search(r'<input type="checkbox" name="accept_health"[^>]*>', page)[0]  # type: ignore[index]
     assert "checked" not in tag
-    assert "You don't need this to apply." in page
-    assert 'stop showing as "needs attention" here' in page
+    assert "stop showing as needs attention" in page
     assert "Home Assistant" not in page
     assert "--accept-" not in page  # the checkbox label names no CLI flag
     assert re.search(r"<details><summary>Show the command</summary><code>[^<]+</code></details>", page)
@@ -649,7 +611,7 @@ def test_apply_names_home_assistant_in_the_optional_box_with_mqtt_configured(
 
     page = client.get(f"/plan/{job_id}/apply").text
 
-    assert 'stop showing as "needs attention" here and in Home Assistant' in page
+    assert "stop showing as needs attention, here and in Home Assistant" in page
 
 
 def test_a_check_with_nothing_to_change_says_so(client: TestClient, data_dir: Path, planned_diff: Path) -> None:

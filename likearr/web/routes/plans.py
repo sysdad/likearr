@@ -56,23 +56,11 @@ PLAN_HISTORY_ROWS = 200
 
 # ---------------------------------------------------------------- plans
 
-PLAN_ESTIMATE = timedelta(minutes=15)
-"""A dry run's length when there is no earlier plan to go by. Minutes on a warm cache; up to an hour
-after a resolver bump, when every intent is resolved again at MusicBrainz's one request a second."""
-
 _SHRINK_GUARDS = frozenset({"source-shrink", "artist-shrink"})
 
 
 def _plan_jobs(web: _Web) -> list[JobMeta]:
     return [m for m in web.runner.jobs() if m.kind == "plan"]
-
-
-def _estimate(jobs: Sequence[JobMeta]) -> timedelta:
-    """How long the last plan that finished took: the best guess at how long the next one will."""
-    for meta in jobs:
-        if meta.state in {JobState.DONE, JobState.GUARDED} and meta.finished_at:
-            return datetime.fromisoformat(meta.finished_at) - datetime.fromisoformat(meta.started_at)
-    return PLAN_ESTIMATE
 
 
 def _records(config: Config) -> list[HealthRecord]:
@@ -97,9 +85,7 @@ def _plan_page_context(web: _Web, config: Config, error: str = "") -> dict[str, 
     shrinks = [g.message for g in last.guards if g.code in _SHRINK_GUARDS] if last is not None else []
     jobs = _plan_jobs(web)
     schedule = config.schedule.cron
-    # No fire to warn about overlapping while scheduled runs are paused - see `status()`.
     fire = next_fire(schedule, now, web.tz) if config.schedule.enabled else None
-    estimate = _estimate(jobs)
     records = _records(config)
     plans = []
     for meta in jobs[:10]:
@@ -129,8 +115,6 @@ def _plan_page_context(web: _Web, config: Config, error: str = "") -> dict[str, 
         "first_check": last is None,
         "next_fire": fire,
         "schedule": schedule,
-        "overlaps": fire is not None and now + estimate > fire,
-        "estimate_minutes": max(1, round(estimate.total_seconds() / 60)),
         "plans": plans,
         "error": error,
     }

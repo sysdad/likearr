@@ -5,7 +5,7 @@
 {% if config_error %}
 <p class="error">config.toml does not load, so it cannot be edited here: {{ config_error }}</p>
 {% else %}
-<p class="note">These are the only settings the browser can see or change. Paths, URLs and credentials stay in config.toml and the environment. Every save backs the file up first.</p>
+<p class="note">Paths, URLs and credentials stay in config.toml. Every save backs the file up first.</p>
 {% if errors.get("") %}<p class="error">{{ errors[""] }}</p>{% endif %}
 
 <fieldset class="spotify-connect" id="spotify">
@@ -84,12 +84,12 @@
     {% if errors.get("schedule.cron") %}<p class="error">{{ errors["schedule.cron"] }}</p>{% endif %}
     <button type="submit">Save schedule</button>
   </form>
-  <p class="note">A saved schedule change takes effect within about 5 minutes, not instantly - the running scheduler notices it the next time it re-reads config.toml.</p>
+  <p class="note">A saved change takes effect within about 5 minutes.</p>
   {% if not first_applied %}
-  <p class="note">Scheduled runs start after your first reviewed apply. Until then a scheduled run, or &quot;Run and apply now&quot; on Status, changes nothing and says so. Review changes and apply them once, in the browser or a terminal, and the schedule takes over from there.</p>
+  <p class="note">Scheduled runs start after your first reviewed apply: <a href="/plan">Review changes</a>.</p>
   {% endif %}
   {% if schedule.enabled %}
-  <p class="note">Scheduled runs are enabled. Pausing stops them, including &quot;Run and apply now&quot; on Status, which starts the same scheduled run. A plan and apply you review yourself, in the browser or a terminal, is never affected.</p>
+  <p class="note">Scheduled runs are on. Pausing stops them and &quot;Run and apply now&quot;; changes you review yourself still apply.</p>
   <form method="post" action="/settings/pause">
     <input type="hidden" name="file_hash" value="{{ file_hash }}">
     <label for="pause-reason">Reason (optional)</label>
@@ -97,7 +97,7 @@
     <button type="submit">Pause scheduled runs</button>
   </form>
   {% else %}
-  <p class="warn">{% if paused_at_local %}Paused since {{ paused_at_local | when }}{% else %}Scheduled runs are off in config.toml{% endif %}{% if schedule.paused_reason %} - {{ schedule.paused_reason }}{% endif %}. No scheduled run will fire until you resume.</p>
+  <p class="warn">{% if paused_at_local %}Paused since {{ paused_at_local | when }}{% else %}Scheduled runs are off in config.toml{% endif %}{% if schedule.paused_reason %} - {{ schedule.paused_reason }}{% endif %}.</p>
   <form method="post" action="/settings/resume">
     <input type="hidden" name="file_hash" value="{{ file_hash }}">
     <button type="submit" class="primary">Resume scheduled runs</button>
@@ -144,7 +144,7 @@
 {# Outside the config_error branch: Doctor is most useful exactly when config.toml is broken. #}
 <fieldset class="doctor" id="doctor">
   <legend>Doctor</legend>
-  <p class="note">Checks config, Lidarr, MusicBrainz and Spotify. Read-only: nothing here changes anything. It asks Spotify, so it runs only when you press the button.</p>
+  <p class="note">Checks config, Lidarr, MusicBrainz and Spotify. Changes nothing.</p>
   {# A stable live region, outside what the panel's own outerHTML poll swaps - see job.html. #}
   <div role="status" aria-live="polite">
   {% include "_doctor.html" %}
@@ -156,7 +156,7 @@
   <summary>Advanced</summary>
   <fieldset class="cleanup" id="cleanup">
     <legend>Clean up</legend>
-    <p class="note">Clean up reviews the albums on disk that nothing on Spotify asks for, and exports what you decide to keep or trash. Carrying it out needs the library mounted at Lidarr's exact path in the <code>likearr-cli</code> container, and a holding folder on the same filesystem, outside the library: <code>prune-stage</code> moves trash there, and <code>promote-save</code> follows artists and saves albums on Spotify. Both are commands you run yourself. Turning Clean up on adds it to the menu and offers promote-save's Spotify write access above; turning it off hides both and forgets no decision.</p>
+    <p class="note">Review the albums on disk that nothing on Spotify asks for, and decide what to keep or trash. Trash moves to a holding folder outside the library, never deleted (<a href="https://github.com/sysdad/likearr#optional-clean-up" target="_blank" rel="noopener">setup</a>). Turning it off keeps your decisions.</p>
     {% for e in cleanup.errors %}<p class="warn">{{ e }}</p>{% endfor %}
     <form method="post" action="/settings/cleanup">
       <input type="hidden" name="file_hash" value="{{ file_hash }}">

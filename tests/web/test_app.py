@@ -399,11 +399,7 @@ def test_status_separates_the_last_apply_from_the_last_run(client: TestClient) -
     assert "Liked songs" in page
 
 
-LOST_STATE_TEXT = (
-    "This Lidarr has 2 artists tagged likearr that the state database has no record of. If you lost or "
-    "replaced the database, restore it from backup. Until you do, nothing likearr monitored before is "
-    "ever unmonitored."
-)
+LOST_STATE_TEXT = "2 artists tagged likearr that likearr&#39;s state database doesn&#39;t know"
 
 
 def test_status_warns_about_tagged_artists_the_state_database_has_no_record_of(
@@ -420,7 +416,7 @@ def test_status_warns_about_tagged_artists_the_state_database_has_no_record_of(
 def test_status_says_nothing_about_lost_state_without_the_count(client: TestClient) -> None:
     _login(client)
 
-    assert "that the state database has no record of" not in client.get("/").text
+    assert "state database doesn&#39;t know" not in client.get("/").text
 
 
 def test_status_renders_a_last_run_recorded_before_the_lost_state_count(client: TestClient, data_dir: Path) -> None:
@@ -435,7 +431,7 @@ def test_status_renders_a_last_run_recorded_before_the_lost_state_count(client: 
 
     assert response.status_code == 200
     assert "Applied: 4 releases monitored" in response.text
-    assert "that the state database has no record of" not in response.text
+    assert "state database doesn&#39;t know" not in response.text
 
 
 def test_history_s_when_column_does_not_wrap(client: TestClient) -> None:
@@ -604,7 +600,7 @@ def test_status_with_a_token_missing_its_date_points_to_settings(client: TestCli
 
     page = client.get("/").text
 
-    assert 'the re-authorization date is unknown. Re-authorize from <a href="/settings">Settings</a>' in page
+    assert 'date is unknown. Re-authorize from <a href="/settings#spotify">Settings</a>' in page
     assert 'unknown: re-authorize from <a href="/settings">Settings</a>' in page
     assert "<code>likearr auth" not in page
     assert "Spotify is not connected" not in page
@@ -622,7 +618,7 @@ def test_status_shows_projected_wanted_from_the_diff(client: TestClient, data_di
     page = client.get("/").text
 
     assert "10 <span" in page
-    assert "a projection, not Lidarr's live wanted list" in page
+    assert "monitored with no files" in page
     assert "a guard held" in page
 
 
@@ -723,12 +719,12 @@ def test_status_labels_a_part_way_apply_as_the_plan_it_was_attempting(client: Te
 
     assert "stopped part-way" in page
     assert "1 of 9 changes made" in page
-    assert "not everything in it reached Lidarr" in page
+    assert "not all of it reached Lidarr" in page
 
 
 def test_status_does_not_call_a_fully_landed_apply_part_way(client: TestClient, data_dir: Path) -> None:
     """Every planned change reached Lidarr and only confirming it failed - the run page must
-    not say "stopped part-way: 3 of 3" or "not everything in it reached Lidarr"."""
+    not say "stopped part-way: 3 of 3" or "not all of it reached Lidarr"."""
     with SqliteState(data_dir / "state.sqlite") as state:
         state.record_run(
             _record(
@@ -748,7 +744,7 @@ def test_status_does_not_call_a_fully_landed_apply_part_way(client: TestClient, 
 
     assert "made all 3 of its planned changes" in page
     assert "stopped part-way" not in page
-    assert "not everything in it reached Lidarr" not in page
+    assert "not all of it reached Lidarr" not in page
 
 
 def test_status_names_the_artists_set_to_none_in_what_changed(client: TestClient, data_dir: Path) -> None:
@@ -1292,6 +1288,35 @@ def test_paused_by_hand_with_no_timestamp_says_off_in_config_not_an_unknown_time
 # ---------------------------------------------------------------- live schedule preview
 
 
+def test_the_all_good_banner_notes_a_failed_scheduled_fire(client: TestClient, data_dir: Path) -> None:
+    """A scheduled fire that failed without reaching Home Assistant leaves the banner green, but it
+    no longer says nothing needs you: it notes the failure and links to the job."""
+    job_id = "2026-09-23T17-00-00Z-f1f1f1"
+    job_dir = data_dir / "ui" / "jobs" / job_id
+    job_dir.mkdir(parents=True)
+    meta = {
+        "id": job_id,
+        "kind": "scheduled",
+        "argv": ["likearr", "run", "--scheduled", "--apply"],
+        "label": "Scheduled run",
+        "started_at": "2026-09-23T17:00:00+00:00",
+        "finished_at": "2026-09-23T17:00:05+00:00",
+        "exit_code": 1,
+        "state": "failed",
+        "drain": True,
+    }
+    (job_dir / "meta.json").write_text(json.dumps(meta))
+    (job_dir / "log.txt").write_text("")
+    _login(client)
+
+    page = client.get("/").text
+
+    glance = page[page.index("At a glance") : page.index("Last applied run")]
+    assert "All good." in glance
+    assert "nothing needs you" not in glance
+    assert f'The last scheduled run failed: <a href="/jobs/{job_id}">' in glance
+
+
 def test_status_labels_run_now_as_run_and_apply_with_a_review_first_note(client: TestClient) -> None:
     _login(client)
 
@@ -1299,7 +1324,7 @@ def test_status_labels_run_now_as_run_and_apply_with_a_review_first_note(client:
 
     assert "Run and apply now" in page
     assert "Run now</button>" not in page
-    assert "plans and applies within the guards" in page
+    assert "Checks and applies in one go" in page
     assert '<a href="/plan">Review changes</a>' in page
 
 
@@ -2089,7 +2114,7 @@ def test_status_leads_with_health_last_run_and_next_run(client: TestClient) -> N
     assert "Home Assistant" not in glance
     assert "Dry run: would monitor" in glance  # the newest run is the fixture's dry run
     assert "Next scheduled run" in glance
-    assert "appears after the next run" in glance  # no last-run facts yet: the record's counts
+    assert "More detail after the next run" in glance  # no last-run facts yet: the record's counts
 
 
 def test_status_needs_attention_for_what_home_assistant_would_flag(client: TestClient, data_dir: Path) -> None:
@@ -2891,9 +2916,7 @@ def test_a_reauth_that_grants_the_collaborative_scope_makes_names_needed_again(
 
 # ---------------------------------------------------------------- a job the system killed
 
-OOM_TEXT = (
-    "This ran out of memory and was stopped by the system (the container&#39;s memory limit). Nothing was changed."
-)
+OOM_TEXT = "This ran out of memory (the container&#39;s limit) and was stopped. Nothing was changed."
 
 
 def test_a_job_the_system_killed_says_it_ran_out_of_memory(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -3104,7 +3127,7 @@ def test_a_job_adopted_after_a_restart_says_so_and_offers_no_cancel(data_dir: Pa
     page = client.get(f"/jobs/{job_id}").text
 
     assert "Still running from before likearr restarted" in page
-    assert "there is no Cancel" in page
+    assert "can't be cancelled here" in page
     assert f'action="/jobs/{job_id}/cancel"' not in page
 
 
@@ -3180,14 +3203,14 @@ def test_accept_as_known_opens_the_apply_confirm_with_accept_health_ticked(
     card = client.get("/").text.split('<section id="collisions">', 1)[1]
     link = f'href="/plan/{job_id}/apply?accept_health=1"'
     assert f'<a class="button small" {link}>Accept as known</a>' in card
-    assert "stops lighting Home Assistant amber" in card
+    assert "stops flagging this as a problem" in card
 
     preset = client.get(f"/plan/{job_id}/apply", params={"accept_health": "1"}).text
     plain = client.get(f"/plan/{job_id}/apply").text
     assert '<input type="checkbox" name="accept_health" checked>' in preset
     assert "<details open>" in preset and "Accept the name collision as known" in preset
     assert "including ones that appeared after this check" in preset  # what the box really accepts
-    assert "stops lighting Home Assistant amber" in preset
+    assert "stops flagging the skip as a problem, here and in Home Assistant" in preset
     assert '<input type="checkbox" name="accept_health">' in plain and "Accept the name collision" not in plain
 
     token = re.search(r'name="plan_token" value="([0-9a-f]+)"', preset)
@@ -3210,11 +3233,11 @@ def test_accept_as_known_says_status_not_home_assistant_without_mqtt(
     job_id = _start_plan(client)
 
     card = client.get("/").text.split('<section id="collisions">', 1)[1]
-    assert "stops showing as needs attention on Status" in card
+    assert "stops flagging this as a problem" in card
     assert "Home Assistant" not in card
 
     preset = client.get(f"/plan/{job_id}/apply", params={"accept_health": "1"}).text
-    assert "stops showing as needs attention on Status" in preset
+    assert "stops flagging the skip as a problem" in preset
     assert "Home Assistant" not in preset
 
 
