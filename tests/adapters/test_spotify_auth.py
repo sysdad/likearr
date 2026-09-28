@@ -77,7 +77,7 @@ def test_build_authorize_url_shape(spotify_config: SpotifyConfig, client: httpx.
 
 
 def test_the_write_scopes_are_asked_for_only_on_request(spotify_config: SpotifyConfig, client: httpx.Client) -> None:
-    """#161: read-only by default; `include_write=True` (promote-save's opt-in) adds the two modify scopes."""
+    """Read-only by default; `include_write=True` (promote-save's opt-in) adds the two modify scopes."""
     auth = SpotifyAuth(spotify_config, client)
 
     read_only, _, _ = auth.build_authorize_url()
@@ -92,7 +92,7 @@ def test_the_write_scopes_are_asked_for_only_on_request(spotify_config: SpotifyC
 
 
 def test_a_token_with_the_write_scopes_keeps_them_on_re_authorization(spotify_config: SpotifyConfig) -> None:
-    """#161 decision (a), keep what you have: a plain re-authorization asks for the write scopes
+    """Keep what you have: a plain re-authorization asks for the write scopes
     again only when the stored token already has both."""
     write_tokens(spotify_config, scope=ALL_SCOPES)
     assert asks_for_write_scopes(spotify_config.token_file) is True
@@ -110,7 +110,7 @@ def test_a_token_with_the_write_scopes_keeps_them_on_re_authorization(spotify_co
 def test_a_token_from_before_the_collaborative_scope_keeps_its_write_access_and_gains_it(
     spotify_config: SpotifyConfig, client: httpx.Client
 ) -> None:
-    """#103 item 3 with #161: a token granted read and write before likearr asked for
+    """A token granted read and write before likearr asked for
     playlist-read-collaborative still counts as having write access, so its next re-authorization
     asks for everything - the new read scope and the write scopes it already had."""
     old = "user-follow-read user-library-read playlist-read-private user-follow-modify user-library-modify"
@@ -175,7 +175,7 @@ def test_redirect_without_a_port_is_rejected(spotify_config: SpotifyConfig, clie
         SpotifyAuth(config, client).build_authorize_url()
 
 
-# ---------------------------------------------------------------------------- direct-callback mode (#79)
+# ---------------------------------------------------------------------------- direct-callback mode
 
 
 def test_an_explicit_redirect_uri_overrides_the_configured_loopback_one(
@@ -234,7 +234,7 @@ def test_exchange_code_sends_the_same_explicit_redirect_uri(
 def test_exchange_code_holds_the_token_lock(
     spotify_config: SpotifyConfig, client: httpx.Client, clock: FakeClock
 ) -> None:
-    """The web UI's "Connect Spotify" exchange (issue #79) goes through the same locked write as
+    """The web UI's "Connect Spotify" exchange goes through the same locked write as
     `likearr auth` and a scheduled run's refresh: a concurrent holder makes it wait, then give up,
     never interleave a write."""
     auth = SpotifyAuth(spotify_config, client, now=clock.time, sleep=clock.sleep)
@@ -268,7 +268,7 @@ def test_parse_redirect_url_rejects_a_url_without_a_code() -> None:
         SpotifyAuth.parse_redirect_url("http://127.0.0.1:8765/callback")
 
 
-# ---------------------------------------------------------------------------- loopback callback (#171)
+# ---------------------------------------------------------------------------- loopback callback
 
 
 @pytest.mark.parametrize(
@@ -388,7 +388,7 @@ def test_access_token_refreshes_inside_the_60s_skew(
 
 
 def test_missing_token_file_is_a_source_error(spotify_config: SpotifyConfig, client: httpx.Client) -> None:
-    """#118: names the browser path too, since a new user reads this before ever hearing of the
+    """Names the browser path too, since a new user reads this before ever hearing of the
     CLI - Settings is what the README's quick start actually sends them to."""
     with pytest.raises(SourceError) as excinfo:
         SpotifyAuth(spotify_config, client).access_token()

@@ -61,14 +61,14 @@ def doctor_command(ctx: Context, *, no_spotify: bool = False, as_json: bool = Fa
     FAILed; a WARN (no token yet, profiles not created) is not a failure.
 
     `as_json` (``--json``) prints one line of JSON instead - ``{"checks": [...], "summary": {...}}``
-    - for the web UI's read-only Doctor view (issue #80), which runs this as a child job and
+    - for the web UI's read-only Doctor view, which runs this as a child job and
     renders the same checks a terminal would see.
     """
     checks: list[Check] = []
     checks.append(Check("PASS", "version", f"likearr {__version__}, commit {commit() or 'unknown'}"))
     checks.append(Check("PASS", "config", f"loaded from {ctx.config.state_db.parent}"))
     if ctx.config.musicbrainz.contact.strip().lower() == PLACEHOLDER_CONTACT:
-        # Loads (issue #110, option B) so a first `doctor` still runs, but it identifies nobody.
+        # Loads so a first `doctor` still runs, but it identifies nobody.
         checks.append(
             Check(
                 "WARN",
@@ -194,7 +194,7 @@ def _check_lidarr(ctx: Context) -> list[Check]:
 
 
 def _not_chosen(key: str, options: Sequence[str]) -> str:
-    """Doctor's line for a `[lidarr]` key a first start leaves unset (#3), with Lidarr's choices."""
+    """Doctor's line for a `[lidarr]` key a first start leaves unset, with Lidarr's choices."""
     return (
         f"not set: no run plans or applies until it is. Pick one in Settings, under Lidarr setup, or set "
         f"[lidarr] {key} in config.toml (Lidarr has: {', '.join(options) or 'none'})"
@@ -206,7 +206,7 @@ LOST_STATE_SHOWN = 10
 
 
 def _check_state_matches_lidarr(ctx: Context, view: LidarrView) -> Check:
-    """Lidarr artists carrying likearr's tag that the state database has no record of (#175).
+    """Lidarr artists carrying likearr's tag that the state database has no record of.
 
     FAIL when `owned_artists` is empty: likearr tagged artists in this Lidarr and the database
     remembers none of them, which is a lost or replaced database, and from then on nothing likearr
@@ -438,7 +438,7 @@ def _spotify_canaries(ctx: Context) -> list[tuple[str, str, dict[str, Any], str]
 @dataclass(slots=True)
 class SetupProfilesPlan:
     """What `setup-profiles` sees and would do, built once and shared by the text, `--json` and
-    web UI (issue #80) renderings, so there is exactly one place that decides what is missing,
+    web UI renderings, so there is exactly one place that decides what is missing,
     what already matches, and what exists but differs.
     """
 
@@ -461,9 +461,9 @@ class SetupProfilesPlan:
     """What `--apply` would create or change - the same lines the text output has always shown.
     Never includes a 'differs' profile (see `profiles`'s docstring): applying would not change it."""
     root_folders: list[str] = field(default_factory=list)
-    """Every root folder Lidarr has, for Settings to pick `[lidarr] root_folder` from (#3)."""
+    """Every root folder Lidarr has, for Settings to pick `[lidarr] root_folder` from."""
     quality_profiles: list[str] = field(default_factory=list)
-    """Every quality profile Lidarr has, for Settings to pick `[lidarr] quality_profile` from (#3)."""
+    """Every quality profile Lidarr has, for Settings to pick `[lidarr] quality_profile` from."""
 
     @property
     def needs_apply(self) -> bool:
@@ -522,7 +522,7 @@ def _build_setup_profiles_plan(ctx: Context) -> SetupProfilesPlan:
     folder = next((f for f in folders if str(f.get("path") or "").rstrip("/") == root.rstrip("/")), None)
     root_folder: dict[str, Any] = {"path": root}
     if not root:
-        # Not chosen yet (#3): nothing to create or change until Settings picks one.
+        # Not chosen yet: nothing to create or change until Settings picks one.
         root_folder["status"] = "unset"
         root_folder["applies"] = False
     elif folder is None:
@@ -584,7 +584,7 @@ def setup_profiles_command(ctx: Context, *, do_apply: bool = False, as_json: boo
     silently hiding it.
 
     `as_json` (``--json``) prints the plan as one line of JSON instead of the dry-run text, for
-    the web UI's Lidarr setup panel (issue #80), which previews with this and applies by spawning
+    the web UI's Lidarr setup panel, which previews with this and applies by spawning
     `setup-profiles --apply` as a job.
     """
     try:
@@ -626,7 +626,7 @@ def setup_profiles_command(ctx: Context, *, do_apply: bool = False, as_json: boo
         folder = next(
             (f for f in ctx.lidarr.root_folders() if str(f.get("path") or "").rstrip("/") == root.rstrip("/")), None
         )
-        # No root folder chosen yet (#3): `plan.root_folder` said so, and nothing is done to one.
+        # No root folder chosen yet: `plan.root_folder` said so, and nothing is done to one.
         if root and folder is None:
             ctx.lidarr.add_root_folder(root)
             emit(f"ok    root folder {root!r} created")

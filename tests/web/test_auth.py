@@ -118,7 +118,7 @@ def test_unsafe_methods_need_a_same_origin_request(headers: dict[str, str], allo
     assert cross_origin_allowed("POST", headers) is allowed
 
 
-# ---------------------------------------------------------------- refused-host message (#169)
+# ---------------------------------------------------------------- refused-host message
 
 
 def test_the_message_names_the_host_and_the_setting_with_no_port() -> None:
@@ -209,7 +209,7 @@ def test_only_the_first_host_header_counts_as_starlette_did() -> None:
     assert sent[0]["status"] == 400
 
 
-# ---------------------------------------------------------------- hosts with LIKEARR_ALLOWED_HOSTS unset (#3)
+# ---------------------------------------------------------------- hosts with LIKEARR_ALLOWED_HOSTS unset
 
 
 def _host_status(middleware_hosts: list[str], host: str, *, any_ipv4: bool) -> int:

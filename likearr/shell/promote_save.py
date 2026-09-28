@@ -6,10 +6,10 @@ already applied. Its other fields were always meant for a Spotify-side step, and
 - **`promote`** (artist MBIDs): follow that artist on Spotify, so likearr keeps monitoring their
   studio albums and EPs from then on.
 - **`save`** (artist MBIDs): save the albums of theirs that **a human reviewed and kept**.
-- **`save_releases`** (release-group MBIDs, #55): save that one album, which a human reviewed and
+- **`save_releases`** (release-group MBIDs): save that one album, which a human reviewed and
   chose to keep and save on its own. The same rule as `save`, one album at a time: it must be in
   the review snapshot with files, and still hold files in Lidarr.
-- **`save_exclude_releases`** (release-group MBIDs, #55): an album of a `save` artist that a human
+- **`save_exclude_releases`** (release-group MBIDs): an album of a `save` artist that a human
   chose to keep with no change on Spotify. It is left out of that artist's save.
 
 Both are cross-checked against the review snapshot's per-album ``save`` flag, which the review page
@@ -151,9 +151,9 @@ class Decisions:
     promote: tuple[str, ...]
     save: tuple[str, ...]
     save_releases: tuple[str, ...] = ()
-    """Release groups saved one at a time (#55)."""
+    """Release groups saved one at a time."""
     save_exclude_releases: tuple[str, ...] = ()
-    """Release groups of `save` artists kept with no change on Spotify: never saved (#55)."""
+    """Release groups of `save` artists kept with no change on Spotify: never saved."""
 
     @property
     def saves_anything(self) -> bool:
@@ -288,8 +288,8 @@ class ReviewSnapshot:
     reviewed: dict[str, frozenset[str]]
     """artist mbid -> the release-group mbids reviewed *with files* for that artist."""
     save_flags: dict[str, bool] = field(default_factory=dict)
-    """rg mbid -> the snapshot's own ``save`` flag, for releases that carry one (a snapshot the
-    review page wrote since #55). An older snapshot has none, and nothing is cross-checked."""
+    """rg mbid -> the snapshot's own ``save`` flag, for releases that carry one. An older snapshot
+    has none, and nothing is cross-checked."""
 
     def save_flag(self, rg_mbid: str) -> bool | None:
         return self.save_flags.get(rg_mbid)
@@ -317,7 +317,7 @@ def read_reviewed(path: Path) -> ReviewSnapshot:
     """Read the review page's own export (``review-data.json``).
 
     Shape: a top-level ``artists`` list, each with ``mbid`` and ``releases``, each release with
-    ``rg``, ``files``, ``title`` and ``type``, and since #55 ``save``. Only ``mbid``, ``rg``,
+    ``rg``, ``files``, ``title`` and ``type``, and ``save``. Only ``mbid``, ``rg``,
     ``files`` and ``save`` are read; a release with no files at review time was not a "keep" and
     cannot become a save.
 

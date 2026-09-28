@@ -111,13 +111,13 @@ def test_the_allowlist_is_exactly_the_approved_keys() -> None:
 
 
 def test_every_field_has_a_non_empty_help_line() -> None:
-    """#130: a guard used to render with no help at all; every field must say what it does."""
+    """A guard used to render with no help at all; every field must say what it does."""
     for f in FIELDS:
         assert f.help.strip(), f"{f.name} has no help"
 
 
 def test_liked_track_scope_choice_labels_are_sentences_but_the_values_stay_the_stored_ones() -> None:
-    """#130: the dropdown shows a sentence per option, but the posted/stored value is unchanged."""
+    """The dropdown shows a sentence per option, but the posted/stored value is unchanged."""
     scope = next(f for f in FIELDS if (f.section, f.key) == ("rules", "liked_track_scope"))
 
     assert scope.choices == ("album", "smallest")
@@ -127,7 +127,7 @@ def test_liked_track_scope_choice_labels_are_sentences_but_the_values_stay_the_s
 
 
 def test_the_reworded_help_no_longer_uses_the_flagged_jargon() -> None:
-    """#130 (bar B19): "Release group MBIDs" and "catalogue gap this new" read as jargon."""
+    """The reworded help drops "Release group MBIDs" and "catalogue gap this new" jargon."""
     deny = next(f for f in FIELDS if (f.section, f.key) == ("rules", "deny_releases"))
     recent = next(f for f in FIELDS if (f.section, f.key) == ("rules", "recent_release_days"))
 
@@ -277,7 +277,7 @@ def test_loosening_a_guard_needs_a_second_confirm_naming_it(config_path: Path, k
 
 
 def test_loosening_unmapped_ratio_amber_says_status_not_amber(config_path: Path) -> None:
-    """Issue #139: the confirm text talks about Status needing attention, not Home Assistant's
+    """The confirm text talks about Status needing attention, not Home Assistant's
     amber state. The config key itself (`unmapped_ratio_amber`) is unchanged - see the field
     label and `_GUARD_EFFECT` in `settings.py`."""
     field = next(f for f in FIELDS if (f.section, f.key) == ("guards", "unmapped_ratio_amber"))
@@ -333,7 +333,7 @@ def test_writing_backs_up_the_old_file_and_replaces_it_atomically(config_path: P
 def test_a_save_drops_world_bits_from_the_config_and_its_backup(config_path: Path, before: int, after: int) -> None:
     """config.toml can hold a capability URL (a webhook with a token), so a save never leaves it or
     its backup readable by other users. Group bits stay: a host user editing by hand may be in the
-    container's group (#107). Not a hard 0600 (#171)."""
+    container's group. Not a hard 0600."""
     os.chmod(config_path, before)
     backup = write_config(
         config_path,
@@ -560,7 +560,7 @@ def test_switching_a_source_off_or_removing_a_playlist_saves_in_one_step(config_
     assert plan_save(config_path.read_text(), values, base_dir=config_path.parent).confirm == []
 
 
-# ---------------------------------------------------------------- pause / resume (issue #68)
+# ---------------------------------------------------------------- pause / resume
 
 
 def test_pausing_saves_in_one_step_with_a_reason_and_the_time(config_path: Path) -> None:
@@ -615,7 +615,7 @@ def test_resuming_an_already_enabled_schedule_still_confirms(config_path: Path) 
     assert check.confirm != []
 
 
-# ---------------------------------------------------------------- live schedule preview (#86)
+# ---------------------------------------------------------------- live schedule preview
 
 
 def test_preview_schedule_gives_the_next_fires_in_the_chosen_timezone() -> None:
@@ -671,7 +671,7 @@ def test_preview_schedule_omits_the_summary_for_anything_else(cron: str) -> None
     assert preview.summary == ""
 
 
-# ---------------------------------------------------------------- readable confirm rows (#86)
+# ---------------------------------------------------------------- readable confirm rows
 
 
 def test_describe_changes_reads_a_bool_as_on_off() -> None:
@@ -745,7 +745,7 @@ def test_adding_a_deny_entry_says_the_songs_on_it_re_resolve() -> None:
 
 
 def test_removing_a_deny_entry_says_the_songs_kept_off_it_re_resolve() -> None:
-    """Issue #271: removing an entry now re-resolves what fell through from it, and says so."""
+    """Removing an entry now re-resolves what fell through from it, and says so."""
     text = _deny_confirm((MBID, _OTHER_MBID), ())
 
     assert "re-resolves the songs that were kept off the releases you removed" in text
@@ -774,7 +774,7 @@ def test_describe_changes_reads_an_ordinary_value_as_old_arrow_new() -> None:
     assert row.summary == "180 -> 90"
 
 
-# ---------------------------------------------------------------- Clean up's switch (#148)
+# ---------------------------------------------------------------- Clean up's switch
 
 
 @pytest.mark.parametrize("prune", ['prune = "x"\n', '[[prune]]\nholding_dir = "/x"\n'])

@@ -6,7 +6,7 @@ never carries the plan; it names a job. What this module decides:
 - **Lifecycle.** A finished plan is *reviewable* until the world it was planned against moves on.
   It is *superseded* when an apply has landed since (any apply - a cron run's included), or when
   `[rules]`/`[guards]` no longer match the configuration it recorded (the same comparison `apply`
-  makes since #27, so a settings save supersedes it). It *expires* after `EXPIRE_AFTER`
+  makes, so a settings save supersedes it). It *expires* after `EXPIRE_AFTER`
   unreviewed. Both are computed when read, from facts that already exist, rather than stored: no
   hook to forget, and a hand edit of `config.toml` supersedes exactly like a browser save. The
   digest check in `apply` stays the real backstop; this just says so before the last step.
@@ -72,7 +72,7 @@ class PlanState:
 
 _CHANGE_COUNTS = ("monitored", "unmonitored", "added", "new_items_none")
 """What an apply's health record says it changed, artists set to "Monitor New Albums: None"
-included (#172): an apply that did only that moved Lidarr from under the plan too. Ratchets and
+included: an apply that did only that moved Lidarr from under the plan too. Ratchets and
 re-monitored artists are not in the record; an apply that did only those (rare: they come with
 monitors) leaves the plan reviewable, and `apply`'s digest check still refuses it if Lidarr moved."""
 
@@ -112,7 +112,7 @@ def applied_since(records: Sequence[HealthRecord], finished_at: str) -> bool:
     """Whether an apply that changed something (a cron run's included) was recorded after
     `finished_at`. A cron apply with nothing to do leaves Lidarr as the plan saw it, so it must not
     kill the plan - every six hours it would otherwise. An apply that failed part-way changed
-    Lidarr too (#54), so it counts."""
+    Lidarr too, so it counts."""
     after = datetime.fromisoformat(finished_at).timestamp()
     return any(
         not r.dry_run
@@ -148,7 +148,7 @@ def plan_state(
     if resolver_version is not None and resolver_version != RESOLVER_VERSION:
         return PlanState("superseded", "This check was made by an older likearr; check again.")
     changed = config_changes(recorded, current)
-    if changed is None:  # `apply` refuses such a diff (#27), so it is no plan to offer
+    if changed is None:  # `apply` refuses such a diff, so it is no plan to offer
         return PlanState("superseded", "This plan does not record the settings it was made under.")
     if changed:
         return PlanState("superseded", f"The settings changed since this plan was made: {', '.join(changed)}.")
@@ -410,7 +410,7 @@ def section_rows(
 
     A key starting with ``_`` is not a column. ``_href:<Column>`` makes that column's cell a link;
     ``_release`` carries what a monitor row's "Not this one" needs, and is set only where the
-    button would work (`deniable`, issue #153); ``_deny_note`` says where the choice lives instead.
+    button would work (`deniable`); ``_deny_note`` says where the choice lives instead.
     """
     if name == "add_artists":
         return [{"Artist": a.name or a.artist_mbid, "Profile": _PROFILES[a.profile]} for a in diff.add_artists]
@@ -509,7 +509,7 @@ _WIDEN_NOTE = (
     '"Monitor New Albums" is set to None first, so the release types this shows are not monitored; '
     "albums already monitored stay monitored."
 )
-"""What a widening does to an artist whose "Monitor New Albums" the same plan sets to None (#172)."""
+"""What a widening does to an artist whose "Monitor New Albums" the same plan sets to None."""
 
 
 def _with_widen_note(because: str) -> str:
@@ -539,7 +539,7 @@ RUN_CHANGE_SECTIONS = (
     "set_new_items_none",
     "refresh_artists",
 )
-"""What an applied run's "What changed" shows (#76): every section that can hold a named change,
+"""What an applied run's "What changed" shows: every section that can hold a named change,
 in `SECTIONS`' own order. `update_reasons` is left out - state only, no Lidarr change - and so are
 `guards`, `name_collisions`, `pending` and `unmapped`, which the run's own headline and the
 collision cards already say what they need to."""
@@ -560,7 +560,7 @@ def run_change_sections(
     Returns one dict per non-empty section: ``section`` (its `Section`), ``rows`` (at most `cap` of
     them, or all of them when `cap` is falsy), ``total`` (how many there really are), ``columns``,
     and ``capped`` (whether `rows` is fewer than `total`) - what the Status page's inline "What
-    changed" and `/runs/<id>` (#76) both render, the second with no `cap`.
+    changed" and `/runs/<id>` both render, the second with no `cap`.
     """
     out: list[dict[str, Any]] = []
     for name in RUN_CHANGE_SECTIONS:

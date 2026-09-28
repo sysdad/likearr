@@ -39,8 +39,7 @@ def test_writing_merges_and_the_newest_name_wins(tmp_path: Path) -> None:
 
 def test_not_owned_is_replaced_whole_not_merged(tmp_path: Path) -> None:
     """Unlike `names`, `not_owned` reflects only the newest fetch: a playlist absent from a later
-    listing (unfollowed, deleted) must stop being flagged, and only the latest listing knows that
-    (issue #103, item 1)."""
+    listing (unfollowed, deleted) must stop being flagged, and only the latest listing knows that."""
     path = tmp_path / "ui" / "playlist-names.json"
     write_names(path, {"pl-1": "Road trip", "pl-2": "Discover Weekly"}, fetched_at=WHEN, not_owned=["pl-2"])
     assert read_names(path).not_owned == frozenset({"pl-2"})
@@ -53,7 +52,7 @@ def test_not_owned_is_replaced_whole_not_merged(tmp_path: Path) -> None:
 
 
 def test_needs_reauth_round_trips_and_is_replaced_whole(tmp_path: Path) -> None:
-    """#103 item 3: the collaborative playlists a re-authorization would make readable, kept beside
+    """The collaborative playlists a re-authorization would make readable, kept beside
     `not_owned` so a save can say "re-authorize" rather than "copy it"."""
     path = tmp_path / "ui" / "playlist-names.json"
     write_names(path, {"pl-c": "Band Van"}, fetched_at=WHEN, not_owned=["pl-c"], needs_reauth=["pl-c"])

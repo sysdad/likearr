@@ -1,8 +1,8 @@
 """The apply phase of a run: the only code in likearr with side effects on Lidarr.
 
 `apply` executes exactly the diff it was given, in a fixed order, committing its state writes
-batch by batch. Every Lidarr write a run makes is in this module. Split out of `shell.run`
-(#156); see that module for the invariants every run keeps.
+batch by batch. Every Lidarr write a run makes is in this module. Split out of `shell.run`;
+see that module for the invariants every run keeps.
 """
 
 from __future__ import annotations
@@ -80,7 +80,7 @@ def apply(
         force: apply a stale diff anyway. Only ever set from ``--force``; the digests exist
             precisely so this is a deliberate act.
         monotonic: the clock the re-plan's resolve-progress line and the add-loop's per-artist
-            refresh timing (issue #119) are measured against. Injected so a test never has to
+            refresh timing are measured against. Injected so a test never has to
             sleep for real; defaults to the wall clock.
 
     Returns:
@@ -138,7 +138,7 @@ def apply(
     guarded = diff.guarded
     result = ApplyResult(lidarr_metadata_ok=fresh.lidarr_metadata_ok)
     watched = replace(ctx, lidarr=cast("Any", _WriteWatch(ctx.lidarr, result)))
-    # The single point planning ends and the first Lidarr write begins (issue #68 phase 3):
+    # The single point planning ends and the first Lidarr write begins:
     # everything above this line only reads. `web.jobs.JobRunner` looks for this exact line in a
     # scheduled job's stderr to decide, on a redeploy's SIGTERM, whether the child is still safe to
     # cancel or must be drained. Plain stderr, not `log`, so the line is never reformatted, timed
@@ -261,7 +261,7 @@ def _execute(
             f"lidarr has no quality profile named {config.lidarr.quality_profile!r} "
             f"(it has: {', '.join(sorted(view.quality_profiles)) or 'none'})"
         )
-    # `ensure_*` is get-or-create: a write only when the plan's view lacked the name (#54).
+    # `ensure_*` is get-or-create: a write only when the plan's view lacked the name.
     if not _named(config.lidarr.tag, view.tags):
         result.lidarr_written = True
     tag_id = ctx.lidarr.ensure_tag(config.lidarr.tag)
@@ -275,7 +275,7 @@ def _execute(
     owned_artists = ctx.state.owned_artists()
     skipped: set[str] = set()  # every artist the later phases leave alone, the unknown ones too
     unknown: set[str] = set()  # of those, the ones Lidarr's metadata does not know yet
-    foreign: set[str] = set()  # and the ones someone else added before likearr could (#4)
+    foreign: set[str] = set()  # and the ones someone else added before likearr could
     added_artists: dict[str, LidarrArtist] = {}
 
     # (b) -------------------------------------------------------------- add artists
@@ -292,7 +292,7 @@ def _execute(
                 tag_ids=[tag_id],
             )
         except LidarrArtistUnknown as exc:
-            # Not an outage, so `lidarr_metadata_ok` is left alone (#173). Nothing was added, so
+            # Not an outage, so `lidarr_metadata_ok` is left alone. Nothing was added, so
             # there is nothing likearr owns to unmonitor; the next plan asks for the add again.
             log.warning("skipping %s (%s) this run: %s", add.name, add.artist_mbid, exc)
             skipped.add(add.artist_mbid)
@@ -305,7 +305,7 @@ def _execute(
             continue
         except LidarrArtistExists as exc:
             if tag_id not in exc.artist.tags:
-                # Added by hand or by an import list since the plan was made (issue #4). Recording
+                # Added by hand or by an import list since the plan was made. Recording
                 # it would make it likearr's for good, and every later run would then force its
                 # "Monitor New Albums" to None. Left to whoever added it: no row, no refresh, and
                 # none of this plan's monitors for it; the next plan sees it as theirs.
@@ -334,7 +334,7 @@ def _execute(
             )
         added_artists[add.artist_mbid] = artist
         result.added += 1
-        # A RefreshArtist can take minutes (issue #119): logged whether it succeeds or fails, so
+        # A RefreshArtist can take minutes: logged whether it succeeds or fails, so
         # the job page's progress line moves either way - the add loop is often the slowest part
         # of an apply on a big library, and a failure here is exactly when "how far along is it"
         # matters most.
@@ -409,7 +409,7 @@ def _execute(
     # during add/refresh, and the POST response cannot be trusted to say so. A just-added artist is
     # therefore always re-monitored rather than checked; an existing one is in the diff.
     #
-    # `result.artists_monitored` counts only the plan's own `monitor_artists` (issue #182): a
+    # `result.artists_monitored` counts only the plan's own `monitor_artists`: a
     # just-added artist's re-monitor is part of the add, not a second event, so it is covered by
     # `set_artists_monitored` below but left out of this count - matching what the plan summary
     # already counts as "unmonitored artists to re-monitor" and what `changes_made` counts as part
@@ -506,7 +506,7 @@ def _monitor(
     reported and retried next run: it is a metadata lag, not a reason to fail the run.
 
     Each batch's ownership rows are written *before* the PUT, because Lidarr can apply a batch and
-    still answer with an error (#174). A row nobody writes is an album monitored for good; a row
+    still answer with an error. A row nobody writes is an album monitored for good; a row
     on an album that stayed unmonitored is harmless. See `_settle_failed_batch` for the undo.
     """
     by_artist: dict[str, list[MonitorRelease]] = {}

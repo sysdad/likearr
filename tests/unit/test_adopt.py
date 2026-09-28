@@ -152,7 +152,7 @@ def test_losing_the_state_database_means_owning_nothing_and_unmonitoring_nothing
     assert not result.unmonitor
 
 
-# ------------------------------------------- an artist whose catalogue could not be read (issue #6)
+# ------------------------------------------- an artist whose catalogue could not be read
 
 
 def _unread(artist_mbid: str, step: str) -> ArtistResolution:

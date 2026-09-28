@@ -1,4 +1,4 @@
-"""Parse `likearr setup-profiles --json` for the web UI's Lidarr setup panel (issue #80).
+"""Parse `likearr setup-profiles --json` for the web UI's Lidarr setup panel.
 
 The planning itself lives in `shell.setup_commands._build_setup_profiles_plan`, reused unchanged
 by both the CLI's dry run and this ``--json`` line; this module only turns that line back into a
@@ -41,9 +41,9 @@ class LidarrSetupView:
     todo: tuple[str, ...] = field(default_factory=tuple)
     error: str = ""
     root_folders: tuple[str, ...] = ()
-    """Lidarr's root folders, for Settings to pick `[lidarr] root_folder` from (#3)."""
+    """Lidarr's root folders, for Settings to pick `[lidarr] root_folder` from."""
     quality_profiles: tuple[str, ...] = ()
-    """Lidarr's quality profiles, for Settings to pick `[lidarr] quality_profile` from (#3)."""
+    """Lidarr's quality profiles, for Settings to pick `[lidarr] quality_profile` from."""
 
     @property
     def needs_apply(self) -> bool:

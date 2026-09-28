@@ -1,7 +1,7 @@
 """When a five-field cron line next fires. Pure: the caller supplies the clock and the timezone.
 
 The line and its timezone live in `config.toml`'s `[schedule]` block (`cron` / `timezone`), read
-by the in-service scheduler (`likearr.web.schedule`, issue #68 phase 2) to decide when to fire, and
+by the in-service scheduler (`likearr.web.schedule`) to decide when to fire, and
 by the web UI to show the next fire on Status.
 
 The dialect is the one every Linux crontab speaks: minute, hour, day of month, month, day of

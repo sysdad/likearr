@@ -239,7 +239,7 @@ def test_writing_clears_temp_files_a_dead_run_left_behind(tmp_path: Path) -> Non
 
 
 def test_a_temp_file_write_atomic_left_behind_is_swept(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """`likearr.fsio.write_atomic` names its temp file so `remove_stale_temps` still finds it (#158)."""
+    """`likearr.fsio.write_atomic` names its temp file so `remove_stale_temps` still finds it."""
     import os
 
     from likearr import fsio
@@ -271,7 +271,7 @@ def test_the_plans_monitors_are_kept_too(tmp_path: Path) -> None:
 
 
 def test_a_snapshots_schema_ok_and_warnings_round_trip(tmp_path: Path) -> None:
-    """Issue #68 phase 3: `spotify_snapshot` reuses this shape and needs it lossless."""
+    """`spotify_snapshot` reuses this shape and needs it lossless."""
     from dataclasses import replace
 
     dirty = replace(JUNGLE_SNAPSHOT, schema_ok=False, schema_warnings=("liked tracks: missing 'isrc'",))

@@ -1,4 +1,4 @@
-"""The prune review in the web UI (#31, #55): a prune-report, decided per artist, exported as files.
+"""The prune review in the web UI: a prune-report, decided per artist, exported as files.
 
 `likearr prune-report` runs as a job and writes `prune.json` into its job directory. This module
 reads that report, keeps the reviewer's decisions in a draft beside it, and turns them into the
@@ -16,10 +16,10 @@ Spotify), save (keep, and save all their albums on Spotify) or trash (stage ever
 An album can override its artist: keep it with no change on Spotify - which also takes it out of
 its artist's save - keep it and save it on its own, or trash it. A protected row - the only local
 copy of a liked track - is never trashed, whatever the artist's decision says; it can still be
-saved, because saving moves no file. It says why in plain words (`kept_why`, #64): the song by its
+saved, because saving moves no file. It says why in plain words (`kept_why`): the song by its
 title and the playlist by its name, never an id.
 
-**Carried over (#55).** Every export is recorded in the ledger (`likearr.prune_ledger`), and a
+**Carried over.** Every export is recorded in the ledger (`likearr.prune_ledger`), and a
 report's draft is pre-filled from what the ledger holds from *other* reviews (`prefill`): what was
 kept before is kept again, and says when. Two things never pre-fill: a past trash (it is on disk
 again and needs a fresh look) and a past follow or save (every Spotify write comes from a click in
@@ -127,7 +127,7 @@ class PruneArtist:
     releases: tuple[PruneRelease, ...]
     followed: bool | None = None
     """Followed on Spotify when the report was built; ``None`` when nobody can say (follows were
-    not read, or a report from before #55)."""
+    not read, or from an older report)."""
 
     @property
     def candidates(self) -> tuple[PruneRelease, ...]:
@@ -236,7 +236,7 @@ _LEGACY_ALBUM = re.compile(r" whose album (.{2,1000}) \(([0-9a-fA-F-]{36})\) has
 
 
 def legacy_protection(reason: str) -> Protection | None:
-    """What a report from before #64 said in `protected_reason` alone, read back best-effort.
+    """What an older report said in `protected_reason` alone, read back best-effort.
 
     The line was ``holds a liked track (<intent key>) that is still waiting for an album; ...`` or
     ``... whose album '<title>' (<mbid>) has no files yet; ...``: the key, the kind and the album
@@ -268,7 +268,7 @@ def _text(value: object) -> str:
 
 
 def _protection_of(row: Mapping[str, Any]) -> Protection | None:
-    """A protected row's `Protection`: its ``protection`` object, else its old line (#64)."""
+    """A protected row's `Protection`: its ``protection`` object, else its old line."""
     raw = row.get("protection")
     if isinstance(raw, dict) and raw.get("kind") in PROTECTION_KINDS and isinstance(raw.get("intent_key"), str):
         artists = raw.get("song_artists")
@@ -373,7 +373,7 @@ def write_draft(path: Path, draft: Draft) -> None:
     write_atomic(path, json.dumps(body, indent=1), mode=0o600)
 
 
-# ---------------------------------------------------------------- carrying decisions over (#55)
+# ---------------------------------------------------------------- carrying decisions over
 
 
 def ledger_source(job_id: str) -> str:
@@ -872,7 +872,7 @@ def net_effect(artist: PruneArtist, draft: Draft) -> list[str]:
     return lines
 
 
-# ---------------------------------------------------------------- why an album is always kept (#64)
+# ---------------------------------------------------------------- why an album is always kept
 
 _MUSICBRAINZ = "https://musicbrainz.org"
 
@@ -909,7 +909,7 @@ class KeptWhy:
 def kept_why(
     release: PruneRelease, *, playlist_names: Mapping[str, str] | None = None, songs: Mapping[str, str] | None = None
 ) -> KeptWhy:
-    """Why this protected album is always kept, in words with no id in them (#64):
+    """Why this protected album is always kept, in words with no id in them:
 
     - *Only copy of "Think", a song in your playlist "Road trip". Its album, Respect, isn't
       downloaded yet.*

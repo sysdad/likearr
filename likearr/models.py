@@ -35,7 +35,7 @@ step runs only where 3 answered UNMAPPED, and UNMAPPED is re-resolved every run 
 bump buys re-resolution of the *cached* answers rather than a change of rule for any of them.
 
 5: when the name search finds the album title under two different MusicBrainz artists who share
-the Spotify artist's name, the earliest release date no longer decides (issue #32). A track's ISRC
+the Spotify artist's name, the earliest release date no longer decides. A track's ISRC
 chooses the artist, and failing that the intent is UNMAPPED at ``ambiguous:same-name-artists``.
 This one *does* change answers that resolved under 4 - "Busy Earnin'" by the London band Jungle
 moves off a US band's 1969 album - and nothing but a bump reaches a cached RESOLVED answer, so every
@@ -44,29 +44,29 @@ MusicBrainz's 1 request/second; answers still fresh in `mb_cache` cost no reques
 `Fingerprint` re-baselines the health comparison, so that run reports nothing as new.
 
 6: a saved album whose name search finds several same-titled releases by its artist prefers the
-Album, then a studio release, then the year Spotify gives, before the earliest date. #23 made the
-earliest date decide (without a bump), so the re-resolve 5 forced sent six saved albums to an
-earlier same-titled single, EP or demo, and those wrong answers are now cached. Only a bump reaches
-a cached RESOLVED answer; the cost and the re-baseline are as for 5.
+Album, then a studio release, then the year Spotify gives, before the earliest date. The rule
+shipped earlier made the earliest date decide (without a bump), so the re-resolve 5 forced sent
+six saved albums to an earlier same-titled single, EP or demo, and those wrong answers are now
+cached. Only a bump reaches a cached RESOLVED answer; the cost and the re-baseline are as for 5.
 
 7: Lidarr's name-search fallback - used when MusicBrainz fails or finds nothing - hands the
-resolver every same-named artist's match instead of the first one (issue #42), so two artists
+resolver every same-named artist's match instead of the first one, so two artists
 sharing a name are decided by the track's ISRC or left ambiguous, as they already are for
 MusicBrainz's matches. That changes an answer only where the fallback saw two artists, and an
 offline replay of a real library's snapshot changes none - the fallback needs an outage or a miss,
 and the replay has no Lidarr - but a guess cached by an earlier fallback is only reachable by a
-bump, and the rule since #23 is that a change which can alter a resolution bumps. Deployed
+bump, and the rule is that a change which can alter a resolution bumps. Deployed
 together with 6, it costs one re-resolve, not two.
 
 8: a liked or playlist track whose album title MusicBrainz holds under a *different* artist
 credit - Spotify's "John Mayer" for MusicBrainz's "John Mayer Trio" - is taken under that credit
 when MusicBrainz records a ``member of band`` or ``collaboration`` relationship joining the two
-artists, and never on the names alone (issue #14). The rule runs only where 7 answered UNMAPPED at
+artists, and never on the names alone. The rule runs only where 7 answered UNMAPPED at
 ``track:album:search`` after the ISRC stand-in, so it cannot change an answer 7 resolved, and an
 offline replay of stored resolutions changes none. It is a bump anyway: it changes what matches,
-and the rule since #23 is that such a change bumps, so every answer is recomputed under it once.
+and the rule is that such a change bumps, so every answer is recomputed under it once.
 
-9: two changes, one bump, so one re-resolve (issue #89). Among one artist's same-titled releases
+9: two changes, one bump, so one re-resolve. Among one artist's same-titled releases
 the name search found, a title equal to the one Spotify printed - nothing folded away but case and
 punctuation - beats one that only matches once a qualifier is dropped, before the earliest date
 decides: CRUISR's plain EP *All Over* had been losing to the earlier *All Over (Bear//Face
@@ -76,18 +76,18 @@ a track whose every release is refused only for being a remix is kept on one of 
 (``track:remix-only``) while `keep_remix_only_tracks` is on, which is the default. The first
 changes answers that resolved under 8, so only a bump reaches them.
 
-10: the resolver train, one bump for seven changes, so one re-resolve (issues #150, #151, #152,
-#153, #163, #164, #166). A saved album's barcode matches after dropping leading zeros, and several
-release groups on one barcode are narrowed by title. A song from a Various Artists compilation
-takes its ISRC's artist before a same-name search. The `smallest` scope drops an ISRC's
-differently-titled recordings. The title search skips a studio release whose main performers
-differ from a multi-performer release Spotify named (featured guests do not count). A catalogue too
-large to browse skips the title search instead of failing. `deny_releases` also applies to a
-followed artist's catalogue. Titles fold letters in any script. An offline replay of a real library's
-snapshot moved no stored answer; the fixes land on intents the old rules left unmapped or wrong.
+10: the resolver train, one bump for seven changes, so one re-resolve. A saved album's barcode
+matches after dropping leading zeros, and several release groups on one barcode are narrowed by
+title. A song from a Various Artists compilation takes its ISRC's artist before a same-name
+search. The `smallest` scope drops an ISRC's differently-titled recordings. The title search skips
+a studio release whose main performers differ from a multi-performer release Spotify named
+(featured guests do not count). A catalogue too large to browse skips the title search instead of
+failing. `deny_releases` also applies to a followed artist's catalogue. Titles fold letters in any
+script. An offline replay of a real library's snapshot moved no stored answer; the fixes land on
+intents the old rules left unmapped or wrong.
 
 11: a saved album matched by its barcode (``album:upc``) takes its release group's own artist
-credit, never the release's (issue #268). A barcode search's release group carries no credit, and
+credit, never the release's. A barcode search's release group carries no credit, and
 10 filled it from the release: Spotify's barcode for *At the Jazz Corner of the World* is a digital
 release credited to Art Blakey, while its release group is credited only to Art Blakey & The Jazz
 Messengers, so 10 keyed the album to a new Art Blakey artist. A release group that cannot be
@@ -95,26 +95,26 @@ fetched is now dropped from the barcode's answer instead. A dry run had already 
 RESOLVED answer, and only a bump reaches a cached one.
 
 12: Lidarr's album-search fallback compares artist and title with the core normaliser instead of an
-ASCII-only fold of its own (issue #5). That fold turned a name written wholly in a non-Latin script
+ASCII-only fold of its own. That fold turned a name written wholly in a non-Latin script
 into "", so for a saved album or a track's album that MusicBrainz missed, Lidarr's search could
 return a same-titled album by a different non-Latin artist and the credit check passed on "" == "".
 What re-resolves differently: answers reached through that fallback, which now need the title
 (`normalize_title`) and the credit (`credits_match`) to match, never on an empty string. MusicBrainz
 answers are untouched; every cached answer is recomputed once, as for any bump.
 
-Not bumped for #23, and that was the mistake 6 corrects: it changed which release the name search
-picks, and the old answers only survived because nothing re-resolved them.
+Not bumped when it changed the rule, and that was the mistake 6 corrects: it changed which release
+the name search picks, and the old answers only survived because nothing re-resolved them.
 
-Not bumped for issue #9, deliberately. Making the `smallest` scope's reuse sensitive to follow
+Not bumped. Making the `smallest` scope's reuse sensitive to follow
 state, and giving positive MusicBrainz cache entries a maximum age, change *when a cached answer
 stops being reused*; they change no rule. The same intent, the same follow state and the same
 MusicBrainz data still produce the same release, step and detail. A bump would also re-resolve
 every cached resolution in a single run, which is precisely what the jittered cache TTL exists to
 avoid, and would reset the health baseline through `Fingerprint` for nothing.
 
-Not bumped for issue #53, for the same reason. An answer reached after a MusicBrainz failure is no
+Not bumped, for the same reason. An answer reached after a MusicBrainz failure is no
 longer cached, whatever path reached it, and the Lidarr fallback after a MusicBrainz error honours
-the #18 negative cache. The same lookup answers still produce the same release and step; what
+the negative cache. The same lookup answers still produce the same release and step; what
 changes is what is cached, plus two things no cache ever holds: an `error:metadata` where a
 negative-cached Lidarr term used to be re-asked during an outage, and the wording of the
 UNMAPPED ambiguity detail. A provisional answer also never clears a waiting track's pending
@@ -133,7 +133,7 @@ LIKED_TRACK_SCOPES = frozenset({LIKED_TRACK_SCOPE_ALBUM, LIKED_TRACK_SCOPE_SMALL
 
 @dataclass(frozen=True, slots=True)
 class ExclusionRules:
-    """Releases a liked or playlist track may never resolve to (issue #15).
+    """Releases a liked or playlist track may never resolve to.
 
     Every field defaults to the behaviour that shipped before them, so a deployment that changes
     no configuration changes no answer - see `token`.
@@ -160,14 +160,14 @@ class ExclusionRules:
     """When False, a remix release is never a candidate - unless the liked track is itself a remix.
 
     "Remix" means the MusicBrainz `Remix` secondary type **or**
-    `core.normalize.has_remix_marker` on the title. The type alone is not enough: every example in
-    issue #15 is typed `EP` with no secondary types, so the type check that `is_studio` already
+    `core.normalize.has_remix_marker` on the title. The type alone is not enough: real examples
+    are typed `EP` with no secondary types, so the type check that `is_studio` already
     performs never saw them.
     """
     keep_remix_only_tracks: bool = True
     """When `allow_remix_releases` is False, still monitor a remix release for a liked or playlist
     track when **every** release that could hold it is refused, each only for being a remix
-    (issue #89, ``track:remix-only``). Read nowhere while remixes are allowed.
+    (``track:remix-only``). Read nowhere while remixes are allowed.
 
     The remix rule is there to stop a remix EP beating the real album, not to cost a song its only
     home: The Knocks' "Learn To Fly" exists on MusicBrainz only on *The Feeling (Remixes)*, an EP
@@ -205,7 +205,7 @@ class ExclusionRules:
         resolution is checked against the list directly (`core.resolver._reusable`), so only the
         intents that landed on a denied release are recomputed.
 
-        `keep_remix_only_tracks` adds ``k0`` only when it is **off** (issue #89), so the defaults
+        `keep_remix_only_tracks` adds ``k0`` only when it is **off**, so the defaults
         are still `""` and a library running ``c1r0`` keeps ``c1r0``: keeping is the default, and
         the RESOLVER_VERSION 9 bump, not the token, is what re-resolves that library once. It moves
         the token whatever `allow_remix_releases` says, even though it changes no answer while
@@ -219,7 +219,7 @@ class ExclusionRules:
 
 
 NO_EXCLUSIONS = ExclusionRules()
-"""Every opt-out at its default, i.e. the behaviour that shipped before issue #15.
+"""Every opt-out at its default, i.e. the behaviour that shipped before these rules existed.
 
 A module-level singleton because it is the default argument of `core.resolver.resolve_track` and
 `resolve_all`, and a frozen dataclass constructed in a signature is both a lint error and a new
@@ -284,7 +284,7 @@ class ReleaseGroup:
     secondary_types: frozenset[SecondaryType] = frozenset()
     first_release_date: date | None = None
     main_artist_mbids: tuple[str, ...] = field(default=(), compare=False)
-    """The MBIDs of the release group's main credited artists, in credit order (issue #164).
+    """The MBIDs of the release group's main credited artists, in credit order.
 
     Every credit except the featured guests: a credit joined by a featuring phrase ("feat.", "ft.",
     "featuring") and every credit after it are left out, so "Dirty Projectors feat. Dawn Richard"
@@ -314,7 +314,7 @@ class ReleaseGroup:
 
 @dataclass(frozen=True, slots=True)
 class BarcodeMatch:
-    """A release group holding a release whose barcode is the one asked for (issue #150).
+    """A release group holding a release whose barcode is the one asked for.
 
     One per distinct release group. `official` is True when at least one of those releases is
     Official, which is the last tie-break when one barcode spans several release groups.
@@ -326,7 +326,7 @@ class BarcodeMatch:
 
 @dataclass(frozen=True, slots=True)
 class IsrcRecording:
-    """One MusicBrainz recording carrying an ISRC, with the release groups it is on (issue #163).
+    """One MusicBrainz recording carrying an ISRC, with the release groups it is on.
 
     MusicBrainz sometimes files one ISRC on two different songs by the same artist, so the
     recording's own title is kept with its release groups: the resolver drops a recording that is
@@ -458,7 +458,7 @@ class Resolution:
     resolves to that release rather than to the single, because the follow monitors it anyway. That
     made the answer depend on something that changes, while the cache treated every resolution as
     permanent - so following an artist later never swapped their already-resolved single for the
-    album (issue #9). A cached `track:smallest:*` resolution is reused only while this still
+    album. A cached `track:smallest:*` resolution is reused only while this still
     matches.
 
     **Three states, not two.** ``None`` means "not recorded", which is every row written before
@@ -478,7 +478,7 @@ class Resolution:
     recomputed on upgrade."""
     denied_skipped: frozenset[str] = frozenset()
     """Release group MBIDs on `[rules] deny_releases` that the resolver refused on the way to this
-    track answer (issue #271). Empty when it met none, and for every row written before the field.
+    track answer. Empty when it met none, and for every row written before the field.
 
     The deny list is a candidate filter, so a refused release is invisible in the answer: a song
     kept off denied X lands on Y, and Y alone cannot say X was ever in play. `core.resolver.
@@ -486,7 +486,7 @@ class Resolution:
     removing an entry move a song back. Adding an entry is checked against the answer the
     resolution chose, as before."""
     checked_at: datetime | None = None
-    """When this answer was last worked out from lookups (issue #165); ``None`` for a row written
+    """When this answer was last worked out from lookups; ``None`` for a row written
     before the field existed. Reusing the answer does not move it, re-resolving it does.
 
     `core.resolver._due` looks the answer up again once it is older than the max age the shell
@@ -521,7 +521,7 @@ class ArtistRelation:
 
     The resolver reads two of MusicBrainz's relationship types - ``member of band`` and
     ``collaboration`` - as evidence that two differently-credited artists are one act for the
-    purpose of filing a release (issue #14). Every other type is carried as it comes and ignored
+    purpose of filing a release. Every other type is carried as it comes and ignored
     there: a ``sibling`` or a ``tribute`` joins two names, not one act.
     """
 
@@ -763,7 +763,7 @@ class Diff:
     set_new_items_none: list[str]
     """Artist MBIDs whose monitorNewItems ("Monitor New Albums") must be set to 'none': only artists
     holding a release likearr owns (added, claimed or adopted), including one whose release it
-    claims, whose profile it widens or which it re-monitors this run (#172). A hand-managed artist
+    claims, whose profile it widens or which it re-monitors this run. A hand-managed artist
     whose wanted release is already monitored keeps its own setting."""
     guards: list[Guard]
     pending: list[Resolution]
@@ -793,7 +793,7 @@ class Diff:
     likearr sets `monitorNewItems=none` on the artists it holds releases of (`set_new_items_none`),
     so a followed artist's new album is monitored only once Lidarr's own scheduled refresh has
     picked it up - and if that never happens for the artist, the album is never monitored and
-    nothing said so (issue #8). This asks Lidarr for the metadata instead of waiting on it. Capped
+    nothing said so. This asks Lidarr for the metadata instead of waiting on it. Capped
     per run by `[lidarr] max_refreshes_per_run`, and in the diff rather than done silently, so a dry
     run shows it and a reviewed apply carries it."""
     config_fingerprint: Mapping[str, Mapping[str, object]] | None = None
@@ -823,7 +823,7 @@ class Diff:
 
 SPOTIFY_COLLABORATIVE_SCOPE = "playlist-read-collaborative"
 """Lets ``GET /me/playlists`` list, and ``GET /playlists/{id}/items`` read, a playlist the user
-collaborates on but does not own (issue #103, item 3). A token granted before likearr asked for it
+collaborates on but does not own. A token granted before likearr asked for it
 keeps working for everything else: it simply cannot read those playlists until re-authorized, so
 the picker offers a collaborative playlist only once the stored token has this scope."""
 
@@ -843,7 +843,7 @@ Spotify's public reference documents for these scopes, which answer 403 for a De
 app).
 
 Exactly the scope strings Spotify's own reference names for those two endpoints. A sign-in asks
-for them only on opt-in (`likearr auth --promote-save`, #161) or when the token it replaces already
+for them only on opt-in (`likearr auth --promote-save`) or when the token it replaces already
 has them, so a token without them has to be re-authorized by hand with that flag.
 """
 
@@ -950,8 +950,8 @@ class RunStatus(enum.StrEnum):
     SKIPPED = "skipped"
     """A scheduled run that found the lock held: another run is doing the work. Not a failure."""
     PAUSED = "paused"
-    """A scheduled run that did nothing because `[schedule] enabled` is false (issue #68), or because
-    no hand apply has completed yet (issue #111: the message then says it is waiting for the first
+    """A scheduled run that did nothing because `[schedule] enabled` is false, or because
+    no hand apply has completed yet (the message then says it is waiting for the first
     reviewed apply). Not a failure and not `skipped`: nothing is "in progress" here, the schedule
     itself is holding. A hand run never gets this status - both holds are scheduled-only."""
 
@@ -961,19 +961,19 @@ EXIT_ERROR = 1
 EXIT_GUARDED = 2
 EXIT_STALE = 3
 EXIT_BUSY = 4
-"""A hand-run command found another run holding the run lock, and did nothing (#54). Not a fault:
+"""A hand-run command found another run holding the run lock, and did nothing. Not a fault:
 try again when that run ends. A *scheduled* run that finds the lock held exits 0 (`skipped`)."""
 
 PHASE_MARKER_APPLY = "likearr-phase: apply"
 """Printed to stderr, on its own line, by `shell.apply.apply` at the single point where planning
-ends and the first Lidarr write begins (issue #68 phase 3): right before `_execute` is called.
+ends and the first Lidarr write begins: right before `_execute` is called.
 Never printed on a dry run. `web.jobs.JobRunner` looks for this exact line in a scheduled job's
 `log.txt` to tell a redeploy whether the child is still safe to cancel (nothing written to Lidarr
 yet) or must be drained (it may have started writing)."""
 
 PROGRESS_MARKER_POST_RESOLVE = "progress: reading Lidarr and building the plan"
 """Logged by `shell.plan.plan` the moment resolving ends, before Lidarr's album-bearing view is
-read and the diff is built (issue #267). Resolving already logs throttled `progress:` lines while
+read and the diff is built. Resolving already logs throttled `progress:` lines while
 it runs, and the job page shows the newest one for as long as the job is in progress; without this
 marker the page kept showing the last resolve line - stale ETA included - all through the
 Lidarr-read-and-diff work that follows, which can itself take minutes on a big library.
@@ -1115,7 +1115,7 @@ class HealthRecord:
     """Short codes for what is newly wrong. Empty on an `ok` run; this is what HA should read."""
     changes_made: int | None = None
     """An apply's changes to Lidarr that were made: artists added, releases monitored and
-    unmonitored, profiles ratcheted (#54). With `changes_planned`, it tells an
+    unmonitored, profiles ratcheted. With `changes_planned`, it tells an
     apply that stopped part-way from one that changed nothing. ``None`` on a dry run, and on a
     record from before it was kept."""
     changes_planned: int | None = None
@@ -1123,13 +1123,13 @@ class HealthRecord:
     upper bound: a release found already monitored, missing from Lidarr's catalogue, or under an
     artist skipped this run is asked for and never made, so a clean apply can make fewer. Only an
     `error` apply is read against it: as having stopped part-way when `changes_made` falls short,
-    or as having landed everything but lost the confirmation when it does not (#174)."""
+    or as having landed everything but lost the confirmation when it does not."""
     lidarr_changed: bool | None = None
     """Whether the apply wrote to Lidarr at all - the counted changes, or anything else: a tag or
     profile created, a profile set, new-item monitoring changed, an artist re-monitored. What makes
     "changed nothing" true. ``None`` on a dry run and on older records."""
     tagged_without_state: int = 0
-    """Lidarr artists carrying the configured likearr tag that have no `owned_artists` row (#175):
+    """Lidarr artists carrying the configured likearr tag that have no `owned_artists` row:
     the sign of a state database lost or replaced. Report only, so it moves neither the status nor
     the exit code. 0 on a run that never got as far as a plan, and on older records."""
 

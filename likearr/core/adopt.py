@@ -11,7 +11,7 @@ A followed artist whose catalogue could not be read this run (too large to brows
 MusicBrainz error) has none of their catalogue in the desired set, so for them "not wanted" means
 "not known". What the keep list or another source already settles is kept or claimed as usual;
 only the albums that would otherwise be unmonitored are held back, left monitored and unowned,
-and the plan lists them with the reason (#6).
+and the plan lists them with the reason.
 
 It is not a casual recovery step after losing the state database. Lost state means owning
 nothing, which is safe for `run` (nothing is unmonitored), but re-running `adopt` treats every
@@ -50,7 +50,7 @@ _KEPT_BY_HAND = Reason(kind=ReasonKind.MANUAL, source_id=ADOPT_SOURCE_ID)
 @dataclass(frozen=True, slots=True)
 class HeldRelease:
     """A monitored release adopt would have unmonitored, left exactly as it is this time because
-    its artist's catalogue was not read: whether a source wants it is unknown (#6). Not on the
+    its artist's catalogue was not read: whether a source wants it is unknown. Not on the
     keep list and not wanted by any source, or it would be kept or claimed instead."""
 
     key: ReleaseKey

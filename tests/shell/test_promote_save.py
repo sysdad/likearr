@@ -54,7 +54,7 @@ def write_reviewed(
     tmp_path: Path, artists: dict[str, list[tuple[str, int]]] | None = None, *, saves: dict[str, bool] | None = None
 ) -> Path:
     """A review snapshot in the review page's own shape: artists[] -> releases[] -> rg/files, and
-    the per-album ``save`` flag a snapshot written since #55 carries (`saves`; absent otherwise)."""
+    the per-album ``save`` flag a newer snapshot carries (`saves`; absent otherwise)."""
     if artists is None:
         artists = {SAVE_MBID: [("rg-kept", 10), ("rg-also", 11), ("rg-pruned", 0)]}
     saves = saves or {}
@@ -680,7 +680,7 @@ def test_the_dry_run_prints_every_unmatched_item(tmp_path: Path, capsys: pytest.
     assert "Radiohead - Kid A:" in out
 
 
-# --------------------------------------------------------------------------- save_releases (#55)
+# --------------------------------------------------------------------------- save_releases
 # One album saved on its own: the same rules as an artist's `save`, one album at a time - and the
 # snapshot's own per-album `save` flag must agree, or nothing is saved.
 
@@ -794,7 +794,7 @@ def test_following_an_artist_and_saving_one_album_are_both_planned(tmp_path: Pat
     assert [s.spotify_id for s in plan.save] == ["sp-kida"]
 
 
-def test_a_decisions_file_and_snapshot_from_before_55_digest_as_they_did(tmp_path: Path) -> None:
+def test_a_decisions_file_and_snapshot_from_an_older_schema_digest_as_they_did(tmp_path: Path) -> None:
     """Literal digests computed by the code before the new fields existed: a plan made then
     must not read as stale after the upgrade."""
     decisions = ps.read_decisions(

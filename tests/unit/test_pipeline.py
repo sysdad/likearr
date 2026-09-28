@@ -121,7 +121,7 @@ def run_core(
 ):
     """Exactly the sequence the shell performs, minus every side effect."""
     lookup = corpus.lookup(searches=searches) if searches else corpus.lookup()
-    # The corpus records no tracklist for Try!; issue #14's rule needs the liked song to be on it.
+    # The corpus records no tracklist for Try!; the non-studio rule needs the liked song to be on it.
     lookup.tracklists.setdefault(corpus.rg("try_live").mbid, ["Gravity"])
     resolved = resolve_all(
         snap,
@@ -373,7 +373,7 @@ def test_the_pending_singles_files_are_protected_from_prune(corpus: Corpus, libr
     assert not report.candidates, "deleting it would lose the only copy of a liked song"
     assert [r.rg_mbid for r in report.protected] == [single.mbid]
     assert report.total_bytes == 0
-    protection = report.protected[0].protection  # why, by the song's title (#64)
+    protection = report.protected[0].protection  # why, by the song's title
     assert protection is not None
     assert (protection.kind, protection.source, protection.song) == ("pending_album", "liked", "Skyfall")
 
@@ -495,7 +495,7 @@ def test_a_pending_resolution_is_visible_in_the_diff(corpus: Corpus, library) ->
     assert diff.pending[0].status == ResolutionStatus.PENDING_ALBUM
 
 
-# ------------------------------------------- the issue #15 opt-outs, end to end
+# ------------------------------------------- the opt-outs, end to end
 
 
 @pytest.fixture
@@ -503,8 +503,8 @@ def liked_a_compilation_only_song(corpus: Corpus):
     """The Beatles' "Hey Jude": a non-album single collected only on compilations.
 
     Release group 0e986744-f2d8-4066-b6d2-51487aee38df, typed Album + Compilation, recorded live
-    from MusicBrainz. It is the corpus's own `track:non-studio` case, which is the rule issue #15
-    asks to be able to switch off.
+    from MusicBrainz. It is the corpus's own `track:non-studio` case, which is the rule the
+    opt-out asks to be able to switch off.
     """
     release = corpus.rg("hey_jude_comp")
     snap = snapshot(
@@ -538,9 +538,9 @@ def test_opting_out_unmonitors_the_compilation_and_reports_the_track(
 ) -> None:
     """The whole point of the feature: the box set actually leaves the library.
 
-    The song is still liked, so before issue #15 the reason stayed live and nothing was ever
-    unmonitored however the track resolved. `core.diff` now treats an opted-out intent's reason
-    as lost, and this is the test that the two halves meet.
+    The song is still liked, so before the opt-out existed the reason stayed live and nothing was
+    ever unmonitored however the track resolved. `core.diff` now treats an opted-out intent's
+    reason as lost, and this is the test that the two halves meet.
     """
     snap, release, searches = liked_a_compilation_only_song
     view = lidarr_view(
@@ -758,7 +758,7 @@ def test_a_deny_on_the_release_spotify_named_is_never_reached_through_an_outage(
     """The other half of the invariant, stated rather than left implicit.
 
     When the deny list refuses the release the name search already mapped, the Singles rule's
-    studio Album/EP search still runs from it (issue #96), so the refusal is the answer only once
+    studio Album/EP search still runs from it, so the refusal is the answer only once
     that search has come back empty. A failure in it reads as a failure, never as the preference:
     the diff acts on a `track:excluded:*` answer, so an outage must not be able to produce one.
     """
@@ -787,12 +787,12 @@ def test_a_deny_on_the_release_spotify_named_is_never_reached_through_an_outage(
     assert run({failing}) == ("error:metadata", 1), "an outage must never read as a preference"
 
 
-# ------------------------------------------- a credit joined by a MusicBrainz relationship (issue #14)
+# ------------------------------------------- a credit joined by a MusicBrainz relationship
 
 
 @pytest.fixture
 def liked_a_try_track(corpus: Corpus):
-    """John Mayer - "Gravity", liked on Spotify's "TRY! - Live In Concert" (issue #14's 12 intents).
+    """John Mayer - "Gravity", liked on Spotify's "TRY! - Live In Concert".
 
     MusicBrainz holds it as *Try!* by John Mayer Trio (recorded in the corpus), with no ISRC, and
     records John Mayer as a `member of band` of the Trio.
@@ -812,7 +812,7 @@ def liked_a_try_track(corpus: Corpus):
 
 
 def test_try_adds_john_mayer_trio_on_the_full_profile_and_monitors_try(corpus: Corpus, liked_a_try_track) -> None:
-    """The outcome #14 names: a new Lidarr artist, John Mayer Trio, added straight onto the Full
+    """A new Lidarr artist, John Mayer Trio, added straight onto the Full
     metadata profile because *Try!* is a live album, and *Try!* itself monitored."""
     snap, try_live = liked_a_try_track
 

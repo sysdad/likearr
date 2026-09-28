@@ -6,7 +6,7 @@ summary per match - what you did on Spotify, what likearr matched it to, what ha
 and why, and whether the match looks wrong - and keeps the full chain as the detail below it.
 Pure and deterministic: the same inputs always produce the same report, byte for byte.
 
-Two things the summary must never do, both learned from a real case (#32, "Jungle"):
+Two things the summary must never do:
 
 - **Claim something the run will not do.** An artist the name-collision guard skips is not "an
   artist likearr would add": the summary says it won't be added, and why.
@@ -106,7 +106,7 @@ _CANDIDATES = re.compile(r"(\d+) candidate\(s\) considered")
 
 
 DENIABLE_KINDS = frozenset({ReasonKind.LIKED, ReasonKind.PLAYLIST, ReasonKind.FOLLOWED})
-"""The reasons `[rules] deny_releases` takes a release away from (issue #153): a liked or playlist
+"""The reasons `[rules] deny_releases` takes a release away from: a liked or playlist
 song resolves elsewhere, and a followed artist's catalogue leaves the release out. A saved album
 overrides the opt-outs, and a release kept by hand is never dropped, so neither is here."""
 
@@ -1017,7 +1017,7 @@ def resolution_outcome(resolution: Resolution | ArtistResolution) -> str:
     """Where an intent landed: ``matched``, ``pending`` (a single waiting for its album),
     ``excluded`` (left out by the settings: a remix, a compilation, a denied release), ``failed``
     (the lookup failed this run; retried at the next), ``ambiguous`` (two different artists share
-    the name and the title, and nothing said which was meant - issue #32) or ``unmatched``
+    the name and the title, and nothing said which was meant) or ``unmatched``
     (nothing found: a true miss)."""
     if resolution.status is ResolutionStatus.RESOLVED:
         return "matched"

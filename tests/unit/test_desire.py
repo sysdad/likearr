@@ -70,7 +70,7 @@ def test_the_albums_only_tag_drops_eps() -> None:
 
 
 def test_a_denied_release_leaves_a_followed_catalogue() -> None:
-    """#153, option B: "Not this one" on a followed artist's album removes it from the catalogue."""
+    """Option B: "Not this one" on a followed artist's album removes it from the catalogue."""
     lookup = _catalogue_lookup()
     snap = snapshot(artists=[artist_intent("Radiohead")])
     result = resolve_all(snap, lookup, now=NOW, cache={}, pending_since={}, fallback_days=FALLBACK_DAYS)

@@ -1,6 +1,6 @@
-"""`pyproject.toml`: the web stack is a core dependency (issue #147).
+"""`pyproject.toml`: the web stack is a core dependency.
 
-`likearr start` has been the whole product since the single-service cutover (#68); a plain
+`likearr start` has been the whole product since the single-service cutover; a plain
 `likearr` install that cannot run it is a defect, not a lean-CLI feature. This checks the parsed
 TOML directly (`tomllib` is stdlib on the 3.12+ this project requires) rather than the file's text,
 so a reordering or reformatting of the dependency lists does not make it flaky.

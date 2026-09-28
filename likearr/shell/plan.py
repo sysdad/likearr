@@ -1,7 +1,7 @@
 """The plan phase of a run: sources, resolver, desired state, Lidarr view, diff.
 
 `plan` is a read. It writes nothing to Lidarr and only the harmless parts of state (the
-resolution cache and the pending clock). Split out of `shell.run` (#156); see that module for
+resolution cache and the pending clock). Split out of `shell.run`; see that module for
 the invariants every run keeps.
 """
 
@@ -43,7 +43,7 @@ RESOLUTION_AGE_FACTOR = 4 / 3
 """A cached track or saved-album answer is looked up again at this multiple of `[musicbrainz]
 positive_cache_days` (120 days at the default 90), jittered per intent key by up to another 25%.
 
-Longer than the cache it is built from on purpose (issue #165, option A): an `mb_cache` entry lives
+Longer than the cache it is built from on purpose: an `mb_cache` entry lives
 up to 1.25 times `positive_cache_days`, so an answer re-resolved sooner could read the same stale
 entries back and learn nothing. A correction therefore takes up to about five months to land, which
 suits a slow problem: MusicBrainz edits to things a user actually liked are rare.
@@ -83,8 +83,8 @@ def plan(
             the diff records it. Never for a scheduled run (`run_command` refuses that).
         persist: when False (``explain``, ``prune-report``), not even the resolution cache is
             written, so a read-only command stays read-only.
-        monotonic: the clock the resolve-progress line's 60 s throttle is measured against
-            (issue #119). Injected so a test never has to sleep for real; defaults to the wall
+        monotonic: the clock the resolve-progress line's 60 s throttle is measured against.
+            Injected so a test never has to sleep for real; defaults to the wall
             clock.
 
     Raises:
@@ -101,7 +101,7 @@ def plan(
         snapshot = reused
         log.info(
             "reusing the Spotify read from %s: a redeploy cancelled the run that made it, no Spotify "
-            "call is spent replanning (issue #68 phase 3)",
+            "call is spent replanning",
             snapshot.fetched_at.isoformat(),
         )
     else:
@@ -238,13 +238,13 @@ def plan(
 
 
 def _persist_lidarr_negative_cache(ctx: Context, *, now: datetime) -> None:
-    """Write this run's genuinely-failed Lidarr metadata identities to the negative cache (#18).
+    """Write this run's genuinely-failed Lidarr metadata identities to the negative cache.
 
     Gated on `lidarr_metadata_any_success`, decided once here at the end of the run rather than
     per call: writing on a run where every Lidarr metadata call failed would let a plain
     `api.lidarr.audio` outage poison every term it touched for `negative_cache_days`. Gated as
     well on the run not looking like an outage (`core.health.lidarr_metadata_outage`, rule 7): one
-    success is not enough when most lookups failed, and since #53 a MusicBrainz outage sends every
+    success is not enough when most lookups failed, and a MusicBrainz outage sends every
     name search to Lidarr, so a partial Lidarr outage in the same run would reach many terms.
     """
     composite = ctx.composite
@@ -301,7 +301,7 @@ def _albums_only_artists(view: LidarrView, tag_label: str) -> set[str]:
 
 
 def tagged_without_state(view: LidarrView, tag_label: str, owned_artists: Container[str]) -> set[str]:
-    """Artist MBIDs carrying likearr's own tag in Lidarr with no `owned_artists` row (#175).
+    """Artist MBIDs carrying likearr's own tag in Lidarr with no `owned_artists` row.
 
     Every artist likearr adds gets both, so a tagged artist with no row means the state database
     was lost or replaced (or someone added the tag by hand). Unlike "owns nothing", this does not
@@ -327,7 +327,7 @@ def _warn_tagged_without_state(view: LidarrView, tag_label: str, mbids: Iterable
 
 
 def _lost_state_message(count: int) -> str:
-    """The run record's half of #175's warning; Status words it for a person from the count."""
+    """The run record's half of the lost-state warning; Status words it for a person from the count."""
     if not count:
         return ""
     return (
@@ -360,7 +360,7 @@ def _mb_ok(ctx: Context, resolve_result: ResolveResult, diff: Diff) -> bool:
     A lookup that failed and was answered from an expired cache entry is deliberately **not** here,
     although it is counted in `HealthRecord.mb_errors`. Nothing was lost - the adapter's standing
     rule is that a failed lookup never drops a mapping - and since positive entries gained a max
-    age (issue #9) a MusicBrainz wobble reaches many more lookups than it used to. Degrading on it
+    age a MusicBrainz wobble reaches many more lookups than it used to. Degrading on it
     would light the signal for a run in which likearr did exactly the right thing, which is the
     failure mode `core.health` exists to remove. A failure with no cached answer still raises, and
     still turns this false.
@@ -378,7 +378,7 @@ def _mb_failure_count(ctx: Context) -> Callable[[], int] | None:
 
 
 PROGRESS_LOG_INTERVAL_S = 60.0
-"""How often `plan`'s resolve-progress line is allowed to repeat (issue #119's "Want" #3): often
+"""How often `plan`'s resolve-progress line is allowed to repeat: often
 enough that a long first run does not look stuck, rarely enough that it never becomes one line per
 item."""
 
@@ -388,8 +388,8 @@ worth more than a guess, and a warm run (almost all cache hits) never reaches it
 the point - "should show no ETA rather than a misleading one"."""
 
 _PROGRESS_ETA_MIN_SECONDS = 120.0
-"""Below this, an ETA is shown as "under a few minutes" rather than a specific duration (issue
-#267's "Want" #3): the tail of a resolve run is the noisiest part of the estimate (a cache-warm
+"""Below this, an ETA is shown as "under a few minutes" rather than a specific duration: the tail
+of a resolve run is the noisiest part of the estimate (a cache-warm
 stretch near the end skews the live-calls-per-intent rate), so a countdown that close reads as more
 precise than it actually is."""
 
@@ -404,7 +404,7 @@ def _resolve_progress_logger(ctx: Context, total: int, *, monotonic: Callable[[]
     only calls this function and never logs itself.
 
     The last intent's call (`done == total`) always logs, bypassing the throttle, and always with
-    no ETA (issue #267's "Want" #1): otherwise the job page could be left showing a resolve line -
+    no ETA: otherwise the job page could be left showing a resolve line -
     ETA included - from several hundred intents back, for as long as the read-Lidarr-and-build-the-
     diff work that follows resolving takes.
     """
@@ -424,10 +424,10 @@ def _resolve_progress_logger(ctx: Context, total: int, *, monotonic: Callable[[]
 
 def _progress_line(ctx: Context, done: int, total: int, *, final: bool = False) -> str:
     """One ``progress:`` line: done/total, the MusicBrainz lookup split, and an ETA once there
-    have been enough live calls to base one on (issue #119's "Want" #3) - except on the final line
+    have been enough live calls to base one on - except on the final line
     (`final=True`), which never carries one: `done == total` means nothing is left to estimate, and
     the ETA formula's own floor (`_format_eta`'s ``max(1, ...)``) would otherwise print a misleading
-    "about 1m left" on a resolve that has, in fact, just finished (issue #267)."""
+    "about 1m left" on a resolve that has, in fact, just finished."""
     cache_hits = ctx.composite.mb_cache_hits if ctx.composite is not None else 0
     live_calls = ctx.composite.mb_live_calls if ctx.composite is not None else 0
     line = (
@@ -489,10 +489,10 @@ def _persist_resolutions(
     known = set(intent_keys)
     # An answer reached after MusicBrainz failed is acted on this run - `run --apply` monitors it,
     # owns it, and unmonitors what it replaced - but cached nowhere: a cached RESOLVED answer is
-    # reused until RESOLVER_VERSION moves or it expires (#165), and this one was never fully
+    # reused until RESOLVER_VERSION moves or it expires, and this one was never fully
     # checked against MusicBrainz. Uncached, the next run asks again. That covers every path, the
-    # ISRC stand-in included (#53). An answer resting on a release group Lidarr's name search found
-    # after a MusicBrainz error is never cached either (#42), whichever intent it reached.
+    # ISRC stand-in included. An answer resting on a release group Lidarr's name search found
+    # after a MusicBrainz error is never cached either, whichever intent it reached.
     #
     # The pending clock moves one way only for such an intent. It is started for a track that is
     # now waiting and has no clock yet, or a search that fails the same way every run would keep

@@ -275,7 +275,7 @@ def test_resolution_json_round_trip_minimal() -> None:
 
 
 def test_resolution_json_round_trip_keeps_the_rules_token() -> None:
-    """Issue #100: without the token a `c1r0` row read back as `""` and was never reused."""
+    """Without the token a `c1r0` row read back as `""` and was never reused."""
     resolution = Resolution(
         intent_key="liked:track-1",
         status=ResolutionStatus.RESOLVED,
@@ -291,7 +291,7 @@ def test_resolution_json_round_trip_keeps_the_rules_token() -> None:
 
 def test_resolution_json_round_trips_every_model_field() -> None:
     """The codec lists fields by hand, so a new `Resolution` field is dropped silently, on write or
-    on read (#100 was `rules`), and the in-memory fakes never notice. Every field is set off its
+    on read, and the in-memory fakes never notice. Every field is set off its
     default here, so a field added to the model fails this test until the codec carries it."""
     resolution = Resolution(
         intent_key="liked:track-1",
@@ -319,7 +319,7 @@ def test_resolution_json_round_trips_every_model_field() -> None:
 
 
 def test_resolution_from_json_reads_a_row_without_a_token_as_the_defaults() -> None:
-    """Rows written before #100 carry no key; `""` makes them re-resolve once under a live token."""
+    """Older rows carry no key; `""` makes them re-resolve once under a live token."""
     d = json.loads(resolution_to_json(Resolution(intent_key="k", status=ResolutionStatus.RESOLVED, rules="c1r0")))
     del d["rules"]
 
@@ -327,7 +327,7 @@ def test_resolution_from_json_reads_a_row_without_a_token_as_the_defaults() -> N
 
 
 def test_resolution_json_keeps_the_denied_releases_skipped_as_a_sorted_list() -> None:
-    """Issue #271: what the answer fell through from is what lets an un-deny re-resolve it."""
+    """What the answer fell through from is what lets an un-deny re-resolve it."""
     resolution = Resolution(
         intent_key="liked:track-1",
         status=ResolutionStatus.RESOLVED,
@@ -351,7 +351,7 @@ def test_resolution_from_json_reads_a_row_without_denied_releases_as_empty() -> 
 
 
 def test_resolution_json_keeps_when_the_answer_was_checked() -> None:
-    """Issue #165: the age a cached answer expires by. It is on the answer, not the row, because
+    """The age a cached answer expires by. It is on the answer, not the row, because
     the row's `resolved_at` column is rewritten on every run, reused answers included."""
     checked = datetime(2026, 9, 18, 12, 30, tzinfo=UTC)
     resolution = Resolution(intent_key="k", status=ResolutionStatus.RESOLVED, checked_at=checked)
@@ -907,9 +907,9 @@ CREATE TABLE lidarr_negative_cache (
 
 @pytest.mark.parametrize("version", [3, 4])
 def test_an_older_baseline_survives_the_rules_column_and_still_compares(tmp_path: Path, version: int) -> None:
-    """Schema 5 adds a COLUMN, which `CREATE TABLE IF NOT EXISTS` cannot do (issue #15).
+    """Schema 5 adds a COLUMN, which `CREATE TABLE IF NOT EXISTS` cannot do.
 
-    Both directions matter. A v3 file has to gain `lidarr_negative_cache` (a table, from #18) AND
+    Both directions matter. A v3 file has to gain `lidarr_negative_cache` (a table) AND
     the `rules` column; a v4 file has to gain only the column. The migration is version-gated on
     neither - `_add_column` asks `PRAGMA table_info` - so the two land in either order and a file
     that already has the column is untouched.
@@ -998,7 +998,7 @@ def test_the_lidarr_negative_cache_round_trips(tmp_path: Path) -> None:
 
 
 def test_the_scheduler_last_fire_round_trips(tmp_path: Path) -> None:
-    """Schema 6 (issue #68 phase 2). No record yet means the scheduler has never fired."""
+    """Schema 6. No record yet means the scheduler has never fired."""
     when = datetime(2026, 9, 24, 18, 20, tzinfo=UTC)
     with SqliteState(tmp_path / "sched.sqlite") as state:
         assert state.last_scheduled_fire() is None
@@ -1011,7 +1011,7 @@ def test_the_scheduler_last_fire_round_trips(tmp_path: Path) -> None:
 
 
 def test_a_fire_marked_cancelled_round_trips_and_a_fresh_fire_clears_it(tmp_path: Path) -> None:
-    """Schema 7 (issue #68 phase 3). A redeploy that cancelled a fire while it was still planning
+    """Schema 7. A redeploy that cancelled a fire while it was still planning
     marks it so the missed-fire catch-up knows to re-run that exact slot."""
     when = datetime(2026, 9, 24, 18, 20, tzinfo=UTC)
     with SqliteState(tmp_path / "sched.sqlite") as state:
@@ -1045,7 +1045,7 @@ def test_a_v3_database_upgrades_and_starts_with_an_empty_negative_cache(tmp_path
 
 
 def test_a_v6_scheduler_state_row_gains_the_cancelled_column_at_zero(tmp_path: Path) -> None:
-    """Schema 7 (issue #68 phase 3): `scheduler_state.cancelled` is a new column, not a new table,
+    """Schema 7: `scheduler_state.cancelled` is a new column, not a new table,
     so an existing row must gain it rather than the table being recreated empty."""
     path = tmp_path / "v6.sqlite"
     conn = sqlite3.connect(str(path))
@@ -1062,7 +1062,7 @@ def test_a_v6_scheduler_state_row_gains_the_cancelled_column_at_zero(tmp_path: P
         assert not state.scheduled_fire_cancelled()
 
 
-# ---------------------------------------------------------------- first reviewed apply (#111)
+# ---------------------------------------------------------------- first reviewed apply
 
 _V7_SCHEMA = """
 CREATE TABLE schema_version (version INTEGER NOT NULL);
@@ -1122,7 +1122,7 @@ def _v7_file(path: Path, *, owned: bool = False, baseline: bool = False) -> Path
 
 
 def test_no_first_apply_yet_reads_as_none_and_the_first_one_is_kept(tmp_path: Path) -> None:
-    """Schema 8 (#111): the first hand-applied run is recorded once, and a later apply never moves it."""
+    """Schema 8: the first hand-applied run is recorded once, and a later apply never moves it."""
     first = datetime(2026, 9, 25, 9, 0, tzinfo=UTC)
     with SqliteState(tmp_path / "fresh.sqlite") as state:
         assert state.first_apply_at() is None
@@ -1228,7 +1228,7 @@ def test_the_last_published_run_skips_dry_runs_and_settings_refusals_however_man
 
 
 def test_the_last_published_run_can_skip_paused_and_skipped_runs(state: SqliteState) -> None:
-    """#112: the webhook compares against the last run that said something about the library.
+    """The webhook compares against the last run that said something about the library.
     A paused or skipped tick in between says nothing, so it must not hide an error before it."""
     state.record_run(_health_record(ts=1, dry_run=False, status=RunStatus.ERROR, exit_code=1, message="down"), None)
     state.record_run(_health_record(ts=2, dry_run=False, status=RunStatus.PAUSED), None)
@@ -1286,7 +1286,7 @@ def test_release_titles_come_from_the_cached_resolutions(state: SqliteState) -> 
 def test_an_apply_s_changes_made_and_planned_are_kept_and_an_older_record_reads_as_unknown(
     state: SqliteState,
 ) -> None:
-    """#54: the counts that tell a part-way apply from one that changed nothing survive the store."""
+    """The counts that tell a part-way apply from one that changed nothing survive the store."""
     state.record_run(_health_record(dry_run=False, changes_made=12, changes_planned=40, lidarr_changed=True), None)
     state.record_run(_health_record(), None)
     state._conn.execute(  # a record written before the fields existed
@@ -1310,7 +1310,7 @@ def test_an_apply_s_changes_made_and_planned_are_kept_and_an_older_record_reads_
 
 
 def test_the_lost_state_count_is_kept_and_an_older_record_reads_as_zero(state: SqliteState) -> None:
-    """#175: tagged artists with no `owned_artists` row. Additive, so an older record reads as 0."""
+    """Tagged artists with no `owned_artists` row. Additive, so an older record reads as 0."""
     state.record_run(_health_record(tagged_without_state=3), None)
     state.record_run(_health_record(), None)
     state._conn.execute(  # a record written before the field existed
@@ -1324,7 +1324,7 @@ def test_the_lost_state_count_is_kept_and_an_older_record_reads_as_zero(state: S
     assert newest.record.tagged_without_state == 0
 
 
-# ---------------------------------------------------------------- run_by_id / run_id_in_job (#76)
+# ---------------------------------------------------------------- run_by_id / run_id_in_job
 
 
 def test_run_history_carries_each_row_s_id(state: SqliteState) -> None:

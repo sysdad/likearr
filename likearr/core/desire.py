@@ -43,7 +43,7 @@ CATALOGUE_ERROR_STEP = METADATA_ERROR_STEP
 
 CATALOGUE_UNREAD_STEPS = frozenset({CATALOGUE_TOO_LARGE_STEP, CATALOGUE_ERROR_STEP})
 """The steps of a followed artist in `unmapped` whose catalogue was not read, so none of their
-releases are in the desired set: whether a source wants any of them is unknown, not "no" (#6)."""
+releases are in the desired set: whether a source wants any of them is unknown, not "no"."""
 
 
 def _add(
@@ -78,7 +78,7 @@ def build_desired(
     Albums only, no EPs. Release groups where the followed artist is not the *primary* credit are
     skipped: a featured appearance on someone else's record is not part of a catalogue, and
     monitoring it would quietly add that other artist to Lidarr. A release group on `deny_releases`
-    (``[rules] deny_releases``, "Not this one") is left out of every followed catalogue (issue #153):
+    (``[rules] deny_releases``, "Not this one") is left out of every followed catalogue:
     it is the user's explicit "not this one", and unfollowing would be too blunt a way to drop one
     album. A saved album is never filtered: saving it on Spotify overrides the opt-outs.
 

@@ -406,8 +406,8 @@ def test_non_owned_playlist_is_detected_via_the_items_total(
 def test_a_403_on_playlist_items_is_the_same_not_owned_message(
     spotify_config: SpotifyConfig, client: httpx.Client, clock: FakeClock
 ) -> None:
-    """The Get Playlist Items reference documents 403 for a non-owner, non-collaborator (issue
-    #103, item 1). It must read the same as the 200-with-zero-items path, not the generic
+    """The Get Playlist Items reference documents 403 for a non-owner, non-collaborator.
+    It must read the same as the 200-with-zero-items path, not the generic
     "Spotify refused the request" every other 403 gets - that phrasing looks like a token
     problem, not "this playlist isn't yours"."""
     items = respx.get(f"{API}/playlists/{PLAYLIST_ID}/items").mock(return_value=httpx.Response(403))
@@ -433,7 +433,7 @@ def test_a_403_on_playlist_items_is_the_same_not_owned_message(
 def test_an_unreadable_playlist_says_to_re_authorize_only_when_the_token_predates_collaboration(
     spotify_config: SpotifyConfig, client: httpx.Client, clock: FakeClock, scope: str, hint: bool
 ) -> None:
-    """#103 item 3: a token granted before likearr asked for playlist-read-collaborative cannot read
+    """A token granted before likearr asked for playlist-read-collaborative cannot read
     a playlist you collaborate on either, so the one message that failure gets also says a
     re-authorization fixes that case. With the scope granted, the hint would be wrong."""
     respx.get(f"{API}/playlists/{PLAYLIST_ID}/items").mock(return_value=httpx.Response(403))
@@ -462,7 +462,7 @@ def test_genuinely_empty_playlist_is_fine(
     assert snapshot.counts == {f"playlist:{PLAYLIST_ID}": 0}
 
 
-# ---------------------------------------------------------------------------- reported totals (#176)
+# ---------------------------------------------------------------------------- reported totals
 #
 # Spotify ends a paged read at the first page whose `next` is null. If it ever did that early, the
 # read would look complete and the missing likes would look like un-likes. Every page also carries
@@ -683,7 +683,7 @@ def test_an_empty_playlist_whose_page_reports_items_is_still_caught(
 def test_a_page_without_a_total_is_not_checked(
     spotify_config: SpotifyConfig, client: httpx.Client, clock: FakeClock
 ) -> None:
-    """No `total` means nothing to compare against, so the read stands as it did before #176."""
+    """No `total` means nothing to compare against, so the read stands as it did before."""
     respx.get(f"{API}/me/tracks").mock(
         return_value=httpx.Response(200, json={"items": liked_entries(3), "total": "many", "next": None})
     )

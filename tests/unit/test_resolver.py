@@ -136,7 +136,7 @@ def test_album_falls_back_to_name_search_when_the_barcode_is_unknown() -> None:
 
 
 def test_a_zero_padded_spotify_upc_matches_the_barcode_musicbrainz_stores() -> None:
-    """#150: Chet Baker "In New York" - MusicBrainz knows 888072328433, Spotify says 00888072328433.
+    """Chet Baker "In New York" - MusicBrainz knows 888072328433, Spotify says 00888072328433.
     The one release group holding it is taken without a title check, though its title differs."""
     album = rg("rg-nyc", "Chet Baker in New York", artist_name="Chet Baker")
     lookup = FakeLookup(barcodes={"888072328433": "rg-nyc"}).add(album)
@@ -203,7 +203,7 @@ def test_several_titled_release_groups_on_one_barcode_prefer_the_artists_then_an
 
 
 def test_an_album_whose_barcode_matches_nothing_does_not_blame_musicbrainz() -> None:
-    """#150: the barcode miss read "unknown to MusicBrainz", which blamed MusicBrainz for likearr's
+    """The barcode miss read "unknown to MusicBrainz", which blamed MusicBrainz for likearr's
     own comparison. It now says only what was found: no release with that barcode."""
     lookup = FakeLookup()
     result = resolve_album(album_intent(spotify_album("Nowhere", upc="00123", artists=("Nobody",))), lookup)
@@ -317,7 +317,7 @@ def test_track_album_search_also_benefits_from_the_qualifier_retry() -> None:
 
 
 def test_album_search_matches_when_musicbrainz_carries_the_undecorated_qualifier() -> None:
-    """Issue #21 fault (a): Kyle Andrews - 'Kangaroo', MusicBrainz 'Kangaroo EP'.
+    """Kyle Andrews - 'Kangaroo', MusicBrainz 'Kangaroo EP'.
 
     Spotify's own title has nothing to strip, so the old one-sided `strip_release_qualifiers`
     retry never fired at all. The fix compares both sides stripped, so this now resolves off the
@@ -332,7 +332,7 @@ def test_album_search_matches_when_musicbrainz_carries_the_undecorated_qualifier
 
 
 def test_album_search_matches_a_colon_joined_musicbrainz_title_without_stripping_either_side() -> None:
-    """Issue #21 fault (a): Elf - Spotify's bracketed subtitle and MusicBrainz's colon-joined one
+    """Elf - Spotify's bracketed subtitle and MusicBrainz's colon-joined one
     already fold to the same words under `normalize_title` alone, with no stripping at all."""
     mb_title = "Elf: Music From the Major Motion Picture"
     artist = "Clyde Lawrence"  # a real artist, not "Various Artists" - that short-circuits earlier
@@ -392,7 +392,7 @@ def test_the_isrc_fallback_recognises_the_release_spotify_named() -> None:
 
     The ISRC proves the release group holds this exact recording, so a title match identifies
     it whatever name the two catalogues print for the credit - the John Mayer / "John Mayer
-    Trio" shape from issue #1.
+    Trio" shape.
     """
     live = rg(
         "rg-live",
@@ -829,7 +829,7 @@ def test_resolve_all_covers_every_intent() -> None:
 
 def test_resolve_all_reports_progress_once_per_intent_in_order() -> None:
     """One artist, one album, one track: `progress` is called three times, in that order, each
-    with a correct running total out of the fixed grand total (issue #119)."""
+    with a correct running total out of the fixed grand total."""
     snap, lookup, _ = _basic_snapshot()
     calls: list[tuple[int, int]] = []
     _resolve_all(snap, lookup, progress=lambda done, total: calls.append((done, total)))
@@ -933,7 +933,7 @@ def _two_albums():
 
 
 def test_only_the_intent_resolved_while_the_lookup_failed_is_provisional() -> None:
-    """#53: which intent a failure belongs to is known only here, where intents are resolved one
+    """Which intent a failure belongs to is known only here, where intents are resolved one
     after another. The answer is untouched - both resolve - only the flag differs."""
     snap, inner, saved, liked = _two_albums()
     lookup = _AbsorbsOneFailure(inner, "222")
@@ -1106,7 +1106,7 @@ def test_a_liked_track_on_a_various_artists_compilation_never_browses_various_ar
 
 @pytest.mark.parametrize(("name", "artists"), [("", ("",)), ("", ()), ("Song", ("",)), ("   ", ("Someone",))])
 def test_a_track_spotify_no_longer_serves_is_unmapped_without_a_lookup(name: str, artists: tuple[str, ...]) -> None:
-    """#166: a taken-down or region-locked like comes back with an empty name or artist and an
+    """A taken-down or region-locked like comes back with an empty name or artist and an
     empty "Various Artists" album. Nothing can be looked up for it, and it says so."""
     lookup = FakeLookup()
     album = spotify_album("", artists=("Various Artists",), album_type="compilation")
@@ -1118,7 +1118,7 @@ def test_a_track_spotify_no_longer_serves_is_unmapped_without_a_lookup(name: str
 
 
 def _evangeline(*, isrc_hits: Sequence[str] = ("rg-la", "rg-va"), namesakes: bool = True) -> FakeLookup:
-    """#152: a song liked from a Various Artists compilation, whose artist shares a name.
+    """A song liked from a Various Artists compilation, whose artist shares a name.
 
     Two MusicBrainz artists are called "Evangeline": a Seattle band the name search ranks first, and
     the L.A. singer the user listens to. Each has a studio album listing "Wild Heart". The ISRC is
@@ -1191,7 +1191,7 @@ def test_an_isrc_naming_a_different_credit_is_no_evidence_for_the_compilation_tr
 
 
 def _swan_of_tuonela(*candidate_credit: str) -> tuple[TrackIntent, FakeLookup]:
-    """#164: Berglund and the LPO's "The Swan of Tuonela", filed by Spotify on a live album. The
+    """Berglund and the LPO's "The Swan of Tuonela", filed by Spotify on a live album. The
     composer is every classical release group's first credit, so Sibelius's catalogue is searched,
     and a studio album credited to other performers lists the same title."""
     sibelius = partial(rg, artist_mbid="mb-sibelius", artist_name="Jean Sibelius")
@@ -1244,7 +1244,7 @@ def test_a_classical_track_takes_a_studio_album_by_the_same_performers() -> None
 def test_a_featured_guest_on_the_named_single_does_not_hide_the_artists_album(
     artist: str, guest: str, single: str, album: str, song: str
 ) -> None:
-    """#164: the named remix single is "X feat. Y" and the album is X's. A guest is not a performer
+    """The named remix single is "X feat. Y" and the album is X's. A guest is not a performer
     in the sense of the check, so the main artists are X on both sides and the album is kept."""
     mine = partial(rg, artist_mbid="mb-x", artist_name=artist)
     remix = mine(
@@ -1306,7 +1306,7 @@ def test_an_unknown_credit_on_either_side_skips_nothing() -> None:
 
 
 def _bach(named: ReleaseGroup) -> tuple[TrackIntent, FakeLookup]:
-    """#151: the title search needs Bach's catalogue, which is too large to browse."""
+    """The title search needs Bach's catalogue, which is too large to browse."""
     lookup = FakeLookup(
         searches={("Johann Sebastian Bach", named.title): named.mbid},
         fail={"artist_release_groups"},
@@ -1449,7 +1449,7 @@ def resolve_smallest(
 
 
 def _dean_martin() -> tuple[TrackIntent, FakeLookup]:
-    """#163: MusicBrainz files ISRC USCA29600867 on two Dean Martin recordings, "Good Mornin' Life"
+    """MusicBrainz files ISRC USCA29600867 on two Dean Martin recordings, "Good Mornin' Life"
     (on albums only) and "Kiss" (on the 1952 single, and on an earlier album than the song's own).
     Spotify filed the liked song on a compilation."""
     dean = partial(rg, artist_mbid="mb-dean", artist_name="Dean Martin")
@@ -1517,7 +1517,7 @@ def test_a_spelling_variants_album_stays_an_isrc_candidate() -> None:
 
 
 def test_when_no_recording_title_is_the_liked_songs_every_isrc_candidate_stays() -> None:
-    """Nothing to tell the recordings apart by, so the set is exactly what it was before #163."""
+    """Nothing to tell the recordings apart by, so the set is exactly what it was before."""
     intent, lookup = _feelin_alright("Something Else Entirely")
     lookup.isrc_titles["ISRC-FA"]["rg-live"] = "Delta Lady"
     assert resolve_smallest(intent, lookup).step == "track:smallest:single"
@@ -1753,7 +1753,7 @@ def test_a_cached_track_resolution_is_not_reused_after_the_scope_changes() -> No
     assert _reusable({"liked:t": cached}, "liked:t", Resolution) is cached  # scope-agnostic callers unchanged
 
 
-# ---------------------------------------------- following an artist later (issue #9)
+# ---------------------------------------------- following an artist later
 
 
 def _followable_world():
@@ -1789,7 +1789,7 @@ def _smallest_all(snap, lookup, cache=None):
 
 
 def test_following_the_artist_later_swaps_the_cached_single_for_the_album() -> None:
-    """Issue #9: the resolution was permanent, so the follow's dedupe rule never got to apply."""
+    """The resolution was permanent, so the follow's dedupe rule never got to apply."""
     lookup, album, single, track = _followable_world()
 
     before = _smallest_all(snapshot(tracks=[track]), lookup)
@@ -2026,7 +2026,7 @@ def test_the_link_lookup_is_asked_once_per_followed_artist() -> None:
     assert links.calls == [SP_LAWRENCE], "one lookup, and the adapter caches it on disk"
 
 
-# ------------------------------------------- the issue #15 opt-outs: box sets and remix EPs
+# ------------------------------------------- the opt-outs: box sets and remix EPs
 
 NO_COMPILATIONS = ExclusionRules(allow_compilation_fallback=False)
 NO_REMIXES = ExclusionRules(allow_remix_releases=False)
@@ -2051,7 +2051,7 @@ def _only_on_a_box_set() -> tuple:
 
 
 def test_a_compilation_only_track_still_monitors_the_compilation_by_default() -> None:
-    """The opt-out is opt-in: an untouched config resolves exactly as it did before issue #15."""
+    """The opt-out is opt-in: an untouched config resolves exactly as it did before the opt-out."""
     intent, lookup, box = _only_on_a_box_set()
     result = resolve(intent, lookup)
     assert result.status == ResolutionStatus.RESOLVED
@@ -2106,7 +2106,7 @@ def test_opting_out_of_compilations_leaves_the_singles_rule_alone() -> None:
 
 
 def _remix_ep_holds_the_original() -> tuple:
-    """Issue #15's shape: an EP MusicBrainz types as studio, whose title is the only evidence.
+    """The opt-out's shape: an EP MusicBrainz types as studio, whose title is the only evidence.
 
     Real case, recorded in the golden corpus: "Grease (The Remix EP)", release group
     2f26958e-b86d-3b3c-8a15-57253046ea58, primary type EP, **no secondary types at all**.
@@ -2160,7 +2160,7 @@ def test_a_liked_remix_still_gets_its_remix() -> None:
 
 def test_a_remix_release_spotify_named_outright_is_reported_not_monitored() -> None:
     """Nothing to fall through to, so the refusal itself is the answer - once keeping a remix-only
-    song (issue #89) is switched off too. With it on, the default, that same release is kept."""
+    song is switched off too. With it on, the default, that same release is kept."""
     remix_ep = rg("rg-remix", "The Feeling (Remixes)", primary=PrimaryType.EP)
     lookup = FakeLookup(barcodes={"111": "rg-remix"}).add(remix_ep)
     intent = track_intent("The Feeling", spotify_album("The Feeling (Remixes)", upc="111"))
@@ -2181,7 +2181,7 @@ def test_a_remix_release_spotify_named_outright_is_reported_not_monitored() -> N
 
 
 def test_a_denied_release_falls_through_to_the_next_candidate() -> None:
-    """Issue #15's 'Mercy, Mercy, Mercy': an untagged live album reads as studio and wins.
+    """'Mercy, Mercy, Mercy': an untagged live album reads as studio and wins.
 
     MusicBrainz types Cannonball Adderley's "Live in Concert" (8832ad43-...) Album with no
     secondary types at all, so no rule can tell it from a studio record. Naming it is the only
@@ -2227,7 +2227,7 @@ def test_denying_every_candidate_reports_the_release_it_would_have_monitored() -
 
 
 def test_denying_the_release_spotify_named_lets_the_isrc_find_another() -> None:
-    """The deny list makes the mapping 'fail' on purpose, so the #13 fallback gets its turn."""
+    """The deny list makes the mapping 'fail' on purpose, so the fallback path gets its turn."""
     box = rg("rg-box", "Greatest Hits", secondary=[SecondaryType.COMPILATION])
     album = rg("rg-album", "Studio Record", released="1999-01-01")
     lookup = FakeLookup(barcodes={"111": "rg-box"}, isrcs={"I1": ["rg-box", "rg-album"]}).add(box, album)
@@ -2273,7 +2273,7 @@ def _re_resolve(intent, lookup, cache, rules: ExclusionRules):
 
 
 def test_deploying_the_opt_outs_re_resolves_nothing() -> None:
-    """The default token is "", which is also what every pre-#15 row carries. No bump needed."""
+    """The default token is "", which is also what every pre-existing row carries. No bump needed."""
     intent, lookup, cache = _cached_under(NO_EXCLUSIONS)
     assert next(iter(cache.values())).rules == ""
 
@@ -2327,7 +2327,7 @@ def test_a_still_denied_release_keeps_the_fallback_answer_reused() -> None:
 
 
 def test_removing_a_deny_entry_re_resolves_what_fell_through_from_it() -> None:
-    """Issue #271: `_reusable` only checked the release an answer chose, so a song kept off a denied
+    """`_reusable` only checked the release an answer chose, so a song kept off a denied
     release stayed on its fallback after the entry was removed."""
     intent, lookup, cache = _cached_under(SINGLE_DENIED)
 
@@ -2357,8 +2357,8 @@ def test_removing_a_deny_entry_a_track_never_met_re_resolves_nothing() -> None:
 
 def test_the_deny_list_is_read_only_where_the_probe_can_record_it() -> None:
     """`denied_skipped` is recorded by `_DenyProbe.__contains__`. A new read of `deny_releases`
-    elsewhere in the resolver (a set operation, a loop) would bypass it and quietly bring #271 back,
-    so any such read has to be looked at, and this list updated, on purpose."""
+    elsewhere in the resolver (a set operation, a loop) would bypass it and quietly bring the bug
+    back, so any such read has to be looked at, and this list updated, on purpose."""
     tree = ast.parse(inspect.getsource(resolver_module))
     readers = {
         func.name
@@ -2372,7 +2372,7 @@ def test_the_deny_list_is_read_only_where_the_probe_can_record_it() -> None:
 
 
 def test_a_row_without_the_field_is_reused_as_before() -> None:
-    """Rows written before #271 read `denied_skipped` as empty: nothing is re-resolved on upgrade."""
+    """Older rows read `denied_skipped` as empty: nothing is re-resolved on upgrade."""
     intent, lookup, cache = _cached_under(NO_EXCLUSIONS)
     stale = {key: replace(res, denied_skipped=frozenset()) for key, res in cache.items()}
 
@@ -2392,7 +2392,7 @@ def _through_state(cache: dict, tmp_path: Path) -> dict:
 
 
 def test_a_non_default_token_survives_the_state_and_is_reused(tmp_path: Path) -> None:
-    """Issue #100: the stored row dropped its token, so under `c1r0` nothing was ever reused."""
+    """The stored row dropped its token, so under `c1r0` nothing was ever reused."""
     intent, lookup, cache = _cached_under(NO_REMIXES)
     stored = _through_state(cache, tmp_path)
 
@@ -2408,7 +2408,7 @@ def test_a_stored_token_still_re_resolves_under_other_rules(tmp_path: Path) -> N
 
 
 def test_a_stored_fall_through_re_resolves_once_its_entry_is_removed(tmp_path: Path) -> None:
-    """Issue #271 through the real state: the skipped release survives SQLite, not just memory."""
+    """Through the real state: the skipped release survives SQLite, not just memory."""
     intent, lookup, cache = _cached_under(SINGLE_DENIED)
     stored = _through_state(cache, tmp_path)
 
@@ -2417,7 +2417,7 @@ def test_a_stored_fall_through_re_resolves_once_its_entry_is_removed(tmp_path: P
     assert _re_resolve(intent, lookup, stored, NO_EXCLUSIONS) != {}
 
 
-# ------------------------------------------- cached answers expire (issue #165)
+# ------------------------------------------- cached answers expire
 
 
 def _max_age(days: float) -> Callable[[str], timedelta]:
@@ -2465,7 +2465,7 @@ def test_an_answer_younger_than_its_max_age_is_reused_and_keeps_its_clock() -> N
 
 
 def test_an_answer_older_than_its_max_age_is_looked_up_again() -> None:
-    """Issue #165: a RESOLVED answer was reused until RESOLVER_VERSION moved, however old it was, so
+    """A RESOLVED answer was reused until RESOLVER_VERSION moved, however old it was, so
     a MusicBrainz correction never reached an intent that had already resolved."""
     intent, lookup, _album, _single = _album_named_single_also_exists()
     first, _ = _run_at(NOW, intent, lookup, {})
@@ -2517,7 +2517,7 @@ def test_the_max_age_is_asked_per_intent_key() -> None:
 
 
 def test_a_row_from_before_the_clock_is_reused_and_starts_it_now() -> None:
-    """Rows written before #165 have no `checked_at`. Re-resolving them all on the first run would
+    """Older rows have no `checked_at`. Re-resolving them all on the first run would
     be the stampede the jitter exists to prevent, so they are reused and their clock starts."""
     intent, lookup, _album, _single = _album_named_single_also_exists()
     first, _ = _run_at(NOW, intent, lookup, {})
@@ -2570,7 +2570,7 @@ def _settled_on_the_single(intent: TrackIntent, lookup: FakeLookup) -> dict:
 
 def test_an_expired_single_fallback_settled_by_the_clock_stays_on_the_single() -> None:
     """Its clock was cleared when it settled, so a plain re-resolve would go back to waiting and
-    let go of the single: an expiry must never step an answer backwards (#165 review)."""
+    let go of the single: an expiry must never step an answer backwards."""
     intent, lookup = _dateless_single()
     settled = _settled_on_the_single(intent, lookup)
     later = NOW + timedelta(days=200)
@@ -2679,7 +2679,7 @@ def test_an_expired_answer_is_served_stale_when_the_re_check_is_only_provisional
 
 
 def test_a_first_resolve_after_a_failure_is_still_provisional() -> None:
-    """Serving stale needs something cached: an intent with no answer yet behaves as before (#53)."""
+    """Serving stale needs something cached: an intent with no answer yet behaves as before."""
     intent, lookup, _album, _single = _album_named_single_also_exists()
     failures = iter(range(100))
 
@@ -2715,7 +2715,7 @@ def test_expiry_leaves_the_other_reuse_rules_alone() -> None:
     assert lookup.calls != {}
 
 
-# ------------------------------------------- same-name artists with a same-titled album (issue #32)
+# ------------------------------------------- same-name artists with a same-titled album
 #
 # The name search is by title and artist *name*, so two MusicBrainz artists called "Jungle" who both
 # put out an album called "Jungle" tie exactly. The track's own ISRC decides between them; a date
@@ -2810,7 +2810,7 @@ def test_an_ambiguous_intent_is_re_resolved_every_run_and_is_never_a_metadata_fa
 # The other shape: the search returns two same-named artists, but only ONE passes the title check -
 # and it is the wrong one. MusicBrainz's "Still Feeling You (Deluxe 2020)" by the right Couch
 # passes the adapter's gate (it deletes any parenthetical) but not the resolver's; a stranger's
-# plain "Still Feeling You" passes both. Taking the lone survivor by name is the #32 guess again.
+# plain "Still Feeling You" passes both. Taking the lone survivor by name is the same guess again.
 
 RIGHT_COUCH, WRONG_COUCH = "artist-couch", "artist-other-couch"
 COUCH_DELUXE = rg("rg-couch-deluxe", "Still Feeling You (Deluxe 2020)", artist_mbid=RIGHT_COUCH, artist_name="Couch")
@@ -2866,9 +2866,9 @@ def test_a_lone_title_survivor_with_no_isrc_evidence_stands_on_its_title() -> No
         assert resolve(_still_feeling_you(isrc), lookup).release_group == STRANGER_COUCH
 
 
-# ------------------------------------------- a credit MusicBrainz joins by a relationship (issue #14)
+# ------------------------------------------- a credit MusicBrainz joins by a relationship
 #
-# The shapes are the ones the #14 re-measurement found at `track:album:search`, with
+# The shapes are the ones found at `track:album:search`, with
 # made-up MBIDs: the golden corpus holds the one case recorded from MusicBrainz itself (Try!).
 
 
@@ -2886,7 +2886,7 @@ def _related(intent, lookup: FakeLookup, *, rules: ExclusionRules = NO_EXCLUSION
 
 
 def _try_world() -> tuple:
-    """John Mayer / John Mayer Trio, *Try!*: 12 of the 16 intents #14 is for."""
+    """John Mayer / John Mayer Trio, *Try!*: 12 of the 16 intents this scenario covers."""
     try_live = rg(
         "rg-try",
         "Try!",
@@ -2916,7 +2916,7 @@ def _try_world() -> tuple:
 
 def test_a_title_under_a_band_the_spotify_artist_is_a_member_of_is_taken() -> None:
     """*Try!* is Album + Live, MusicBrainz knows no ISRC for it and the Trio has no studio album
-    holding the song, so it is `track:non-studio` to *Try!* itself - the intended outcome on #14."""
+    holding the song, so it is `track:non-studio` to *Try!* itself - the intended outcome."""
     intent, lookup, try_live = _try_world()
 
     result = _related(intent, lookup)
@@ -3070,7 +3070,7 @@ def test_collaboration_joins_two_credits() -> None:
 )
 def test_the_related_artist_must_be_the_spotify_credit_exactly(spotify_credit: str, related_name: str) -> None:
     """The relationship makes two MBIDs one act; the name only picks out which relation is
-    Spotify's credit, and it is full equality there too - containment is what #14 refused."""
+    Spotify's credit, and it is full equality there too - containment is refused."""
     found = rg("rg-x", "Some Record", artist_mbid="mb-credited", artist_name="Some Other Credit")
     lookup = FakeLookup(relations={"mb-credited": [relation("mb-related", related_name)]}).add(found)
     intent = track_intent("Song", spotify_album("Some Record", artists=(spotify_credit,)), artists=(spotify_credit,))
@@ -3108,7 +3108,7 @@ def test_two_joined_artists_are_doubt_and_neither_is_taken() -> None:
 
 
 def test_an_unrelated_artist_sharing_the_title_does_not_stop_the_related_one() -> None:
-    """Same-title collisions are dense - 26 terms in the #14 probe. They are simply not joined."""
+    """Same-title collisions are dense - 26 terms in this probe. They are simply not joined."""
     stranger = rg("rg-s", "Homesick", artist_mbid="mb-stranger", artist_name="Lawrence Welk", released="1960-01-01")
     homesick = rg("rg-h", "Homesick", artist_mbid="mb-clyde", artist_name="Clyde Lawrence", released="2020-01-01")
     lookup = FakeLookup(
@@ -3309,7 +3309,7 @@ def test_a_track_spotify_files_under_various_artists_asks_nothing() -> None:
     assert lookup.calls.get("artist_relations", 0) == 0
 
 
-# ------------------------------------------- #14 review: the song must be on the record
+# ------------------------------------------- the song must be on the record
 
 
 def test_a_joined_artists_record_without_the_song_is_not_taken() -> None:
@@ -3386,7 +3386,7 @@ def test_a_refused_release_of_the_joined_artist_gives_way_to_an_allowed_one() ->
     assert result.release_group == allowed
 
 
-# ------------------------------------------- #14 review: doubt chooses nothing
+# ------------------------------------------- doubt chooses nothing
 
 
 def _two_joinable(second_relations) -> FakeLookup:
@@ -3463,7 +3463,7 @@ def test_an_isrc_on_the_related_artists_own_releases_does_not_refuse() -> None:
     assert _related(intent, lookup).release_group == try_live
 
 
-# ------------------------------------------- #14 review: the rule never runs where it must not
+# ------------------------------------------- the rule never runs where it must not
 
 
 def _joinable_trio(lookup: FakeLookup) -> FakeLookup:
@@ -3487,7 +3487,7 @@ def test_an_opted_out_release_spotify_named_is_reported_not_replaced_by_a_joined
 
 
 def test_a_contested_name_search_stays_ambiguous_with_a_joined_credit_on_offer() -> None:
-    """Two same-named John Mayers, the ISRC naming the one whose title failed: ambiguous (#32),
+    """Two same-named John Mayers, the ISRC naming the one whose title failed: ambiguous,
     and the relationship rule is not a way round it."""
     survivor = rg("rg-survivor", "Try!", artist_mbid="mb-mayer", artist_name="John Mayer")
     rival = rg("rg-rival", "Try! (Deluxe 2020)", artist_mbid="mb-mayer-2", artist_name="John Mayer")
@@ -3525,7 +3525,7 @@ def test_an_isrc_stand_in_whose_every_release_is_refused_reports_the_refusal() -
     assert lookup.calls.get("artist_relations", 0) == 0
 
 
-# ------------------------------------------- issue #89: exact titles first, and remix-only songs
+# ------------------------------------------- exact titles first, and remix-only songs
 
 
 def _cruisr_all_over() -> tuple:
@@ -3725,7 +3725,7 @@ def test_a_remix_only_song_prefers_an_ep_over_a_remix_single() -> None:
 
 @pytest.mark.parametrize("keep", [True, False])
 def test_a_real_album_still_beats_a_remix_ep_whatever_keep_remix_only_says(keep: bool) -> None:
-    """Grease (#15): the remix EP is refused and the album is there, so nothing is remix-only."""
+    """Grease: the remix EP is refused and the album is there, so nothing is remix-only."""
     intent, lookup, album, _remix_ep = _remix_ep_holds_the_original()
     rules = ExclusionRules(allow_remix_releases=False, keep_remix_only_tracks=keep)
 
@@ -3784,7 +3784,7 @@ def test_a_remix_named_by_spotify_is_not_remix_only_when_only_the_va_soundtrack_
 def test_a_refused_remix_single_still_finds_the_artists_album_that_lists_the_song(keep: bool) -> None:
     """With remixes allowed the Singles rule finds the album by tracklist; the song therefore has a
     home that is not a remix, and keeping the remix single would monitor what the setting refuses.
-    Until issue #96 the refusal was the answer; now the album search runs from the refused single
+    The album search runs from the refused single
     too, so the song lands on the album whatever `keep_remix_only_tracks` says."""
     single = rg("rg-single", "Song (Club Remix)", primary=PrimaryType.SINGLE, released="2019-01-01")
     album = rg("rg-album", "The Album", released="2020-01-01")
@@ -3806,7 +3806,7 @@ def test_a_refused_remix_single_still_finds_the_artists_album_that_lists_the_son
     assert "allow_remix_releases" in result.detail, "and the detail says why that release is not monitored"
 
 
-# ------------------------------------------- issue #96: the album search runs from a refused release
+# ------------------------------------------- the album search runs from a refused release
 
 
 def _box_set_whose_artist_album_lists_the_song() -> tuple:
@@ -3897,7 +3897,7 @@ def test_a_remix_only_song_prefers_a_release_lidarr_can_hold() -> None:
 
 
 def _eminem_encore() -> tuple:
-    """Eminem's "Mockingbird", from a replay of #89: Spotify files it on the album
+    """Eminem's "Mockingbird": Spotify files it on the album
     "Encore", and the name search returns - through the adapter's looser gate - the Album, an
     earlier same-titled Single that does not carry the song, and an even earlier "Encore (Bonus
     CD)" EP that fails the resolver's own title check."""

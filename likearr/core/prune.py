@@ -6,7 +6,7 @@ This only ever produces a report. Nothing here deletes, moves or unmonitors anyt
 A row is a **candidate** when the album has files, no source wants it and likearr does not own it.
 A candidate is **protected** instead when deleting it would take away the only local copy of a
 song the user liked - see :func:`build_prune_report` for the rule. Why, is kept as data
-(`Protection`), so the review can say it in words with no id in them (#64).
+(`Protection`), so the review can say it in words with no id in them.
 """
 
 from __future__ import annotations
@@ -59,7 +59,7 @@ def split_track_key(intent_key: str) -> tuple[str, str, str] | None:
 
 @dataclass(frozen=True, slots=True)
 class Protection:
-    """Why a release must not be pruned, as data: the review words it, and names no id (#64)."""
+    """Why a release must not be pruned, as data: the review words it, and names no id."""
 
     kind: str
     """One of `PROTECTION_KINDS`."""
@@ -137,12 +137,12 @@ class PruneRow:
     resolved to this MusicBrainz artist); ``None`` when follows were not read at all
     (`[spotify] followed_artists = false`), so nobody can say. The review uses it to say why
     nothing asks for an album - a followed artist brings studio albums and EPs only - and to hide
-    "follow" (#55)."""
+    "follow"."""
     follow_unmatched: bool = False
     """A Spotify follow with this artist's name could not be matched to a MusicBrainz artist, so
     "not followed" may be wrong: the review says so instead of claiming it."""
     protection: Protection | None = None
-    """`protected_reason` as data, for the review's words (#64); None for a candidate."""
+    """`protected_reason` as data, for the review's words; None for a candidate."""
 
 
 @dataclass(slots=True)

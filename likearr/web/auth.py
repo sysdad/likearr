@@ -8,8 +8,8 @@ its port directly over plain http, so it authenticates for itself (docs/dev/DESI
 - **A signed session cookie** after login: ``HttpOnly``, ``SameSite=Strict``, and ``Secure``
   whenever the request arrived over https. Its signing key is made at startup, so a restart
   logs everyone out; for a one-user admin page that is a feature, and there is no key to keep.
-  ``Strict`` is never loosened for any route - Spotify's direct-callback mode (``/spotify/callback``,
-  issue #79) reaches this service by a cross-site GET redirect, which a ``Strict`` cookie is never
+  ``Strict`` is never loosened for any route - Spotify's direct-callback mode (``/spotify/callback``)
+  reaches this service by a cross-site GET redirect, which a ``Strict`` cookie is never
   sent on, so that one route is exempted from the login gate below (``_OPEN_PATHS``) instead and
   authorizes itself a different way: see ``web.spotify_connect``'s docstring.
 - **Five failed logins from one address in a minute pause that address for a minute.** The
@@ -72,10 +72,10 @@ _SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
 _OPEN_PATHS = frozenset({"/login", "/healthz", "/spotify/callback", "/favicon.ico"})
 """What answers without a session, matched exactly. The login form and the container healthcheck
-need none by design; `/spotify/callback` (issue #79) is reached by a cross-site GET redirect from
+need none by design; `/spotify/callback` is reached by a cross-site GET redirect from
 Spotify that never carries the `SameSite=Strict` session cookie, so it authorizes itself with a
 single-use, server-side PKCE `state` instead (see `web.spotify_connect`) and is exempted here
-rather than by loosening the cookie for every route. `/favicon.ico` (issue #141) is what a browser
+rather than by loosening the cookie for every route. `/favicon.ico` is what a browser
 asks for on its own, ignoring the `<link rel="icon">` in the page head - without this entry a
 logged-out visitor's request for it 303s to `/login` instead of getting the icon. A prefix match
 would also open "/loginx" and any later route that happens to start the same way."""
@@ -329,7 +329,7 @@ def _sanitized(value: str) -> str:
 
 
 def refused_host_message(host_header: str) -> str:
-    """The message for a Host header outside `ALLOWED_HOSTS_ENV` (issues #169, #3): names the refused
+    """The message for a Host header outside `ALLOWED_HOSTS_ENV`: names the refused
     host, sanitised (see `_sanitized`), and the setting that would admit it - conditional wording,
     because a hostile rebinding page might be the one reading this, not the person who typed the
     address on purpose, so it never reads as an order to add the sender's own name.
@@ -355,7 +355,7 @@ def refused_host_message(host_header: str) -> str:
 class AllowedHostMiddleware:
     """Refuses a request whose Host header names a host outside `allowed_hosts`, 400 `text/plain`.
 
-    Replaces Starlette's `TrustedHostMiddleware` (issue #169). Same strict, exact-match rule on the
+    Replaces Starlette's `TrustedHostMiddleware`. Same strict, exact-match rule on the
     part before the first ":" of the Host header (see `app.LOOPBACK_HOSTS`'s docstring for why
     that beats comparing the whole header), and no www redirect - but the body now names the host
     it refused and the setting that would admit it, instead of a bare "Invalid host header" that
@@ -370,7 +370,7 @@ class AllowedHostMiddleware:
     websocket - `AuthGateMiddleware` closes every one unconditionally, regardless of Host - so the
     match this class would need for one is moot.
 
-    **With `any_ipv4` (`ALLOWED_HOSTS_ENV` unset, issue #3), any IPv4 literal is accepted as well**,
+    **With `any_ipv4` (`ALLOWED_HOSTS_ENV` unset), any IPv4 literal is accepted as well**,
     so a Compose install reached at its LAN address answers without naming that address first.
     Host names are still refused. Security rationale: the hosts check exists to stop DNS
     rebinding, where a hostile page re-points its own domain at this server and the browser then
@@ -412,7 +412,7 @@ class AllowedHostMiddleware:
 def content_security_policy(*, form_action: Sequence[str] = ()) -> str:
     """The policy every response carries, with `form_action`'s sources added after ``'self'``.
 
-    Only one-click Connect Spotify (#11) passes any: see `web.spotify_connect.one_click_form_action`
+    Only one-click Connect Spotify passes any: see `web.spotify_connect.one_click_form_action`
     for which pages, and which two origins.
     """
     sources = " ".join(("'self'", *form_action))
@@ -426,7 +426,7 @@ class SecurityHeadersMiddleware:
     so ``'self'`` is the whole policy, and nothing inline is ever allowed to run.
 
     A response that already carries a ``Content-Security-Policy`` keeps it: the pages with one-click
-    Connect Spotify (#11) set `content_security_policy` with a wider `form-action`, and nothing else.
+    Connect Spotify set `content_security_policy` with a wider `form-action`, and nothing else.
     The other headers are added regardless.
     """
 

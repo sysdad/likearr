@@ -1,6 +1,6 @@
 """The web app's end-to-end fixtures: a data directory, the fake CLI and a logged-out client.
 
-Split out of `test_app.py` (#154); what they are built from is in `app_support.py`.
+Split out of `test_app.py`; what they are built from is in `app_support.py`.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ from tests.web.app_support import (
 
 @pytest.fixture(autouse=True)
 def _web_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The host names the test client uses, and a contact no page may show (#3: both env-only)."""
+    """The host names the test client uses, and a contact no page may show (both env-only)."""
     monkeypatch.setenv("LIKEARR_ALLOWED_HOSTS", "testserver,likearr.example.org")
     monkeypatch.setenv("LIKEARR_MUSICBRAINZ_CONTACT", "contact-SENTINEL@example.invalid")
 
@@ -50,7 +50,7 @@ def data_dir(tmp_path: Path) -> Path:
     with SqliteState(tmp_path / "state.sqlite") as state:
         state.record_run(_record(), None)
         state.record_run(_record(ts=int((NOW - timedelta(minutes=5)).timestamp()), dry_run=True), None)
-        state.record_first_apply(NOW - timedelta(days=1))  # an install that has applied before (#111)
+        state.record_first_apply(NOW - timedelta(days=1))  # an install that has applied before
     return tmp_path
 
 

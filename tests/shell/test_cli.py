@@ -62,7 +62,7 @@ def test_a_missing_subcommand_is_a_usage_error() -> None:
 
 
 def test_serve_is_not_a_command_any_more(capsys: pytest.CaptureFixture[str]) -> None:
-    """`serve` was renamed to `start` outright (issue #68 phase 4): no alias, no deprecation."""
+    """`serve` was renamed to `start` outright: no alias, no deprecation."""
     with pytest.raises(SystemExit) as excinfo:
         cli.main(["serve"])
     assert excinfo.value.code == 2
@@ -70,7 +70,7 @@ def test_serve_is_not_a_command_any_more(capsys: pytest.CaptureFixture[str]) -> 
 
 
 def test_the_command_list_is_exactly_these() -> None:
-    """The one-time ledger import is gone (#162): nothing on the list is for one install only."""
+    """The one-time ledger import is gone: nothing on the list is for one install only."""
     listed = (
         "{run,auth,doctor,setup-profiles,adopt,playlists,lidarr-files,explain,prune-report,"
         "prune-stage,prune-checks,promote-save,start}"
@@ -135,7 +135,7 @@ def _example_config(tmp_path: Path) -> Path:
 def test_a_scheduled_run_on_a_new_install_publishes_paused_and_creates_no_state_database(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Issue #111: the example config (every `[schedule]` key commented out, so the schedule is on)
+    """The example config (every `[schedule]` key commented out, so the schedule is on)
     and no state database yet. The fire publishes `paused` and exits 0 without ever building a
     `Context`, so no database is created and nothing is contacted."""
     config = _example_config(tmp_path)
@@ -222,7 +222,7 @@ def test_a_config_error_is_one_line_and_exit_1(
 def test_doctor_on_a_wrongly_typed_guard_names_the_key_not_an_unexpected_error(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """#110: the real `build_context`, so the real load. It fails before anything is contacted."""
+    """The real `build_context`, so the real load. It fails before anything is contacted."""
     config = tmp_path / "config.toml"
     example = Path(__file__).resolve().parents[2] / "deploy" / "config.example.toml"
     config.write_text(
@@ -237,7 +237,7 @@ def test_doctor_on_a_wrongly_typed_guard_names_the_key_not_an_unexpected_error(
 
 
 def test_no_root_handler_survives_the_previous_capsys_bound_cli_test() -> None:
-    """Regression for issue #39. The test above runs the real `build_context`, which calls
+    """Regression test. The test above runs the real `build_context`, which calls
     `setup_logging` and binds a root `StreamHandler` to `sys.stderr` as `capsys` has replaced it
     for that test - a stream `capsys` closes as soon as that test ends.
 
@@ -360,7 +360,7 @@ def test_lidarr_files_never_builds_spotify(monkeypatch: pytest.MonkeyPatch, tmp_
 def test_a_prune_preview_and_the_checks_never_build_spotify(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, argv: list[str], spotify: bool
 ) -> None:
-    """Only --apply re-plans against Spotify; the previews the web UI runs read Lidarr alone (#58)."""
+    """Only --apply re-plans against Spotify; the previews the web UI runs read Lidarr alone."""
     seen: dict[str, Any] = {}
 
     def build(config_path: Any, **kwargs: Any):
@@ -407,7 +407,7 @@ def _cleanup_cli(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *, enabled: bo
 def test_a_cleanup_command_warns_once_when_clean_up_is_off_and_still_runs(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str], argv: list[str]
 ) -> None:
-    """#148: typing a Clean up command is already opting in, so it runs - with one line saying
+    """Typing a Clean up command is already opting in, so it runs - with one line saying
     the web UI's Clean up is off."""
     ran = _cleanup_cli(monkeypatch, tmp_path, enabled=False)
 
@@ -707,7 +707,7 @@ def test_auth_passes_its_options_through(monkeypatch: pytest.MonkeyPatch, tmp_pa
 
 
 def test_auth_has_no_back_fill_option(capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> None:
-    """#162: the one-time date back-fill is gone; re-authorizing records the date."""
+    """The one-time date back-fill is gone; re-authorizing records the date."""
     monkeypatch.setenv("COLUMNS", "200")  # argparse wraps usage to the terminal width
     with pytest.raises(SystemExit) as excinfo:
         cli.main(["auth", "--help"])

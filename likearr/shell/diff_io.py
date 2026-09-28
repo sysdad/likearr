@@ -328,15 +328,15 @@ def _ratchet_from_dict(raw: Mapping[str, Any]) -> ProfileRatchet:
 
 
 def write_diff(diff: Diff, path: Path) -> None:
-    """Write `diff.json` (pretty-printed, stable ordering) creating parent directories. 0600
-    (#158 follow-up): a plan names every artist and release it will touch."""
+    """Write `diff.json` (pretty-printed, stable ordering) creating parent directories. 0600:
+    a plan names every artist and release it will touch."""
     path.parent.mkdir(parents=True, exist_ok=True)
     write_atomic(path, json.dumps(diff_to_dict(diff), indent=2) + "\n", mode=0o600)
 
 
 def diff_from_run_dict(raw: Mapping[str, Any]) -> Diff:
     """Decode a `runs.diff_json` value into a `Diff`, for the Status page's "What changed" and
-    `/runs/<id>` (#76).
+    `/runs/<id>`.
 
     `record_run` (`adapters.state_sqlite`) stores a run's diff with `dataclasses.asdict`, not this
     module's own `diff_to_dict` - a different shape for the same data, close enough to reuse

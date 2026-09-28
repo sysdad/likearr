@@ -1,4 +1,4 @@
-"""The app's route table, pinned: splitting `likearr/web/app.py` into route modules (#154) must not
+"""The app's route table, pinned: splitting `likearr/web/app.py` into route modules must not
 add, drop, reorder or rewire a single route."""
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ ROUTES = [
     ("/settings", ("POST",), "settings_save"),
     ("/settings/pause", ("POST",), "settings_pause"),
     ("/settings/resume", ("POST",), "settings_resume"),
-    ("/settings/cleanup", ("POST",), "settings_cleanup"),  # #148
+    ("/settings/cleanup", ("POST",), "settings_cleanup"),
     ("/settings/schedule", ("POST",), "settings_schedule"),
     ("/settings/schedule/preview", ("GET", "HEAD"), "settings_schedule_preview"),
     ("/settings/playlists", ("POST",), "playlists_refresh"),

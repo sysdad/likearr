@@ -135,7 +135,7 @@ def _barcode_payload(*releases: tuple[str, str, dict]) -> dict:
 
 @respx.mock
 def test_release_groups_by_barcode_ignores_leading_zeros_on_either_side(lookup: MusicBrainzLookup) -> None:
-    """#150: Spotify sends 00888072328433, MusicBrainz stores 888072328433. The same GTIN."""
+    """Spotify sends 00888072328433, MusicBrainz stores 888072328433. The same GTIN."""
     respx.get(f"{MB_URL}/release").mock(
         return_value=httpx.Response(200, json=_barcode_payload(("888072328433", "Official", RG_JSON)))
     )
@@ -195,7 +195,7 @@ def test_release_groups_by_barcode_returns_every_release_group_once(lookup: Musi
     assert all(m.official for m in matches)
 
 
-# #268: At the Jazz Corner of the World. Spotify's UPC is the 1994 XW digital release, credited to
+# At the Jazz Corner of the World. Spotify's UPC is the 1994 XW digital release, credited to
 # Art Blakey alone; its release group is credited only to Art Blakey & The Jazz Messengers.
 JAZZ_CORNER_UPC = "00724382888857"
 JAZZ_CORNER_RG = "d5f8521c-58a6-3c56-af99-a1a1c353925d"  # gitleaks:allow (a MusicBrainz id)
@@ -220,7 +220,7 @@ def _jazz_corner_search() -> dict:
 
 @respx.mock
 def test_a_barcode_match_takes_the_release_groups_own_credit_not_the_releases(lookup: MusicBrainzLookup) -> None:
-    """#268: Lidarr files an album under its release group's artist, so the release's credit is
+    """Lidarr files an album under its release group's artist, so the release's credit is
     never the answer. The group is fetched (cached) as the ISRC path fetches it."""
     group_credit = [
         {
@@ -255,7 +255,7 @@ def test_a_barcode_match_takes_the_release_groups_own_credit_not_the_releases(lo
 
 @respx.mock
 def test_a_barcode_match_whose_release_group_is_not_found_is_dropped(lookup: MusicBrainzLookup) -> None:
-    """#268: no release group, no match - never the release's credit in its place. A wrong artist
+    """No release group, no match - never the release's credit in its place. A wrong artist
     is worse than no barcode answer; the resolver's name search still runs."""
     respx.get(f"{MB_URL}/release").mock(return_value=httpx.Response(200, json=_jazz_corner_search()))
     respx.get(f"{MB_URL}/release-group/{JAZZ_CORNER_RG}").mock(return_value=httpx.Response(404))
@@ -265,7 +265,7 @@ def test_a_barcode_match_whose_release_group_is_not_found_is_dropped(lookup: Mus
 
 @respx.mock
 def test_a_failed_release_group_fetch_fails_the_barcode_lookup(lookup: MusicBrainzLookup) -> None:
-    """#268: a MusicBrainz error fetching the group is a lookup error like any other - raised, so
+    """A MusicBrainz error fetching the group is a lookup error like any other - raised, so
     the composite counts it (``mb_ok``) and the answer is provisional - never the release's credit."""
     respx.get(f"{MB_URL}/release").mock(return_value=httpx.Response(200, json=_jazz_corner_search()))
     respx.get(f"{MB_URL}/release-group/{JAZZ_CORNER_RG}").mock(return_value=httpx.Response(503))
@@ -314,7 +314,7 @@ def test_release_groups_for_isrc_dedupes(lookup: MusicBrainzLookup) -> None:
 
 @respx.mock
 def test_recordings_for_isrc_keeps_each_recordings_title_with_its_release_groups(lookup: MusicBrainzLookup) -> None:
-    """#163: the Dean Martin shape - one ISRC on two recordings of different songs. Each keeps its
+    """The Dean Martin shape - one ISRC on two recordings of different songs. Each keeps its
     own title and release groups; a release group on both is fetched once."""
     search = respx.get(f"{MB_URL}/recording").mock(
         return_value=httpx.Response(
@@ -377,7 +377,7 @@ def test_negative_cache_expires(
 def test_negative_entries_written_together_fall_due_apart(
     mb_config: MusicBrainzConfig, client: httpx.Client, tmp_path: Path, clock: FakeClock
 ) -> None:
-    """#166: negative rows written in one run used to expire together at exactly
+    """Negative rows written in one run used to expire together at exactly
     `negative_cache_days`, and be refetched together every time after. They are jittered by key now,
     as positive rows are: within `negative_cache_days * (1 + POSITIVE_TTL_JITTER)`, and the same key
     always gets the same age."""
@@ -461,7 +461,7 @@ def test_search_release_group_rejects_a_different_artist(lookup: MusicBrainzLook
     assert lookup.search_release_group("Fake Band", "Fake Album") is None
 
 
-# ------------------------------------------------------- issue #21: title-comparison normalisation
+# ------------------------------------------------------- title-comparison normalisation
 
 
 @respx.mock
@@ -490,7 +490,7 @@ def test_search_release_group_prefers_an_exact_title_match_over_a_qualifier_stri
 
     Spotify's "Kangaroo" must resolve to the exact-titled album, never the EP, and that must
     hold whichever order MusicBrainz's own relevance ranking happens to list them in - the
-    qualifier-stripped pass (issue #21) exists to *rescue* a match when nothing matches exactly,
+    qualifier-stripped pass exists to *rescue* a match when nothing matches exactly,
     not to outrank a real one that MusicBrainz simply ranked second.
     """
     kyle_andrews = [{"artist": {"id": ARTIST_MBID, "name": "Kyle Andrews"}}]
@@ -540,9 +540,9 @@ def test_search_release_group_matches_after_stripping_a_bracketed_soundtrack_qua
 def test_search_release_group_still_rejects_an_unrelated_release_with_the_same_title(
     lookup: MusicBrainzLookup,
 ) -> None:
-    """The evidence from issue #14: a same-titled album by a wholly unrelated artist, score 100.
+    """A same-titled album by a wholly unrelated artist, score 100.
 
-    None of the title-side loosening in issue #21 may accept this - only the credit gate, which
+    None of the title-side loosening may accept this - only the credit gate, which
     is exact equality, refuses it. Invented names: 'Pellucid Varnish' - 'Harbour Lights' also names
     an album credited to Ondine Karsk.
     """
@@ -563,7 +563,7 @@ def test_search_release_group_still_rejects_an_unrelated_release_with_the_same_t
     assert lookup.search_release_group("Pellucid Varnish", "Harbour Lights") is None
 
 
-# ------------------------------------------------------- issue #21: unquoted retry on an empty search
+# ------------------------------------------------------- unquoted retry on an empty search
 
 
 @respx.mock
@@ -623,7 +623,7 @@ def test_search_release_group_unquoted_retry_still_rejects_an_unrelated_artist(
     assert route.call_count == 2
 
 
-# ------------------------------------------------------- issue #22: artist-credit fold
+# ------------------------------------------------------- artist-credit fold
 
 
 @respx.mock
@@ -674,8 +674,8 @@ def test_search_release_group_matches_a_spotify_featuring_decoration_on_the_cred
 def test_search_release_group_still_rejects_a_credit_containing_the_spotify_one(
     lookup: MusicBrainzLookup,
 ) -> None:
-    """John Mayer / John Mayer Trio: containment, not equality - issue #14's identity question,
-    not this one's. The fold in issue #22 must not accidentally start accepting it."""
+    """John Mayer / John Mayer Trio: containment, not equality - a different identity question,
+    not this one's. The credit fold must not accidentally start accepting it."""
     respx.get(f"{MB_URL}/release-group").mock(
         return_value=httpx.Response(
             200,
@@ -691,7 +691,7 @@ def test_search_release_group_still_rejects_a_credit_containing_the_spotify_one(
 
 @respx.mock
 def test_a_release_group_keeps_every_credited_artist(lookup: MusicBrainzLookup) -> None:
-    """#164: a classical credit is composer first, then the performers. The first stays the
+    """A classical credit is composer first, then the performers. The first stays the
     release group's artist; the whole credit is kept beside it, in order."""
     credit = [
         {"name": "Jean Sibelius", "joinphrase": "; ", "artist": {"id": "sibelius", "name": "Jean Sibelius"}},
@@ -732,7 +732,7 @@ def _credit(*entries: tuple[str, str]) -> list[dict]:
 def test_featured_guests_are_left_out_of_the_main_artists(
     lookup: MusicBrainzLookup, credit: list[dict], main: tuple[str, ...]
 ) -> None:
-    """#164: a join phrase joins a credit to the next, so everything after "feat."/"ft."/"featuring"
+    """A join phrase joins a credit to the next, so everything after "feat."/"ft."/"featuring"
     (any case, spaces and punctuation aside) is a guest."""
     with respx.mock:
         respx.get(f"{MB_URL}/release-group/{RG_MBID}").mock(
@@ -770,7 +770,7 @@ def test_search_artist_rejects_a_near_miss(lookup: MusicBrainzLookup) -> None:
 
 @respx.mock
 def test_search_artist_candidates_returns_every_exact_name_match_best_scored_first(lookup: MusicBrainzLookup) -> None:
-    """#152, from the recorded "Evangeline" search: five artists share the name, and the one the
+    """From the recorded "Evangeline" search: five artists share the name, and the one the
     user listens to scores third. A near miss is not a candidate; one search answers both methods."""
     route = respx.get(f"{MB_URL}/artist").mock(
         return_value=httpx.Response(
@@ -884,7 +884,7 @@ def test_a_runaway_catalogue_stops_at_the_page_cap(lookup: MusicBrainzLookup) ->
 
 @respx.mock
 def test_a_runaway_catalogue_is_crawled_once_per_run(lookup: MusicBrainzLookup) -> None:
-    """#151: several liked tracks by one composer each asked for the whole 30-page crawl again. The
+    """Several liked tracks by one composer each asked for the whole 30-page crawl again. The
     failure is remembered for the life of the lookup (one run), and every ask raises it."""
     from likearr.adapters import musicbrainz as mb
 
@@ -1198,7 +1198,7 @@ def test_a_cache_hit_avoids_http(lookup: MusicBrainzLookup) -> None:
 
 @respx.mock
 def test_live_calls_and_cache_hits_are_counted_separately(lookup: MusicBrainzLookup) -> None:
-    """Issue #119: the shell's progress line needs "how much of this run was actually live
+    """The shell's progress line needs "how much of this run was actually live
     network work" versus "how much was free". The first lookup goes out live; the second is
     answered from the fresh cache entry the first one wrote."""
     respx.get(f"{MB_URL}/release").mock(
@@ -1268,7 +1268,7 @@ def test_failure_with_a_cached_value_returns_the_cached_value(
     assert not lookup.ok
 
 
-# ------------------------------------------------- positive entries expire (issue #9)
+# ------------------------------------------------- positive entries expire
 
 
 def _ttl_lookup(
@@ -1437,7 +1437,7 @@ def test_cached_disambiguations_without_a_database_know_nothing_and_create_nothi
     assert not (tmp_path / "nope.sqlite").exists()
 
 
-# ---------------------------------------------------------------------------- issue #14
+# ---------------------------------------------------------------------------- other-credit search
 
 
 TRIO_MBID = "00000000-0000-4000-8000-0000000000b1"

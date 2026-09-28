@@ -69,12 +69,12 @@ def test_prune_report_lists_candidates(tmp_path: Path, sink: CapturingSink, caps
     assert payload["summary"]["candidates"] == 2
     assert payload["summary"]["total_bytes"] == 300
     assert "A Stranger" in capsys.readouterr().out
-    assert {row["artist_followed"] for row in payload["candidates"]} == {False}  # nobody follows them (#55)
+    assert {row["artist_followed"] for row in payload["candidates"]} == {False}  # nobody follows them
     assert {row["protection"] for row in payload["candidates"]} == {None}
 
 
 def test_prune_report_writes_prune_json_0600(tmp_path: Path, sink: CapturingSink) -> None:
-    """#158 follow-up: `prune.json` is a reviewable plan, like `diff.json`, so it keeps the same
+    """`prune.json` is a reviewable plan, like `diff.json`, so it keeps the same
     0600 mode rather than whatever the umask gives a plain write."""
     source, lookup, lidarr = _prune_world(tmp_path)
     out = tmp_path / "prune.json"
@@ -87,7 +87,7 @@ def test_prune_report_writes_prune_json_0600(tmp_path: Path, sink: CapturingSink
 def test_prune_report_writes_why_a_row_is_protected_as_data(
     tmp_path: Path, sink: CapturingSink, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """#64: the snapshot's songs reach the report, and a protected row carries `protection` beside
+    """The snapshot's songs reach the report, and a protected row carries `protection` beside
     the terminal's `protected_reason` line."""
     from likearr.core import prune as core_prune
 
@@ -257,7 +257,7 @@ def test_prune_stage_dry_run_still_works_while_the_lock_is_held(
     tmp_path: Path, sink: CapturingSink, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """The preview is deliberately left unlocked: the web UI's prune-preview job must keep working
-    while a run holds the lock (#58)."""
+    while a run holds the lock."""
     source, lookup, lidarr = _prune_world(tmp_path)
     manifest = tmp_path / "prune.json"
     with make_context(tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink) as ctx:
@@ -358,7 +358,7 @@ def test_prune_stage_rescans_when_lidarr_cannot_count_the_artists_files(
     tmp_path: Path, sink: CapturingSink, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """A fully-selected, unowned, unprotected artist whose file count Lidarr cannot answer must
-    still fall back to a rescan, never a remove (#133; mutation M7 flips this to "remove")."""
+    still fall back to a rescan, never a remove (mutation M7 flips this to "remove")."""
     library = tmp_path / "library"
     source, lookup, lidarr = _prune_world(tmp_path)
     rows = {
@@ -396,8 +396,8 @@ def test_prune_stage_rescans_when_lidarr_cannot_count_the_artists_files(
 def test_prune_stage_rescans_when_track_files_fails_for_one_album(tmp_path: Path, sink: CapturingSink) -> None:
     """A `track_files` failure for one album stages nothing for that album, but the artist's other
     album still stages; the artist is rescanned, not removed. This is because `listed` then
-    undercounts what Lidarr still holds (`on_disk != staged`), not because of the fallback reason
-    (#133): removing the `except LidarrError` in `_moves_for` would make this fail too."""
+    undercounts what Lidarr still holds (`on_disk != staged`), not because of the fallback reason:
+    removing the `except LidarrError` in `_moves_for` would make this fail too."""
     library = tmp_path / "library"
     source, lookup, lidarr = _prune_world(tmp_path)
     kept = library / "A Stranger" / "Something Else" / "01 - One.flac"
@@ -436,7 +436,7 @@ def test_prune_stage_skips_a_candidate_with_no_lidarr_album_id(
     tmp_path: Path, sink: CapturingSink, caplog: pytest.LogCaptureFixture
 ) -> None:
     """A candidate row whose `lidarr_album_id` is missing (a stale or hand-edited manifest) is
-    skipped with a warning rather than staging its files (#133)."""
+    skipped with a warning rather than staging its files."""
     library = tmp_path / "library"
     source, lookup, lidarr = _prune_world(tmp_path)
     kept = library / "A Stranger" / "Something Else" / "01 - One.flac"
@@ -476,7 +476,7 @@ def test_prune_stage_skips_a_candidate_with_no_lidarr_album_id(
 
 
 def _library_config(tmp_path: Path) -> Any:
-    """A config whose root folder exists, so the mount check (#58) passes and the test reaches
+    """A config whose root folder exists, so the mount check passes and the test reaches
     what it is about."""
     (tmp_path / "library").mkdir(exist_ok=True)
     config = make_config(tmp_path)
@@ -699,7 +699,7 @@ def test_prune_stage_rejects_more_than_one_selection_method(tmp_path: Path, sink
             )
 
 
-# --------------------------------------------------------------------------- the mount pre-check (#58)
+# --------------------------------------------------------------------------- the mount pre-check
 
 
 def test_prune_stage_preview_refuses_a_root_folder_that_is_not_mounted(tmp_path: Path, sink: CapturingSink) -> None:
@@ -817,7 +817,7 @@ def test_prune_stage_preview_writes_its_totals_and_lidarr_plan(
     assert "delete_artist" not in lidarr.names()
 
 
-# --------------------------------------------------------------------------- prune-checks (#58)
+# --------------------------------------------------------------------------- prune-checks
 
 
 def test_prune_checks_names_auto_add_lists_and_a_busy_queue(
@@ -859,7 +859,7 @@ def test_prune_checks_records_what_lidarr_cannot_answer(tmp_path: Path, sink: Ca
     assert answer["queue"] == []
 
 
-# --------------------------------------------------------------------------- #63 review: the move itself
+# --------------------------------------------------------------------------- the move itself
 
 
 def _staged_world(tmp_path: Path, *, sizes: tuple[int, int] = (5, 5)) -> tuple[Any, FakeLidarr, Path, Path, Any]:
@@ -978,7 +978,7 @@ def test_a_file_outside_the_artist_folder_flattens_and_a_duplicate_bare_name_sto
 ) -> None:
     """`_relative_name` flattens a file Lidarr lists outside the artist's own folder to its bare
     name. A second such file with the same bare name must stop the stage instead of silently
-    overwriting the first (#133) - the same no-overwrite rule
+    overwriting the first - the same no-overwrite rule
     `test_a_file_already_in_the_holding_folder_is_never_replaced` pins, but tripped by two files
     staged in the same run rather than one already sitting in holding."""
     library = tmp_path / "library"

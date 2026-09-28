@@ -49,7 +49,7 @@ class FakeMusicBrainz:
         self.calls: list[str] = []
         self.cache_hits = 0
         """Unset by every other test; only `test_mb_cache_hits_and_live_calls_are_read_off_the_primary`
-        writes to it, to check `CompositeLookup.mb_cache_hits` reads it back (issue #119)."""
+        writes to it, to check `CompositeLookup.mb_cache_hits` reads it back."""
         self.live_calls = 0
         """Same as `cache_hits`, for `CompositeLookup.mb_live_calls`."""
 
@@ -184,7 +184,7 @@ def test_musicbrainz_failing_and_lidarr_finding_nothing_is_not_an_error() -> Non
 
 
 def test_same_name_artists_from_musicbrainz_pass_through_and_lidarr_is_never_asked() -> None:
-    """Issue #32. Two candidates is MusicBrainz *answering*, not missing: Lidarr's own name search
+    """Two candidates is MusicBrainz *answering*, not missing: Lidarr's own name search
     would only pick one of the same two artists by name, which is the guess being refused."""
     other = ReleaseGroup(
         mbid="00000000-0000-4000-8000-000000000003",
@@ -373,7 +373,7 @@ def test_a_healthy_run_records_nothing() -> None:
 
 
 def test_mb_cache_hits_and_live_calls_are_read_off_the_primary() -> None:
-    """Issue #119: the shell's progress line reads these off `ctx.composite`, the same way it
+    """The shell's progress line reads these off `ctx.composite`, the same way it
     already reads `mb_stale_served`. `FakeMusicBrainz` carries neither counter by default, so the
     property must default to 0 rather than raising."""
     mb = FakeMusicBrainz()
@@ -387,7 +387,7 @@ def test_mb_cache_hits_and_live_calls_are_read_off_the_primary() -> None:
     assert composite.mb_live_calls == 3
 
 
-# ---------------------------------------------------------------- negative-caching a term (issue #18)
+# ---------------------------------------------------------------- negative-caching a term
 
 
 class _FailThenSucceedLidarr:
@@ -510,7 +510,7 @@ def test_a_different_lookup_succeeding_is_what_the_gate_checks() -> None:
     assert composite.lidarr_metadata_new_failures == (_IDENTITY,)
 
 
-# ---------------------------------------------------------------- issue #42: same-named artists behind a fallback
+# ---------------------------------------------------------------- same-named artists behind a fallback
 
 LONDON = ReleaseGroup(
     mbid="3c5834e7-0000-4000-8000-000000000002",
@@ -605,7 +605,7 @@ def test_behind_a_fallback_with_nothing_to_decide_it_is_ambiguous_never_a_guess(
 
 
 def test_behind_a_fallback_a_saved_album_by_two_same_named_artists_is_ambiguous() -> None:
-    """The likeliest way into an unmatched intent (#53): a saved album carries no ISRC, and its
+    """The likeliest way into an unmatched intent: a saved album carries no ISRC, and its
     barcode already missed, so two artists behind the fallback are never chosen between."""
     from likearr.core.resolver import AMBIGUOUS_SAME_NAME_STEP, resolve_album
     from likearr.models import ResolutionStatus
@@ -621,7 +621,7 @@ def test_behind_a_fallback_a_saved_album_by_two_same_named_artists_is_ambiguous(
 
 
 def test_the_ambiguity_detail_does_not_say_musicbrainz_when_lidarr_found_the_artists() -> None:
-    """#53: the candidates here came from Lidarr's own search, not MusicBrainz's."""
+    """The candidates here came from Lidarr's own search, not MusicBrainz's."""
     from likearr.core.resolver import resolve_album
     from tests.unit.fakes import album_intent, spotify_album
 
@@ -633,7 +633,7 @@ def test_the_ambiguity_detail_does_not_say_musicbrainz_when_lidarr_found_the_art
     assert "MusicBrainz artists" not in result.detail
 
 
-# ---------------------------------------------------------------- issue #53: what an MB failure reaches
+# ---------------------------------------------------------------- what an MB failure reaches
 
 
 class _LinksDown(FakeMusicBrainz):
@@ -666,9 +666,9 @@ def test_a_musicbrainz_answer_moves_no_failure_count() -> None:
 
 
 def test_after_the_error_the_isrc_stand_in_answer_is_provisional_not_only_lidarrs() -> None:
-    """The gap #53 closes. MusicBrainz's name search errors, Lidarr finds nothing, and the track's
+    """MusicBrainz's name search errors, Lidarr finds nothing, and the track's
     ISRC - still answered from MusicBrainz's cache - names the release. It resolves, but its
-    answer rests on no Lidarr release group, so #42's check alone would have cached it."""
+    answer rests on no Lidarr release group, so the fallback check alone would have cached it."""
     from likearr.core.resolver import resolve_all
     from likearr.models import ResolutionStatus
     from tests.unit.fakes import NOW, snapshot
@@ -695,7 +695,7 @@ def test_after_the_error_the_isrc_stand_in_answer_is_provisional_not_only_lidarr
 
 
 def test_after_the_error_a_negative_cached_term_is_not_asked_of_lidarr_again() -> None:
-    """#53: the fallback after an error skips a term Lidarr is known to 503 on, like a miss does.
+    """The fallback after an error skips a term Lidarr is known to 503 on, like a miss does.
     With MusicBrainz failed too, that is both backends failing."""
     mb = FakeMusicBrainz(error=MetadataError("musicbrainz is down"))
     lidarr = FakeLidarr(error=LidarrMetadataError("skyhook is down"))
@@ -720,7 +720,7 @@ def test_after_the_error_an_expired_cache_entry_is_retried() -> None:
 
 
 def test_after_the_error_a_genuine_lidarr_failure_is_counted_and_is_a_cache_candidate() -> None:
-    """#53: it used to be recorded by name only - no attempt, no attempt failure, no candidate - so
+    """It used to be recorded by name only - no attempt, no attempt failure, no candidate - so
     the outage rule could not see it and the term was re-asked every run."""
     mb = FakeMusicBrainz(error=MetadataError("musicbrainz is down"))
     composite = make(mb, FakeLidarr(error=LidarrMetadataError("skyhook is down")))
@@ -745,7 +745,7 @@ def test_after_the_error_a_lidarr_answer_is_an_attempt_and_a_success() -> None:
     assert composite.lidarr_metadata_any_success is True
 
 
-# ---------------------------------------------------------------- issue #14: the relationship join
+# ---------------------------------------------------------------- the relationship join
 
 TRY = ReleaseGroup(
     mbid="00000000-0000-4000-8000-000000000014",
@@ -764,7 +764,7 @@ MAYER = ArtistRelation(
 
 
 class _Joined(_SearchDown):
-    """MusicBrainz whose name search is down, but which still answers the #14 questions."""
+    """MusicBrainz whose name search is down, but which still answers the relationship questions."""
 
     def __init__(self, *, relations_error: Exception | None = None) -> None:
         super().__init__([])
@@ -796,7 +796,7 @@ def test_the_relationship_questions_are_passed_to_musicbrainz() -> None:
 
 
 def test_a_failed_relationship_lookup_is_counted_and_is_unknown_not_none() -> None:
-    """A failure costs the intent the rule, never a wrong artist - and moves the #53 count. It is
+    """A failure costs the intent the rule, never a wrong artist - and moves the failure count. It is
     ``None``, "could not be read", not ``()``: the resolver must not read it as "no relationship"."""
     composite = make(_Joined(relations_error=MetadataError("musicbrainz is down")), FakeLidarr())
 
@@ -817,7 +817,7 @@ def test_a_failed_other_credit_search_is_counted_and_answers_nothing() -> None:
 
 
 def test_a_relationship_answer_reached_after_a_musicbrainz_error_is_provisional() -> None:
-    """#53 holds for the new path: the name search errored, so whatever this intent reaches - here
+    """On this path the name search errored, so whatever this intent reaches - here
     *Try!* through the relationship - is acted on this run and not cached."""
     from likearr.core.resolver import resolve_all
     from likearr.models import ResolutionStatus
@@ -875,14 +875,14 @@ def test_a_failed_relationship_lookup_leaves_the_intent_unmapped_not_errored() -
     assert result.provisional == {intent.reason.key}
 
 
-# ---------------------------------------------------------------- issue #5: non-Latin names behind the fallback
+# ---------------------------------------------------------------- non-Latin names behind the fallback
 
 
 @respx.mock
 def test_behind_a_fallback_a_non_latin_stranger_with_the_same_title_stays_unmapped(
     lidarr_config: LidarrConfig, client: httpx.Client
 ) -> None:
-    """Issue #5, end to end through the real Lidarr adapter. MusicBrainz finds nothing, and Lidarr's
+    """End to end through the real Lidarr adapter. MusicBrainz finds nothing, and Lidarr's
     search returns a same-titled album by a different artist whose name is also non-Latin. The old
     ASCII fold read both names as "" and resolved the saved album to that stranger."""
     from likearr.adapters.lidarr import LidarrClient

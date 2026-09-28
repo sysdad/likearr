@@ -1,4 +1,4 @@
-"""The Unmatched page's rows (#60): one per release, grouped by what happened and why."""
+"""The Unmatched page's rows: one per release, grouped by what happened and why."""
 
 from __future__ import annotations
 
@@ -548,7 +548,7 @@ def test_a_part_of_followed_artists_counts_artists_not_releases() -> None:
     assert found is not None and (found.matched, found.unit_one, found.unit) == (1, "artist", "artists")
 
 
-# ---------------------------------------------------------------- a track Spotify no longer serves (#166)
+# ---------------------------------------------------------------- a track Spotify no longer serves
 
 
 def test_a_track_spotify_no_longer_serves_has_its_own_reason_and_is_labelled_by_its_id() -> None:

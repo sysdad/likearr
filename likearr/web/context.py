@@ -1,7 +1,7 @@
 """The web app's shared state: `WebSettings`, `_Web` (settings, the job runner, templates) and
 `_web`, which every route module reaches it through.
 
-Split out of `likearr.web.app` (#154) so the route modules in `likearr.web.routes` can share it
+Split out of `likearr.web.app` so the route modules in `likearr.web.routes` can share it
 without importing `app`, which imports them. It imports `helpers`; `helpers` never imports it
 at run time.
 """
@@ -40,7 +40,7 @@ from likearr.web.schedule import SCHEDULED_KIND
 from likearr.web.status import ago, short_message
 
 log = logging.getLogger("likearr.web.app")
-"""Under the app's own name, so log lines read as they did before the split (#154)."""
+"""Under the app's own name, so log lines read as they did before the split."""
 
 
 _HERE = Path(__file__).parent
@@ -85,7 +85,7 @@ class WebSettings:
     `likearr start` turns it on; tests only where they test it, for the same reason."""
     auto_preview_setup: bool = False
     """Preview the Lidarr setup at start while a root folder or quality profile is not chosen yet
-    (#3, `routes.settings.preview_setup_if_needed`). `likearr start` turns it on; tests only where
+    (`routes.settings.preview_setup_if_needed`). `likearr start` turns it on; tests only where
     they test it, for the same reason as `auto_fetch_names`."""
     scheduler: bool = False
     """Start the in-service scheduler (`likearr.web.schedule.Scheduler`) in the lifespan. `likearr
@@ -141,7 +141,7 @@ class _Web:
         self.limiter = settings.limiter if settings.limiter is not None else LoginLimiter()
         self.spotify_pending = spotify_connect.PendingSpotifyAuthStore(now=lambda: settings.now().timestamp())
         self.spotify_switches = spotify_connect.PendingSwitchStore(now=lambda: settings.now().timestamp())
-        """Server-side PKCE state for "Connect Spotify" (issue #79): see `spotify_connect`."""
+        """Server-side PKCE state for "Connect Spotify": see `spotify_connect`."""
         self.templates = Jinja2Templates(directory=str(_HERE / "templates"))
         self.templates.env.filters["when"] = self._when
         self.templates.env.filters["fire_when"] = self._fire_when
@@ -224,12 +224,12 @@ class _Web:
         """The names file is missing, or lacks a playlist the config names: "load on the first sync,
         then persist". A refresh of names already known is the Settings button's, never automatic.
 
-        False with no Spotify token file (#118): fetching playlist names needs one, and without it
+        False with no Spotify token file: fetching playlist names needs one, and without it
         the job would only fail with "no token file ... - run `likearr auth` first". Checked here,
         once, so startup, a finished check and a saved settings form never start that doomed job.
 
         Also true when the names file still marks playlists as needing a re-authorization and the
-        token now has ``playlist-read-collaborative`` (#103, item 3)."""
+        token now has ``playlist-read-collaborative``."""
         try:
             config = self.config()
         except ConfigError:
@@ -241,14 +241,14 @@ class _Web:
             return True
         if any(pid not in cache.names for pid in config.spotify.playlists):
             return True
-        # #103 item 3: the last listing greyed out collaborative playlists for a token without
+        # The last listing greyed out collaborative playlists for a token without
         # playlist-read-collaborative. Once a re-authorization (web or `likearr auth`) grants it,
         # that answer is stale: re-list, or the picker and a save keep refusing them.
         return bool(cache.needs_reauth) and can_read_collaborative(read_granted_scopes(config.spotify.token_file))
 
     def _after_scheduled(self, meta: JobMeta) -> None:
         """After a scheduled job settles: a redeploy that cancelled it while it was still planning
-        (issue #68 phase 3) marks its fire cancelled, so the missed-fire catch-up re-fires it after
+        marks its fire cancelled, so the missed-fire catch-up re-fires it after
         restart. Any other outcome - done, failed, guarded, stale, busy, or interrupted after it
         had already printed the apply-phase marker - leaves the fire recorded as serviced."""
         if meta.state is not JobState.INTERRUPTED or meta.phase == JOB_PHASE_APPLY:
@@ -294,7 +294,7 @@ class _Web:
         return load_config(self.config_path)
 
     def cleanup_enabled(self) -> bool:
-        """`[prune] enabled` (#148): whether Clean up and promote-save's Spotify write access are
+        """`[prune] enabled`: whether Clean up and promote-save's Spotify write access are
         offered. Read fresh, so the Settings switch shows on the next page. `False` when config.toml
         does not load: off is the default, and the page's own `config_error` handling says why."""
         try:
@@ -305,7 +305,7 @@ class _Web:
     @property
     def tz(self) -> ZoneInfo:
         """`[schedule] timezone`, read fresh every time, not cached from startup: Settings can
-        change it live (issue #68 phase 2), and a zone cached at startup would show Status's next
+        change it live, and a zone cached at startup would show Status's next
         fire and every rendered time in the old zone until the next restart."""
         try:
             return ZoneInfo(self.config().schedule.timezone)
@@ -342,13 +342,13 @@ class _Web:
         page that started it.
 
         ``has_mqtt`` goes into every render, page or fragment: it gates the Home Assistant wording
-        (issue #139) wherever it appears, including fragments included from a page that never asked
-        for it directly (Jinja includes inherit the caller's context). ``cleanup_enabled`` (#148)
+        wherever it appears, including fragments included from a page that never asked
+        for it directly (Jinja includes inherit the caller's context). ``cleanup_enabled``
         goes in the same way and gates the nav's Clean up link. Both are `False` when config.toml
         does not load - the page's own `config_error` handling already says why.
 
         The pages that can hold a form posting to ``/settings/spotify/connect`` (`CONNECT_FORM_PAGES`)
-        widen `form-action` when one-click Connect applies (#11,
+        widen `form-action` when one-click Connect applies (see
         `spotify_connect.one_click_form_action`); every other response keeps the default policy.
         """
         try:
@@ -383,7 +383,7 @@ class _Web:
 
 
 CONNECT_FORM_PAGES = frozenset({"settings.html", "prune_review.html", "_prune_finish.html"})
-"""The templates that can hold a form posting to ``/settings/spotify/connect`` (#11): Settings'
+"""The templates that can hold a form posting to ``/settings/spotify/connect``: Settings'
 Connect Spotify, and Clean up's "Authorize write access on Spotify" in `_prune_finish.html`,
 included by `prune_review.html`. It is the page holding the form whose `form-action` the browser
 checks. The fragment is listed for a direct load, where it is the page; under htmx its header is

@@ -1,8 +1,8 @@
 """Offline resolver replay: re-resolve a state snapshot's intents from its `mb_cache` alone.
 
-Read-only and network-free. Written for the saved-album regression that followed #40
-(RESOLVER_VERSION 6); kept because every future resolver change deserves the same check. Not
-shipped: the Docker image copies `likearr/` only.
+Read-only and network-free. Written for a saved-album regression at RESOLVER_VERSION 6; kept
+because every future resolver change deserves the same check. Not shipped: the Docker image
+copies `likearr/` only.
 
     uv run python scripts/replay_resolver.py SNAPSHOT.sqlite --out replay.json
     PYTHONPATH=/path/to/other/checkout python scripts/replay_resolver.py SNAPSHOT.sqlite --out old.json
@@ -15,7 +15,7 @@ What it does, and what it cannot do:
   the MusicBrainz adapter is given an HTTP transport that refuses every request and counts it. Every
   cache entry answers whatever its age, exactly as a MusicBrainz outage would be served. An intent
   needing a lookup the cache does not hold fails with `error:metadata` and is reported as skipped.
-  The snapshot itself is never written. A snapshot from before #123 may hold `isrc-search` and
+  The snapshot itself is never written. An older snapshot may hold `isrc-search` and
   `rg-tracks` rows stored whole, which answer exactly as trimmed ones do; a newer one's rows hold
   only the fields today's parsers read, so a resolver change that needs a dropped field has to
   refetch first.
@@ -26,13 +26,13 @@ What it does, and what it cannot do:
   and the ISRC from a cached ISRC search whose recording carries the song's title and holds that
   release or the answer. Spotify's release year is not stored, so the saved-album year preference
   cannot act here. Unmapped intents are not stored and are not replayed.
-- **The relationship rule (#14) is on** when the code under test has it, as in a normal run, so the
+- **The relationship rule is on** when the code under test has it, as in a normal run, so the
   replay runs the code that ships. It only acts where a track would otherwise be UNMAPPED at
   `track:album:search`, which a stored intent reaches only if the replay's approximate
   reconstruction misses; its `artist-rels:` lookup is then usually not cached, so it is skipped.
 - **The opt-outs are the ones each resolution was made under**, read back from its stored `rules`
   token (``""``, ``c1r0``, ``c1r0k0``, ...), passing only the fields the code under test has - so a
-  checkout from before `keep_remix_only_tracks` (#89) replays ``c1r0`` as it always did. The deny
+  checkout from before `keep_remix_only_tracks` replays ``c1r0`` as it always did. The deny
   list is not in the token and is not replayed. Excluded tracks are UNMAPPED and so not stored:
   what the remix-only rule would now keep is invisible here, and only moves *away* from a stored
   answer are measured.
@@ -40,7 +40,7 @@ What it does, and what it cannot do:
 The `--compare` mode prints one line per intent whose release group differs from the baseline in
 the first result file, and says for each whether the other result files (other code) differ too.
 
-**The Lidarr fallback check** (issue #5). The resolver replay above has no Lidarr: an answer that
+**The Lidarr fallback check**. The resolver replay above has no Lidarr: an answer that
 Lidarr's album search supplied after a MusicBrainz miss replays as a miss. And Lidarr's search
 responses are never stored - `lidarr_negative_cache` keeps only the terms that failed - so no replay
 can reproduce what Lidarr returned. What the snapshot does hold, for every answer the name search
@@ -55,7 +55,7 @@ Each row carries where the answer most likely came from, read off `mb_cache`: ``
 a cached name search lists the release group (Lidarr was never asked, so a refusal there changes
 nothing), ``lidarr-fallback`` when the search is cached but does not list it, and ``unknown`` when
 the search is not cached at all. It also carries ``ascii_fold_empty``: whether the ASCII-only fold
-the Lidarr adapter used before #5 turns any of the four compared names into "" - the case #5 fixes.
+the Lidarr adapter used previously turns any of the four compared names into "" - the case now fixed.
 
 Only counts go to standard output. The per-row detail stays in the result file (``--out``), and
 `--compare` writes the rows that moved to ``--lidarr-detail`` when given. Keep both files local.
@@ -164,7 +164,7 @@ def _isrc_index(
 
 
 def _old_ascii_fold(value: str) -> str:
-    """The Lidarr adapter's own normaliser before #5, frozen here only to label rows: it folded to
+    """The Lidarr adapter's old normaliser, frozen here only to label rows: it folded to
     ASCII, so a name written wholly in a non-Latin script came out as ""."""
     folded = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii").lower()
     folded = _OLD_PAREN.sub(" ", folded).replace("&", " and ")
@@ -209,7 +209,7 @@ def _searched(d: dict[str, Any], strip: Any) -> tuple[str, str, str] | None:
     same = _SAME_NAME.search(detail)
     chosen = d.get("source_release_group") or d.get("release_group")
     if same is not None and chosen:
-        # Several same-named artists, and the track's ISRC chose one (#32, #42). The quoted title is
+        # Several same-named artists, and the track's ISRC chose one. The quoted title is
         # the one searched, already stripped when the retry found them.
         return _unrepr(same[1]), _unrepr(same[2]), str(chosen.get("mbid") or "")
     return None
@@ -333,7 +333,7 @@ def run(snapshot: Path, out: Path) -> None:
             now=lambda: SNAPSHOT_NOW.timestamp(),
             sleep=lambda _s: None,
         )
-        # A checkout from before #14 (RESOLVER_VERSION 7 or older) has no `relations` parameter.
+        # A checkout at RESOLVER_VERSION 7 or older has no `relations` parameter.
         relations = {"relations": lookup} if "relations" in inspect.signature(resolve_track).parameters else {}
         results: dict[str, dict[str, Any]] = {}
         skipped: dict[str, str] = {}
@@ -373,7 +373,7 @@ def run(snapshot: Path, out: Path) -> None:
                     held = {src["mbid"], rg.get("mbid")}
                     isrc_hits = sorted({i for m in held if m for i, t in isrcs.get(m, []) if normalize_title(t) == want})
                     if not isrc_hits:
-                        # Not on the stored answer - the #32 case, where that answer is the wrong
+                        # Not on the stored answer - a case where that answer is the wrong
                         # artist's. Fall back to a recording with the song's title and credit, only
                         # when exactly one cached ISRC has both.
                         by_credit = {
@@ -435,7 +435,7 @@ def run(snapshot: Path, out: Path) -> None:
 def compare_lidarr(first: Path, others: list[Path], detail: Path | None) -> None:
     """Where the Lidarr fallback check moved between result files: counts to standard output, rows
     to `detail` only. A move is expected when the other file accepts and this one refuses, the source
-    is ``lidarr-fallback`` or ``unknown``, and a name folds to "" under the old ASCII fold (#5)."""
+    is ``lidarr-fallback`` or ``unknown``, and a name folds to "" under the old ASCII fold."""
     main = json.loads(first.read_text()).get("lidarr_check")
     if main is None:
         print(f"\n{first.name} has no lidarr fallback check")
@@ -461,7 +461,7 @@ def compare_lidarr(first: Path, others: list[Path], detail: Path | None) -> None
                 and a["source"] in {"lidarr-fallback", "unknown"}
                 and a["ascii_fold_empty"]
             )
-            label = "expected (#5)" if expected else "needs an explanation"
+            label = "expected" if expected else "needs an explanation"
             counts[f"{label}: {a['source']}, {p.stem} {_verdict(b)} -> {first.stem} {_verdict(a)}"] += 1
             rows.append({"key": key, "expected": expected, first.stem: a, p.stem: b})
         moved[p.stem] = rows

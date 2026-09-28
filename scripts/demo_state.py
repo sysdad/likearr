@@ -1,4 +1,4 @@
-"""Write a demo data directory for the README screenshots (#108): no Spotify, no Lidarr, no network.
+"""Write a demo data directory for the README screenshots: no Spotify, no Lidarr, no network.
 
     uv run python scripts/demo_state.py /tmp/likearr-demo
     LIKEARR_UI_PASSWORD='a demo password, 16+ chars' LIKEARR_SPOTIFY_CLIENT_ID=demo \
@@ -404,7 +404,7 @@ def _schedule(now: datetime) -> tuple[str, list[datetime]]:
 
 def _config_text(cron: str) -> str:
     return f"""\
-# likearr demo configuration, written by scripts/demo_state.py for the README screenshots (#108).
+# likearr demo configuration, written by scripts/demo_state.py for the README screenshots.
 # Nothing here is real: no Lidarr answers at this address, and the Spotify token file holds no token.
 
 [lidarr]
@@ -644,7 +644,7 @@ def build_demo(out_dir: Path, *, now: datetime | None = None) -> DemoInfo:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Write a demo data directory for the README screenshots (#108).")
+    parser = argparse.ArgumentParser(description="Write a demo data directory for the README screenshots.")
     parser.add_argument("out_dir", type=Path, help="an empty directory to write the demo data directory into")
     args = parser.parse_args(argv)
     install_network_guard()

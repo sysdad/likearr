@@ -5,7 +5,7 @@ done plus the digests of the world it was computed against, so `--apply` execute
 file and refuses one the world has moved out from under. The keep list is baked into the plan -
 which is the point: applying never re-derives what to keep from a file that may not be there.
 
-`held` (#6) lists what the plan leaves alone because its artist's catalogue was not read. It is
+`held` lists what the plan leaves alone because its artist's catalogue was not read. It is
 for the reader only: `--apply` does nothing with it, and a plan written before it existed reads
 as holding nothing. The `summary` keeps its original three counts.
 """

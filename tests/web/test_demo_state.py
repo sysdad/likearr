@@ -1,4 +1,4 @@
-"""`scripts/demo_state.py` (#108): the demo data directory the README screenshots are taken from.
+"""`scripts/demo_state.py`: the demo data directory the README screenshots are taken from.
 
 The script is run into `tmp_path` and the app is pointed at what it wrote, through Starlette's test
 client: no uvicorn, no child job, and the suite's network guard is on, so a script that reached

@@ -264,7 +264,7 @@ class FakeLidarr:
     """Artist MBIDs whose add Lidarr refuses for any other reason, such as a bad root folder: a
     plain `LidarrError`, which stops the apply."""
     added_elsewhere: dict[str, bool] = field(default_factory=dict)
-    """Artist MBIDs someone adds to Lidarr just before likearr's own add (issue #4), each with
+    """Artist MBIDs someone adds to Lidarr just before likearr's own add, each with
     whether it carries the tags likearr's add sends (True: likearr's own add, from a run that
     stopped before recording it). The add then meets Lidarr's 400 "already exists"."""
     unmonitor_added_artists: bool = False
@@ -625,8 +625,8 @@ class CapturingSink:
     """A `HealthSink` that keeps every record instead of publishing it.
 
     `local` defaults to `True` so every existing test that registers a single `CapturingSink`
-    (standing in for the always-on stdout sink) keeps seeing dry-run records unchanged; a test for
-    issue #19 passes `local=False` to stand in for a retained sink like MQTT instead.
+    (standing in for the always-on stdout sink) keeps seeing dry-run records unchanged; a test
+    passes `local=False` to stand in for a retained sink like MQTT instead.
     """
 
     records: list[HealthRecord] = field(default_factory=list)
@@ -684,10 +684,10 @@ def make_context(
 ) -> Context:
     """A `Context` wired to fakes and a real SQLite state file under `tmp_path`.
 
-    `sinks` overrides `sink` when more than one is needed (issue #19: a local stdout-like sink
-    plus one or more retained ones), and defaults to the single `sink` every other test uses.
+    `sinks` overrides `sink` when more than one is needed (a local stdout-like sink plus one or
+    more retained ones), and defaults to the single `sink` every other test uses.
 
-    `first_applied` records a first hand apply in the state file (issue #111), so a scheduled run
+    `first_applied` records a first hand apply in the state file, so a scheduled run
     applies as it did before the first-apply gate existed. Every test of what a scheduled run
     *does* wants that; a test of the gate itself passes ``first_applied=False``.
     """

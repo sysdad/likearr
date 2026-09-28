@@ -1,4 +1,4 @@
-"""Finishing a clean up (#58): the checklist after Export, for any standard likearr install.
+"""Finishing a clean up: the checklist after Export, for any standard likearr install.
 
 After "Export the decisions", Clean up walks the reviewer through carrying the review out. The
 page previews what it can, read-only, as child jobs - never in the server process:
@@ -227,7 +227,7 @@ class Commands:
     spotify_apply_fresh: str
     """Applies that fresh plan."""
     auth: str
-    """Re-authorizes Spotify with the write scopes (`--promote-save`, #161) step 6 needs."""
+    """Re-authorizes Spotify with the write scopes `--promote-save` step 6 needs."""
 
 
 def _line(prefix: str, parts: Sequence[str]) -> str:

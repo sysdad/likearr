@@ -1,4 +1,4 @@
-"""Take the three README screenshots (#108) from a running demo server.
+"""Take the three README screenshots from a running demo server.
 
 First write and start the demo server (see `scripts/demo_state.py`):
 
@@ -70,7 +70,7 @@ def take_screenshots(password: str, plan_id: str, out_dir: Path, *, base_url: st
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Take the three README screenshots (#108) from a running demo server.",
+        description="Take the three README screenshots from a running demo server.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )

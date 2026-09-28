@@ -114,7 +114,7 @@ _NEGATIVE_CACHE_DAYS = 7.0
 @dataclass(frozen=True, slots=True)
 class OwnedPlaylist:
     """A playlist a run can read: one the authorized user owns, or collaborates on once the token
-    has ``playlist-read-collaborative`` (#103) - the only kinds Development Mode reads items from."""
+    has ``playlist-read-collaborative`` - the only kinds Development Mode reads items from."""
 
     id: str
     name: str
@@ -130,7 +130,7 @@ class PlaylistEntry:
     ``likearr playlists``) need every playlist the account can see, so the ones Development Mode
     will not read items from can be shown, greyed out, with the reason. A playlist you collaborate
     on but do not own is `owned=False`, `collaborative=True`, and `readable` once the stored token
-    has ``playlist-read-collaborative`` (#103, item 3).
+    has ``playlist-read-collaborative``.
     """
 
     id: str
@@ -365,7 +365,7 @@ class SpotifyLibrary:
         ``GET /me/playlists`` lists owned *and followed* playlists alike (Spotify's own algorithmic
         and editorial playlists too, once followed), so the user's own id comes from ``GET /me``
         and each entry is marked owned or not by comparing ``owner.id``, and readable when owned or
-        collaborative with a token that has ``playlist-read-collaborative`` (#103, item 3). Nothing
+        collaborative with a token that has ``playlist-read-collaborative``. Nothing
         is dropped for being someone else's: this is what the picker shows, greying out anything
         not readable with the reason, so a person never has to guess why a playlist did not sync.
         Read-only; the scopes come from the token file, with no extra request. Every call goes
@@ -418,7 +418,7 @@ class SpotifyLibrary:
         return out
 
     def owned_playlists(self) -> list[OwnedPlaylist]:
-        """Every playlist a run can read - owned, or collaborative with the scope (#103) - sorted
+        """Every playlist a run can read - owned, or collaborative with the scope - sorted
         by name (casefolded), then id.
 
         The selectable subset of `all_playlists`: Development Mode returns zero items for any other

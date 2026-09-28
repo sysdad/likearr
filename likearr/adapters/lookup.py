@@ -10,7 +10,7 @@ Only the two lookups Lidarr can actually answer are delegated:
 (:meth:`search_release_group_candidates`, and :meth:`search_release_group` over it). ISRC
 lookups, artist browse and tracklists have no Lidarr equivalent, so those failures propagate.
 
-**Negative-caching a term Lidarr's metadata server always 503s on** (issue #18). A handful of
+**Negative-caching a term Lidarr's metadata server always 503s on**. A handful of
 search terms - a mangled artist/title pair SkyHook chokes on - fail server-side on every run for
 ever, and re-asking four times a day is pure waste. `_lidarr_search` / `_lidarr_lookup` skip a
 term still inside its cache TTL rather than calling Lidarr again, but the *decision to write* a
@@ -19,11 +19,11 @@ here: only when at least one *other* Lidarr metadata lookup succeeded this run, 
 ``api.lidarr.audio`` outage cannot poison the cache for a week. This class only tracks what would
 be written (`lidarr_metadata_new_failures`) and whether writing is safe
 (`lidarr_metadata_any_success`); it never touches the state database itself. The same cache and
-the same counters apply to the fallback after a MusicBrainz *error* as after a plain miss (#53):
+the same counters apply to the fallback after a MusicBrainz *error* as after a plain miss:
 an outage is exactly when every term is asked of Lidarr, so it is no time to re-ask the ones known
 to fail.
 
-**What was reached after a MusicBrainz failure** (issue #53). `mb_failure_count` counts every
+**What was reached after a MusicBrainz failure**. `mb_failure_count` counts every
 MusicBrainz failure this class saw, including the ones it answered some other way - Lidarr's
 name search, "no link". `core.resolver.resolve_all` reads it around each intent, and the shell
 does not cache an answer reached while it moved: it is this run's best answer, but MusicBrainz,
@@ -68,7 +68,7 @@ class CompositeLookup:
         """False once MusicBrainz has failed a lookup this run - feeds ``HealthRecord.mb_ok``."""
         self.mb_failure_count = 0
         """MusicBrainz lookups that failed this run, whether the failure was raised or answered some
-        other way. Only ever grows; `resolve_all` compares it before and after each intent (#53)."""
+        other way. Only ever grows; `resolve_all` compares it before and after each intent."""
         self.lidarr_metadata_ok = True
         """False once Lidarr's metadata proxy has failed - feeds ``HealthRecord.lidarr_metadata_ok``."""
         self._catalogue_too_large: list[str] = []
@@ -110,23 +110,23 @@ class CompositeLookup:
         """Name search: MusicBrainz first, then Lidarr's own ``album/lookup``.
 
         Lidarr is asked only when MusicBrainz failed or found nothing. Several MusicBrainz
-        candidates - different artists sharing the name and the title (issue #32) - are an answer,
+        candidates - different artists sharing the name and the title - are an answer,
         not a miss, and are passed through as they are: Lidarr's search matches on the same names
         and would only pick one of the same artists without any better reason to.
 
         Lidarr's answer is its candidates too - one per artist whose name and title match - not
-        its first hit (issue #42): the first of two same-named artists' albums is the same guess
-        #32 took out of the MusicBrainz path, and the resolver treats Lidarr's candidates exactly
+        its first hit: the first of two same-named artists' albums is the same guess left out
+        of the MusicBrainz path, and the resolver treats Lidarr's candidates exactly
         as it treats MusicBrainz's, so the track's ISRC decides between them or nothing does.
 
         A release group this fallback returns after MusicBrainz *errored* is recorded in
         `provisional_release_groups`, so the shell can use it this run without caching it as
         settled: it was never checked against MusicBrainz, and the next run should ask again.
         The error also moves `mb_failure_count`, which keeps *any* answer this intent reaches
-        out of the cache, not only one resting on these release groups (#53).
+        out of the cache, not only one resting on these release groups.
 
         After an error, Lidarr is asked through the same negative cache and counters as after a
-        miss (#53): a term still inside its TTL is not asked again, and counts as Lidarr failing.
+        miss: a term still inside its TTL is not asked again, and counts as Lidarr failing.
 
         Raises:
             MetadataError: only when *both* backends failed, a negative-cached Lidarr term
@@ -156,7 +156,7 @@ class CompositeLookup:
 
     @property
     def provisional_release_groups(self) -> frozenset[str]:
-        """Release groups this run found only through Lidarr, after MusicBrainz *failed* (#42).
+        """Release groups this run found only through Lidarr, after MusicBrainz *failed*.
 
         Good enough to act on this run - it is Lidarr's own catalogue - but not to cache as a
         settled resolution: MusicBrainz, the authority, never saw the question. A plain
@@ -179,13 +179,13 @@ class CompositeLookup:
         Includes a term skipped because its negative-cache entry is still fresh: it keeps its
         identity here even though Lidarr was not asked again, so `core.health` sees the same
         chronic `lidarr_metadata` identity every run rather than "resolved" then "new" each time
-        the entry expires and fails again (issue #18).
+        the entry expires and fails again.
         """
         return tuple(self._lidarr_metadata_failures)
 
     @property
     def lidarr_metadata_new_failures(self) -> tuple[str, ...]:
-        """Identities that failed a genuine Lidarr metadata attempt this run (issue #18).
+        """Identities that failed a genuine Lidarr metadata attempt this run.
 
         The candidates for `SqliteState.record_lidarr_negative_cache` - never a term that was
         already cached and simply skipped, since nothing was asked of Lidarr for it this run.
@@ -198,7 +198,7 @@ class CompositeLookup:
 
         The gate the caller checks before writing anything to the negative cache: without it, an
         `api.lidarr.audio` outage would cache every term it touched as unanswerable for
-        `negative_cache_days`, which is exactly the false positive issue #18 exists to avoid.
+        `negative_cache_days`, which is exactly the false positive this guards against.
         """
         return self._lidarr_metadata_any_success
 
@@ -220,12 +220,12 @@ class CompositeLookup:
 
     @property
     def mb_cache_hits(self) -> int:
-        """MusicBrainz queries this run answered from a fresh cache entry (issue #119)."""
+        """MusicBrainz queries this run answered from a fresh cache entry."""
         return int(getattr(self._primary, "cache_hits", 0))
 
     @property
     def mb_live_calls(self) -> int:
-        """MusicBrainz queries this run that actually went out over the network (issue #119)."""
+        """MusicBrainz queries this run that actually went out over the network."""
         return int(getattr(self._primary, "live_calls", 0))
 
     # ---------------------------------------------------------------- MusicBrainz only
@@ -324,9 +324,9 @@ class CompositeLookup:
         """
         return self._link("artist_disambiguation", artist_mbid, "")
 
-    # :class:`likearr.ports.CreditRelations` (issue #14). MusicBrainz only, like the outward links:
+    # :class:`likearr.ports.CreditRelations`. MusicBrainz only, like the outward links:
     # Lidarr's catalogue holds no artist relationships, and its name search already had its turn
-    # through `search_release_group_candidates`. A failure is recorded (#53) and never answered as
+    # through `search_release_group_candidates`. A failure is recorded and never answered as
     # "nothing": the other-credit search as no candidates, the relationships as ``None``, "could
     # not be read", on which the resolver chooses nothing. The intent stays UNMAPPED as it was.
 
@@ -409,7 +409,7 @@ class CompositeLookup:
         return result
 
     def _cached_failure(self, identity: str) -> bool:
-        """True when `identity` failed within the last `negative_cache_days` (issue #18)."""
+        """True when `identity` failed within the last `negative_cache_days`."""
         cached_at = self._negative_cache.get(identity)
         if cached_at is None:
             return False
@@ -417,7 +417,7 @@ class CompositeLookup:
         return age_days < self._negative_cache_days
 
     def _mb_failed(self) -> None:
-        """Flag the run, and count the failure for the intent being resolved (#53)."""
+        """Flag the run, and count the failure for the intent being resolved."""
         self.mb_ok = False
         self.mb_failure_count += 1
 

@@ -83,7 +83,7 @@ def test_a_dry_run_says_what_it_would_have_done() -> None:
 
 
 def test_the_headline_counts_artists_set_to_monitor_new_albums_none() -> None:
-    """#172: an apply whose only change is this write must not read as zeros everywhere."""
+    """An apply whose only change is this write must not read as zeros everywhere."""
     counts = {"monitored": 0, "unmonitored": 0, "added": 0, "new_items_none": 2}
 
     applied = describe_run(_row(counts=counts), now=NOW, tz=NY)
@@ -190,7 +190,7 @@ def test_a_skipped_or_stale_run_is_never_the_last_applied_run() -> None:
 
 
 def test_the_lost_state_count_comes_from_the_newest_run_that_planned() -> None:
-    """#175: a failed run after it read nothing from Lidarr, so it must not hide the warning."""
+    """A failed run after it read nothing from Lidarr, so it must not hide the warning."""
     planned = {"followed_artists": 3, "monitored": 0}
     rows = [
         _row(status=RunStatus.ERROR, exit_code=1, counts={}),
@@ -264,7 +264,7 @@ def test_the_reauth_countdown() -> None:
     assert late.days_left < 0
 
 
-# ---------------------------------------------------------------- reauth banner note (#138)
+# ---------------------------------------------------------------- reauth banner note
 
 
 def test_reauth_banner_note_is_empty_well_before_the_warn_window() -> None:
@@ -275,7 +275,7 @@ def test_reauth_banner_note_is_empty_well_before_the_warn_window() -> None:
 
 
 def test_reauth_banner_note_tells_no_token_from_an_undated_one() -> None:
-    """#118 already decided the wording for these two; this only decides which one applies."""
+    """The wording for these two is already decided; this only decides which one applies."""
     unknown = reauth_view(None, None, now=NOW)
 
     assert reauth_banner_note(unknown, has_token=False) == "no-token"
@@ -478,7 +478,7 @@ def test_no_run_for_longer_than_home_assistants_stale_sensor_needs_attention() -
 
 
 def test_a_paused_published_run_is_healthy_not_amber() -> None:
-    """Issue #68 phase 1: paused is its own state, not a stale or a failure - HA must not light
+    """Paused is its own state, not a stale or a failure - HA must not light
     amber just because the schedule is off on purpose."""
     row = _row(status=RunStatus.PAUSED, message="scheduled runs are paused: maintenance window")
 
@@ -498,7 +498,7 @@ def test_with_no_published_run_the_page_shows_a_problem() -> None:
 
 
 def test_the_stale_no_run_message_points_at_the_scheduler_not_a_cron_job() -> None:
-    """The scheduler moved in-process (#68); there is no cron job to check any more."""
+    """The scheduler moved in-process; there is no cron job to check any more."""
     late = int((NOW - timedelta(hours=14)).timestamp())
 
     glance = health_glance(_row(ts=late), now=NOW, tz=NY)
@@ -518,7 +518,7 @@ def test_a_new_collision_links_to_the_cards_only_when_they_are_shown() -> None:
     ]
 
 
-# ---------------------------------------------------------------- first-run checklist (#118)
+# ---------------------------------------------------------------- first-run checklist
 
 
 def test_the_checklist_is_gone_once_a_token_exists_and_a_run_published() -> None:
@@ -618,7 +618,7 @@ def test_coverage_counts_each_intent_once_and_the_outcomes_add_up() -> None:
 
 
 def test_not_monitored_matches_a_naive_membership_check() -> None:
-    """#8: the monitored set is built once, before the comprehension. Its count must still match
+    """The monitored set is built once, before the comprehension. Its count must still match
     a naive per-item membership check over the unbuilt list."""
     last = _last_run()
     c = coverage(last)
@@ -632,7 +632,7 @@ def test_not_monitored_matches_a_naive_membership_check() -> None:
 
 
 def test_an_ambiguous_same_name_match_has_its_own_line() -> None:
-    """Issue #32: two artists share the name, so nothing is monitored. Its own line since #60, so
+    """Two artists share the name, so nothing is monitored. It gets its own line, so
     each line equals the Not added page's card for it."""
     from dataclasses import replace
 
@@ -668,7 +668,7 @@ def test_an_advisory_guard_leaves_a_run_green() -> None:
     assert summary.guards == ()
 
 
-# ---------------------------------------------------------------- the banner's sentences (#39 follow-up)
+# ---------------------------------------------------------------- the banner's sentences
 
 from likearr.web.status import condition_sentence  # noqa: E402
 
@@ -778,7 +778,7 @@ def test_the_banner_uses_the_sentences_and_names_the_collision() -> None:
     ]
 
 
-# ---------------------------------------------------------------- #54
+# ---------------------------------------------------------------- part-way and part-failed applies
 
 
 def test_the_collision_card_goes_once_a_newer_check_no_longer_reports_it() -> None:
@@ -806,7 +806,7 @@ def test_an_apply_that_stopped_part_way_is_the_last_applied_and_says_how_far_it_
 
 
 def test_an_apply_that_fully_landed_but_lost_its_reply_is_not_read_as_part_way() -> None:
-    """#174: a batch Lidarr fully applied, whose confirmation was then lost, is not "3 of 3
+    """A batch Lidarr fully applied, whose confirmation was then lost, is not "3 of 3
     changes made" - that reads as partial when nothing was actually left undone."""
     landed = _row(
         status=RunStatus.ERROR,
@@ -836,7 +836,7 @@ def test_an_apply_that_failed_before_changing_anything_is_not_last_applied_and_s
         changes_planned=40,
         lidarr_changed=False,
     )
-    older_record = _row(status=RunStatus.ERROR, exit_code=1, message="lidarr down")  # before #54: unknown
+    older_record = _row(status=RunStatus.ERROR, exit_code=1, message="lidarr down")  # older record: unknown
 
     view = build_status([failed], now=NOW, tz=NY)
 
@@ -895,7 +895,7 @@ def test_changed_nothing_is_said_only_when_the_record_knows_nothing_was_written(
     assert describe_run(unsure, now=NOW, tz=NY).headline == "Failed: lidarr down"
 
 
-# ---------------------------------------------------------------- run history's Message column (#142)
+# ---------------------------------------------------------------- run history's Message column
 
 
 def test_short_message_leaves_a_short_message_unchanged() -> None:

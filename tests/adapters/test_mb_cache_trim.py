@@ -1,4 +1,4 @@
-"""Issue #123: `isrc-search` and `rg-tracks` cache rows keep only the fields likearr reads.
+"""`isrc-search` and `rg-tracks` cache rows keep only the fields likearr reads.
 
 Three things are pinned here:
 
@@ -43,7 +43,7 @@ ISRC = "XX0000000001"
 OTHER_ISRC = "XX9999999999"
 RG_MBID = "00000000-0000-4000-8000-000000000001"
 
-# The fields issue #123 names, spelled out independently of the code: a projector that drifts from
+# The fields the cache keeps, spelled out independently of the code: a projector that drifts from
 # this list fails `test_the_trimmed_kinds_and_their_fields_are_the_ones_the_issue_names`.
 EXPECTED_ISRC_SEARCH = {
     "recordings": {

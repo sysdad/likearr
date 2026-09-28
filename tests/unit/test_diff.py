@@ -199,7 +199,7 @@ def test_a_followed_only_catalogue_gap_is_informational_not_unmapped() -> None:
     assert result.refresh_artists == [], "an old promo is not waiting on Lidarr's refresh"
 
 
-# --------------------------------------------------------- recent catalogue gaps (issue #8)
+# --------------------------------------------------------- recent catalogue gaps
 
 
 def _gap_view():
@@ -420,7 +420,7 @@ def test_a_partially_live_reason_set_blocks_the_unmonitor() -> None:
     assert not result.unmonitor
 
 
-# ------------------------------------------- the one exception: an opted-out intent (#15)
+# ------------------------------------------- the one exception: an opted-out intent
 
 
 def _excluded(intent_key: str) -> Resolution:
@@ -517,8 +517,7 @@ def test_an_unchanged_reason_set_is_not_recorded() -> None:
     assert diff(desired_state((album, [LIKED])), view, {key: record}).update_reasons == []
 
 
-# A release still desired under a wholly different reason set is re-tagged, never unmonitored
-# (#69: AURORA, followed -> saved, was planned as both an update_reasons and an unmonitor).
+# A release still desired under a wholly different reason set is re-tagged, never unmonitored.
 _SWAPS = [
     pytest.param(FOLLOWED, SAVED, id="followed-to-saved"),
     pytest.param(LIKED, reason(ReasonKind.PLAYLIST, "t1", playlist_id="pl-a"), id="liked-to-playlist"),
@@ -543,7 +542,7 @@ def test_a_still_desired_release_whose_reasons_all_changed_is_not_unmonitored(wa
 
 @pytest.mark.parametrize(("was", "now"), _SWAPS)
 def test_a_release_no_longer_desired_is_still_let_go_when_its_reason_moved(was: Reason, now: Reason) -> None:
-    """The regression guard for #69: only a desired release is exempt. The old release is not."""
+    """The regression guard: only a desired release is exempt. The old release is not."""
     old, new = rg("rg-old", "Old"), rg("rg-new", "New")
     view = lidarr_view(
         artists=[lidarr_artist(ARTIST)],
@@ -597,7 +596,7 @@ def test_ratchets_are_skipped_when_the_profile_ids_are_unknown() -> None:
 
 
 def test_a_hand_managed_artist_whose_wanted_album_is_already_monitored_keeps_its_monitor_new_items() -> None:
-    """#172: a saved album the user already monitors by hand gives likearr nothing to own under the
+    """A saved album the user already monitors by hand gives likearr nothing to own under the
     artist, so its "Monitor New Albums" setting stays the user's."""
     album = rg("rg-1", "Record")
     view = lidarr_view(
@@ -674,7 +673,7 @@ def test_an_artist_already_on_none_is_never_listed() -> None:
 
 
 def test_monitor_new_items_is_set_to_none_on_an_artist_likearr_re_monitors() -> None:
-    """#172: turning an unmonitored artist back on is likearr's own action, so it must not
+    """Turning an unmonitored artist back on is likearr's own action, so it must not
     let Lidarr start auto-monitoring that artist's future albums, even with nothing claimed there."""
     album = rg("rg-1", "Record")
     view = lidarr_view(
@@ -756,7 +755,7 @@ def _digest_now(result, view) -> str:
 
 
 def test_an_artist_to_add_appearing_in_lidarr_makes_the_diff_stale() -> None:
-    """Issue #4: someone added the artist by hand after the plan. Applying it would record their
+    """Someone added the artist by hand after the plan. Applying it would record their
     artist as likearr's, so the reviewed plan must be refused and re-planned instead."""
     album = rg("rg-1", "Record")
     result = diff(desired_state((album, [SAVED])), lidarr_view())
@@ -815,7 +814,7 @@ def test_the_schema_guard_blocks_every_unmonitor() -> None:
 
 
 def test_a_short_spotify_read_refuses_every_unmonitor_but_adds_and_monitors_still_apply() -> None:
-    """#176: a read that fell short of Spotify's reported total arrives as `schema_ok=False`.
+    """A read that fell short of Spotify's reported total arrives as `schema_ok=False`.
 
     The likes it missed look like un-likes, so every unmonitor is refused, from every source, not
     only the short one. What the read did return is still acted on.
@@ -1274,7 +1273,7 @@ def test_the_guard_message_does_not_call_it_a_duplicate() -> None:
 
 
 def test_the_guard_message_offers_only_what_lidarr_can_do() -> None:
-    """Issue #32: Lidarr cannot rename an artist, so "add them under a distinct name" is gone."""
+    """Lidarr cannot rename an artist, so "add them under a distinct name" is gone."""
     existing = lidarr_artist(DUPLICATE_A, id=9001, name="Guns N' Roses")
     wanted = rg("rg-new", "Anything", artist_mbid=DUPLICATE_B, artist_name="Guns N' Roses")
 

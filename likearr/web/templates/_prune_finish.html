@@ -1,4 +1,4 @@
-{# "Finish the clean up" (#58): the checklist after Export. The page previews what it can, read-only,
+{# "Finish the clean up": the checklist after Export. The page previews what it can, read-only,
    as child jobs; the two steps that change something are commands, shown exactly. No command here
    carries --force, and none deletes anything. Refreshes itself while a preview runs. #}
 {% macro changes(tone, text) %}<span class="pill tone-{{ tone }}">{{ text }}</span>{% endmacro %}

@@ -1,4 +1,4 @@
-"""`likearr/web/static/errors.js` and its wiring into `base.html` (#129).
+"""`likearr/web/static/errors.js` and its wiring into `base.html`.
 
 An in-page action (any `hx-post`) that fails - the service down, a 5xx, a proxy error - must show
 a visible banner instead of leaving the control's new value on screen with nothing saved. These

@@ -2,7 +2,7 @@
 
 The version has exactly one source: the static ``version`` in ``pyproject.toml``. It is read
 here through ``importlib.metadata`` off the installed distribution, never hand-copied, so the
-two can't drift apart again (issue #113).
+two can't drift apart again.
 """
 
 from __future__ import annotations

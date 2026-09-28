@@ -1,4 +1,4 @@
-{# The Lidarr setup section of Settings (#85): preview, the inline confirm, the apply and its
+{# The Lidarr setup section of Settings: preview, the inline confirm, the apply and its
    re-check, all swapped in place. Polls only while its job runs. Nothing writes to Lidarr
    without "Yes, apply", the only button that sends confirmed=yes. #}
 {% set setup_job = setup.job %}
@@ -75,7 +75,7 @@
 
   {% set library = setup.library %}
   {% if library and library.unset %}
-  {# Issue #3: a first start has no root folder or quality profile; both come from Lidarr's lists. #}
+  {# A first start has no root folder or quality profile; both come from Lidarr's lists. #}
   <form method="post" action="/settings/lidarr-library" class="lidarr-library" id="lidarr-library">
     <input type="hidden" name="file_hash" value="{{ library.file_hash }}">
     <p class="warn">No run plans or applies until the root folder and quality profile are set.</p>

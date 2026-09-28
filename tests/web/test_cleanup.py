@@ -1,4 +1,4 @@
-"""Finishing a clean up (#58): the previews' files as the page reads them, and the commands."""
+"""Finishing a clean up: the previews' files as the page reads them, and the commands."""
 
 from __future__ import annotations
 

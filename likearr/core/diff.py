@@ -20,7 +20,7 @@ actually present in this run's snapshot) vetoes that: a reason still in the sour
 however badly it resolved.
 
 **...or the user opts it out.** The one exception, and the reason it is safe. An intent that
-resolved to a `track:excluded:*` step (issue #15) did not fail to resolve: it resolved to "the
+resolved to a `track:excluded:*` step did not fail to resolve: it resolved to "the
 user's configuration refuses this release". That answer is produced only by a deterministic rule
 written down in `[rules]`, never by a lookup, a timeout or an outage, so the argument above does
 not apply to it - and without the exception the opt-out would be inert, because the song is still
@@ -86,12 +86,10 @@ CATALOGUE_GAP_STEP = "lidarr:not-in-catalogue"
 RECENT_GAP_STEP = "lidarr:not-in-catalogue-yet"
 """Step for a catalogue gap that is a *recent or future* release: Lidarr's metadata has not caught up.
 
-The two look identical in the diff and were reported as one number, which is what hid issue #8: a
-followed artist's brand-new album is a catalogue gap until Lidarr's own scheduled refresh picks it
-up, and if that refresh never happens for the artist, nothing ever said so. The release date is
-what tells them apart - an undated or long-past release group is a promo, a bootleg or a
-non-Official pressing Lidarr deliberately never tracks, and refreshing for it would be pointless
-work on every run for ever.
+A followed artist's brand-new album is a catalogue gap until Lidarr's own scheduled refresh picks
+it up. The release date is what tells the two apart - an undated or long-past release group is a
+promo, a bootleg or a non-Official pressing Lidarr deliberately never tracks, and refreshing for
+it would be pointless work on every run for ever.
 """
 
 _GAP_STEPS = (CATALOGUE_GAP_STEP, RECENT_GAP_STEP)
@@ -443,7 +441,7 @@ def build_diff(
         if album is None or not album.monitored:
             continue
         # A release still desired is never unmonitored, even when none of its old reasons survive
-        # (unfollowed, but now saved): `update_reasons` re-tags it instead (#69).
+        # (unfollowed, but now saved): `update_reasons` re-tags it instead.
         if key in desired.releases:
             continue
         if any(r.key in live_reason_keys and r.key not in resolved_at for r in record.reasons):
@@ -500,7 +498,7 @@ def build_diff(
     )
 
     # ------------------------------------------------------------------ monitorNewItems
-    # "Monitor New Albums: None" only on an artist holding a release likearr owns (#172). A
+    # "Monitor New Albums: None" only on an artist holding a release likearr owns. A
     # hand-managed artist whose wanted release is already monitored keeps its own setting: what
     # Lidarr auto-monitors there is never owned, so likearr never unmonitors it. The five sets:
     # - `owned_artists`: artists likearr added or ratcheted.
@@ -698,7 +696,7 @@ def lidarr_digest(
     invalidate the plan.
 
     An artist to add is absent when the plan is made, so it adds nothing to the hash then: a plan
-    hashes as it did before its adds were covered, and goes stale only once one appears (issue #4).
+    hashes as it did before its adds were covered, and goes stale only once one appears.
     """
     h = hashlib.sha256()
     album_parts: list[str] = []

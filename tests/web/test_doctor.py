@@ -61,7 +61,7 @@ def test_a_missing_summary_field_is_not_a_view() -> None:
 
 
 def test_problems_come_failures_first_then_warnings_and_passes_apart() -> None:
-    """The Settings Doctor section leads with what needs attention (#85): every FAIL, then every
+    """The Settings Doctor section leads with what needs attention: every FAIL, then every
     WARN (and any level it does not know), each in the order doctor ran them; passes and skips
     are kept apart to be collapsed."""
     checks = [

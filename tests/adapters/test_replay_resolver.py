@@ -1,4 +1,4 @@
-"""Tests for `scripts/replay_resolver.py`'s Lidarr fallback check (issue #5).
+"""Tests for `scripts/replay_resolver.py`'s Lidarr fallback check.
 
 The snapshot is synthetic: a fresh state database with invented resolutions and `mb_cache` rows,
 written the way likearr writes them. Nothing here reads a real snapshot.
@@ -205,7 +205,7 @@ def test_compare_counts_expected_and_unexplained_moves_and_writes_rows_only_to_t
 
     printed = capsys.readouterr().out
     assert "lidarr fallback check, old -> new: 2 answer(s) moved" in printed
-    assert "1  expected (#5): lidarr-fallback, old accepts -> new refuses" in printed
+    assert "1  expected: lidarr-fallback, old accepts -> new refuses" in printed
     assert "1  needs an explanation: lidarr-fallback, old accepts -> new refuses" in printed
     for name in (WANTED, STRANGER, TITLE, "Fake Band", "Part Two"):
         assert name not in printed

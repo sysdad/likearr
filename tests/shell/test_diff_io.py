@@ -1,4 +1,4 @@
-"""`diff_from_run_dict`: decoding `runs.diff_json` (#76) - a different shape from this module's own
+"""`diff_from_run_dict`: decoding `runs.diff_json` - a different shape from this module's own
 `diff_to_dict`/`read_diff`, produced by `adapters.state_sqlite.record_run`'s `dataclasses.asdict`.
 """
 
@@ -66,7 +66,7 @@ def _diff(**overrides: object) -> Diff:
 
 
 def _stored_diff_dict(state: SqliteState, diff: Diff) -> dict[str, object]:
-    """`diff` as `record_run` actually stores it, read back through the accessor #76 adds."""
+    """`diff` as `record_run` actually stores it, read back through the accessor."""
     from likearr.models import HealthRecord, RunStatus
 
     record = HealthRecord(
@@ -112,8 +112,8 @@ def test_the_named_sections_decode_with_their_rows_intact(state: SqliteState) ->
 
 
 def test_update_reasons_pending_and_unmapped_decode_empty_rather_than_crash(state: SqliteState) -> None:
-    """These don't round-trip through `record_run`'s encoding (#76's docstring explains why), so
-    the decoder drops them instead of guessing wrong - it must not raise."""
+    """These don't round-trip through `record_run`'s encoding, so the decoder drops them instead
+    of guessing wrong - it must not raise."""
     raw = _stored_diff_dict(state, _diff())
 
     decoded = diff_from_run_dict(raw)

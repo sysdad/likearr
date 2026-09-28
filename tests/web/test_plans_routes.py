@@ -1,7 +1,7 @@
 """The Plans routes end to end (`likearr.web.routes.plans`): the Check for changes page, a dry
 run and its review, applying it, "Not this one" and the files-on-disk column.
 
-Split out of `test_app.py` with the routes themselves (#154); the shared fixtures are in
+Split out of `test_app.py` with the routes themselves; the shared fixtures are in
 `conftest.py`, the fake CLI and the other shared helpers in `app_support.py`.
 """
 
@@ -39,7 +39,7 @@ from tests.web.app_support import (
     _wait_until,
 )
 
-# ---------------------------------------------------------------- plans (#30)
+# ---------------------------------------------------------------- plans
 
 
 def _schedule_fires_soon(data_dir: Path) -> None:
@@ -52,7 +52,7 @@ def _schedule_fires_soon(data_dir: Path) -> None:
 
 
 def test_the_plan_page_warns_about_an_overlap_without_naming_home_assistant(client: TestClient, data_dir: Path) -> None:
-    """No `[health.mqtt]` in the fixture config (issue #139): the overlap warning names the health
+    """No `[health.mqtt]` in the fixture config: the overlap warning names the health
     status generically, not Home Assistant's retained record."""
     _schedule_fires_soon(data_dir)
     _login(client)
@@ -79,7 +79,7 @@ def test_the_plan_page_names_home_assistant_in_the_overlap_warning_with_mqtt_con
 def test_the_plan_page_warns_about_an_overlap_with_only_a_webhook_configured(
     client: TestClient, data_dir: Path
 ) -> None:
-    """With only `[health.webhook]` set (issue #139), the neutral wording renders too: it never
+    """With only `[health.webhook]` set, the neutral wording renders too: it never
     claims a notification target that isn't there."""
     _schedule_fires_soon(data_dir)
     _enable_webhook(data_dir)
@@ -187,7 +187,7 @@ def test_a_running_plan_job_does_not_note_first_check_once_one_is_recorded(
     _wait_for_job(client, job_id)
 
 
-# ---------------------------------------------------------------- failed job page: reason + remedy (#127)
+# ---------------------------------------------------------------- failed job page: reason + remedy
 
 
 def test_a_dry_run_is_not_started_while_a_scheduled_run_holds_the_lock(
@@ -244,7 +244,7 @@ def test_a_section_can_be_filtered_and_paged(client: TestClient, planned_diff: P
 
 
 def test_the_apply_action_appears_twice_with_the_same_href_and_label(client: TestClient, planned_diff: Path) -> None:
-    """#97.2: reachable right under the summary cards and again at the bottom, from the one partial
+    """Reachable right under the summary cards and again at the bottom, from the one partial
     (`_plan_apply_action.html`) so the two copies can never disagree."""
     _login(client)
     job_id = _start_plan(client)
@@ -259,7 +259,7 @@ def test_the_apply_action_appears_twice_with_the_same_href_and_label(client: Tes
     assert labels[0] == labels[1] == "Apply these changes…"
 
 
-# ---------------------------------------------------------------- #35 review fixes
+# ---------------------------------------------------------------- review edge cases
 
 
 def test_a_page_that_is_a_digit_but_not_a_number_is_page_one(client: TestClient, planned_diff: Path) -> None:
@@ -320,7 +320,7 @@ def test_plan_again_keeps_the_shrink_choice(
     assert 'name="accept_shrink" checked' in page
 
 
-# ---------------------------------------------------------------- apply (#30)
+# ---------------------------------------------------------------- apply
 
 
 def test_a_finished_plan_records_its_token(client: TestClient, data_dir: Path, planned_diff: Path) -> None:
@@ -432,7 +432,7 @@ def test_a_stale_apply_is_a_message_with_a_way_forward(
     assert "Failed" not in final
 
 
-# ---------------------------------------------------------------- "Not this one" (#30)
+# ---------------------------------------------------------------- "Not this one"
 
 
 def test_not_this_one_refuses_a_value_that_is_no_release(client: TestClient, planned_diff: Path) -> None:
@@ -527,7 +527,7 @@ def test_the_apply_job_runs_exactly_run_apply_on_the_plans_file_and_never_force(
     assert meta.drain and meta.plan_id == job_id
 
 
-# ---------------------------------------------------------------- #38 adversarial review
+# ---------------------------------------------------------------- adversarial review
 
 
 def test_an_apply_cannot_be_cancelled(
@@ -570,7 +570,7 @@ def test_editing_the_plans_contents_after_review_is_refused(
 def test_a_stale_browser_apply_says_what_will_show_as_stale_without_mqtt(
     client: TestClient, data_dir: Path, planned_diff: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """No `[health.mqtt]` in the fixture config (issue #139): the job fragment names Status only,
+    """No `[health.mqtt]` in the fixture config: the job fragment names Status only,
     never Home Assistant."""
     monkeypatch.setenv("FAKE_APPLY_EXIT", "3")
     _login(client)
@@ -614,13 +614,13 @@ def test_starting_a_check_is_the_primary_action_and_accept_shrink_is_optional(cl
     advanced = page[page.index("<summary>Advanced (optional)</summary>") :]
     assert 'name="accept_shrink"' in advanced
     assert "You don't need this to check." in advanced
-    assert "--accept-" not in page  # CLI flags are not named on the label (issue #139)
+    assert "--accept-" not in page  # CLI flags are not named on the label
 
 
 def test_apply_is_the_one_required_action_and_accept_health_is_optional_and_unticked(
     client: TestClient, planned_diff: Path
 ) -> None:
-    """No `[health.mqtt]` in the fixture config (issue #139): the optional-box copy names Status
+    """No `[health.mqtt]` in the fixture config: the optional-box copy names Status
     only, the raw command is tucked behind a disclosure, and no checkbox label names a CLI flag."""
     _login(client)
     job_id = _start_plan(client)
@@ -706,7 +706,7 @@ def _only_monitor_new_albums(data_dir: Path, planned_diff: Path) -> None:
 def test_a_check_whose_only_change_is_monitor_new_albums_shows_it_and_offers_a_real_apply(
     client: TestClient, data_dir: Path, planned_diff: Path
 ) -> None:
-    """#172: the review used to say "Nothing to change" and offer "Apply anyway" for this plan."""
+    """The review used to say "Nothing to change" and offer "Apply anyway" for this plan."""
     _only_monitor_new_albums(data_dir, planned_diff)
     _login(client)
     job_id = _start_plan(client)
@@ -724,7 +724,7 @@ def test_a_check_whose_only_change_is_monitor_new_albums_shows_it_and_offers_a_r
     assert '<button type="submit" class="primary">Apply these changes</button>' in confirm
 
 
-# ---------------------------------------------------------------- files on disk behind an unmonitor (#30)
+# ---------------------------------------------------------------- files on disk behind an unmonitor
 
 
 def _counting_app(data_dir: Path, fake_cli: list[str]) -> Any:
@@ -763,7 +763,7 @@ def test_a_check_counts_the_files_behind_its_unmonitors_in_a_child_job(
 def test_after_a_check_the_names_fetch_waits_for_the_file_count(
     data_dir: Path, fake_cli: list[str], planned_diff: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The after-check chain's order (#266 moved it): the count starts first, and the names fetch
+    """The after-check chain's order: the count starts first, and the names fetch
     only once the count has finished, never alongside it or instead of it."""
     _cache_names(data_dir, {"pl-owned": "Road trip"})  # pl-gone has no name: names are needed
     monkeypatch.setenv("LIKEARR_LIDARR_API_KEY", API_KEY_SENTINEL)

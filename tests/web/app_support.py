@@ -1,7 +1,7 @@
 """What the web app's end-to-end tests share: the fixture config, the fake CLI every job runs
 as, and the helpers more than one test file calls. The fixtures themselves are in `conftest.py`.
 
-Split out of `test_app.py` (#154).
+Split out of `test_app.py`.
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ cron = "20 */6 * * *"
 timezone = "America/New_York"
 
 [prune]
-enabled = true  # Clean up is off by default (#148); its suites run with it on
+enabled = true  # Clean up is off by default; its suites run with it on
 
 [ui]
 """
@@ -236,7 +236,7 @@ def _login(client: TestClient) -> None:
 
 
 def _clean_up_off(data_dir: Path) -> None:
-    """Turn Clean up off in the fixture config.toml (#148): it ships with `[prune] enabled = true`
+    """Turn Clean up off in the fixture config.toml: it ships with `[prune] enabled = true`
     so Clean up's own suites run as before. Read fresh on every request, like `_enable_mqtt`."""
     config = data_dir / "config.toml"
     text = config.read_text()

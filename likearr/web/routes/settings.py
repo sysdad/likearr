@@ -1,6 +1,6 @@
 """Settings, Spotify connect, Lidarr setup and Doctor: the Settings page and its sections' routes.
 
-Split out of `likearr.web.app` (#154); `create_app` mounts `ROUTES` where these routes always
+Split out of `likearr.web.app`; `create_app` mounts `ROUTES` where these routes always
 stood in its list.
 """
 
@@ -52,7 +52,7 @@ from likearr.web.jobs import JobMeta, JobRefused, JobState
 from likearr.web.status import ReauthView, reauth_view
 
 log = logging.getLogger("likearr.web.app")
-"""Under the app's own name, so log lines read as they did before the split (#154)."""
+"""Under the app's own name, so log lines read as they did before the split."""
 
 
 PLAYLISTS_FRESH = timedelta(minutes=10)
@@ -88,10 +88,10 @@ def _picker(
       save made meanwhile keeps it.
     - Answered: every playlist `GET /me/playlists` lists, readable or not, checked if selected,
       plus any selected id Spotify did not list at all. A readable entry - owned, or one you
-      collaborate on once the token has ``playlist-read-collaborative`` (#103, item 3) - is a
+      collaborate on once the token has ``playlist-read-collaborative`` - is a
       normal checkbox. An unreadable one not already configured (followed, someone else's, or
       one of Spotify's own algorithmic or editorial playlists) is greyed out, disabled and
-      carries the reason and the workaround (issue #103, item 1); a collaborative one the token
+      carries the reason and the workaround; a collaborative one the token
       cannot read yet says to re-authorize instead - a disabled checkbox never posts its value,
       so it can never be *added* by clicking it. An unreadable one that *is*
       already configured is greyed out too, but stays checked and rides a hidden input, so an
@@ -150,7 +150,7 @@ def _picker(
             str(p.get("name") or ""),
             tracks=p.get("track_count"),
             checked=str(p["id"]) in selected,
-            # Owned, or collaborative once the token may read it (#103, item 3).
+            # Owned, or collaborative once the token may read it.
             readable=_readable(p),
             needs_reauth=p.get("needs_reauth") is True,
         )
@@ -250,7 +250,7 @@ async def settings_save(request: Request) -> Response:
     posted_playlists = values.get(("spotify", "playlists"))
     if isinstance(posted_playlists, tuple):
         # "Remove from settings" is the one way to drop a configured-but-not-owned playlist on
-        # purpose (issue #103): its own checkbox is disabled (see `_picker`), so nothing removes
+        # purpose: its own checkbox is disabled (see `_picker`), so nothing removes
         # it just by being posted back unchanged.
         remove_ids = {v.strip() for v in posted.get("spotify.playlists.remove", []) if v.strip()}
         if remove_ids:
@@ -414,7 +414,7 @@ async def settings_resume(request: Request) -> Response:
 
 
 async def settings_cleanup(request: Request) -> Response:
-    """Turn Clean up on or off (#148): `[prune] enabled`, through the same backed-up write as every
+    """Turn Clean up on or off: `[prune] enabled`, through the same backed-up write as every
     other save, with no confirm - see `cfg.plan_cleanup`."""
     web = _web(request)
     posted = await _posted(request)
@@ -454,7 +454,7 @@ async def settings_cleanup(request: Request) -> Response:
 def settings_schedule_preview(request: Request) -> Response:
     """GET /settings/schedule/preview: the live "Next fires" fragment, from the cron and timezone
     fields as typed - not the saved ones. Read-only: writes nothing, needs no `file_hash`, and
-    never touches config.toml (issue #86). `hx-include` on the schedule form's own fields is what
+    never touches config.toml. `hx-include` on the schedule form's own fields is what
     carries both values here on every keystroke."""
     web = _web(request)
     cron = request.query_params.get("schedule.cron", "")
@@ -521,7 +521,7 @@ async def settings_schedule(request: Request) -> Response:
     return RedirectResponse("/settings", status_code=303)
 
 
-# ---------------------------------------------------------------- Spotify connect (#79)
+# ---------------------------------------------------------------- Spotify connect
 
 
 SPOTIFY_DOCS = "https://github.com/sysdad/likearr/blob/main/docs/spotify.md"
@@ -587,7 +587,7 @@ def spotify_status(config: Config, *, now: datetime) -> dict[str, Any]:
         "account": read_account(config.spotify.token_file),
         "granted_scopes": sorted(granted) if granted else [],
         "has_token": has_token,
-        # #161: a plain Re-authorize keeps write access the token already has; offer the opt-in only without it.
+        # A plain Re-authorize keeps write access the token already has; offer the opt-in only without it.
         "keeps_write": asks_for_write_scopes(config.spotify.token_file),
         "reason": _reauth_reason(reauth, has_token=has_token, revoked=revoked, needs_collaborative=needs_collaborative),
         "callback_mode": bool(config.ui.public_url),
@@ -602,11 +602,11 @@ async def spotify_connect_start(request: Request) -> Response:
     `[ui] public_url` is https) and show its next step. See `web.spotify_connect`'s docstring for
     why the exchange this eventually leads to runs in-process rather than as a child job.
 
-    Read scopes only by default (#161). A posted ``promote_save=1`` - the web UI's
+    Read scopes only by default. A posted ``promote_save=1`` - the web UI's
     ``likearr auth --promote-save`` - adds the write scopes, as does a token that already has
     them (`asks_for_write_scopes`). The choice is recorded server-side with the attempt.
 
-    promote-save follows Clean up's switch (#148): while `[prune] enabled` is off the box is not
+    promote-save follows Clean up's switch: while `[prune] enabled` is off the box is not
     shown, and a posted ``promote_save=1`` is ignored. A token that already has write access keeps
     it on a re-auth either way - dropping it quietly would be its own surprise."""
     web = _web(request)
@@ -652,7 +652,7 @@ async def spotify_connect_start(request: Request) -> Response:
     # Chromium and WebKit browsers check `form-action` on each redirect of a form submission,
     # against the page that submitted it, and drop a hop it does not allow without a word. So a 303
     # from here to Spotify works only when that page allowed Spotify and the `public_url` origin
-    # Spotify may send the same navigation straight back to (#11): direct-callback mode, reached at
+    # Spotify may send the same navigation straight back to: direct-callback mode, reached at
     # `public_url` itself. `web.render` widens those pages' `form-action` in exactly that case
     # (`CONNECT_FORM_PAGES`), and this answer carries the same policy. Anywhere else - paste-back
     # mode, or the UI opened at another address - the answer is a same-origin page with a plain
@@ -729,16 +729,16 @@ _CHANGED_MEANWHILE = (
 async def _connected(web: _Web, config: Config, tokens: TokenSet, *, include_write: bool) -> str:
     """After a save: fetch playlist names if needed, and say what was granted."""
     log.info("spotify connected from the web UI: scopes %s", tokens.scope or "(none reported)")
-    # A token now exists, so `names_needed` no longer holds this back (#118): with an empty names
+    # A token now exists, so `names_needed` no longer holds this back: with an empty names
     # cache, fetch them now rather than leaving Status without playlist names until the next check.
     # It also re-lists when the new token may read collaborative playlists the last listing greyed
-    # out for want of the scope (#103, item 3), so the picker and a save stop refusing them.
+    # out for want of the scope, so the picker and a save stop refusing them.
     if web.settings.auto_fetch_names:
         await anyio.to_thread.run_sync(web.fetch_names_if_needed)
     granted = tokens.scope or "(none reported)"
     who = f" as {tokens.account.label}" if tokens.account else ""
     connected = f"Spotify connected{who}. Granted scopes: {granted}."
-    # What this attempt asked for comes from the server-side pending entry, never the callback (#161).
+    # What this attempt asked for comes from the server-side pending entry, never the callback.
     missing_write = sorted(set(SPOTIFY_WRITE_SCOPES) - set(tokens.scope.split()))
     if not missing_write:
         return connected
@@ -747,7 +747,7 @@ async def _connected(web: _Web, config: Config, tokens: TokenSet, *, include_wri
             f"{connected} Spotify did not grant the write access promote-save needs (missing "
             f"{', '.join(missing_write)}), so promote-save will refuse until you re-authorize and approve it."
         )
-    if not config.prune.enabled:  # promote-save is part of Clean up (#148): nothing to offer
+    if not config.prune.enabled:  # promote-save is part of Clean up: nothing to offer
         return connected
     return f"{connected} Read access only. To use promote-save, re-authorize with its write-access box ticked."
 
@@ -835,7 +835,7 @@ async def spotify_callback(request: Request) -> Response:
         config = web.config()
     except ConfigError as exc:
         # No login here, and in direct-callback mode the route faces the internet: the detail
-        # (a quoted bad value, the config path) goes to the log only, as `/healthz` does (#171).
+        # (a quoted bad value, the config path) goes to the log only, as `/healthz` does.
         log.warning("spotify callback: config.toml does not load: %s", exc)
         message = "likearr's configuration has a problem; log in to see it"
         return web.render(request, "spotify_callback.html", {"message": message}, 503)
@@ -857,7 +857,7 @@ async def spotify_callback(request: Request) -> Response:
     return web.render(request, "spotify_callback.html", {"message": result})
 
 
-# ---------------------------------------------------------------- Lidarr setup + Doctor, in Settings (#80, #85)
+# ---------------------------------------------------------------- Lidarr setup + Doctor, in Settings
 #
 # Both live in their own Settings section, each one htmx fragment (`_doctor.html`,
 # `_lidarr_setup.html`) that polls every 2 seconds only while its job runs, and answers the poll
@@ -883,7 +883,7 @@ def _doctor_panel(web: _Web, meta: JobMeta | None, note: str = "") -> dict[str, 
 
 
 def _broken_settings(web: _Web, exc: Exception) -> dict[str, Any]:
-    """Settings when config.toml does not load: no form, but Doctor still renders (#85)."""
+    """Settings when config.toml does not load: no form, but Doctor still renders."""
     return {"config_error": str(exc), "doctor": _doctor_panel(web, _latest(web.runner.jobs(), "doctor"))}
 
 
@@ -891,7 +891,7 @@ def _setup_panel(web: _Web, meta: JobMeta | None, **extra: Any) -> dict[str, Any
     """The Lidarr setup section for its newest job: a preview (and its table once finished) or
     an apply (and its output once finished). `extra` is `confirm`, `note` or `recheck`.
 
-    `library` is what the "Lidarr library" picker (#3) needs: the file's hash and the two
+    `library` is what the "Lidarr library" picker needs: the file's hash and the two
     `[lidarr]` keys a first start leaves unset, or ``None`` when config.toml does not load."""
     view = None
     output = ""
@@ -945,7 +945,7 @@ async def lidarr_setup_preview_start(request: Request) -> Response:
 
 def lidarr_setup_poll(request: Request) -> Response:
     """GET /settings/lidarr-setup/{job_id}: the section's poll, for a preview or an apply. A
-    plain visit (an old link to the #80 page) goes to the section, which shows the newest job.
+    plain visit (an old link to this page) goes to the section, which shows the newest job.
 
     The poll that sees an apply finish cleanly answers with a read-only preview queued on
     `load` - the re-check. Only that poll: opening Settings later never starts one."""
@@ -962,7 +962,7 @@ def lidarr_setup_poll(request: Request) -> Response:
 
 async def lidarr_setup_apply(request: Request) -> Response:
     """POST /settings/lidarr-setup/{job_id}/apply: the second confirm, then `setup-profiles --apply`
-    as a child job (issue #80's Requirements) - `lidarr_setup.APPLY_ARGV`, the same fixed argv
+    as a child job - `lidarr_setup.APPLY_ARGV`, the same fixed argv
     every time, never built from anything the request carries. Nothing is started without
     ``confirmed=yes``, which only the inline "Yes, apply" button sends."""
     web = _web(request)
@@ -993,7 +993,7 @@ def _library_choices(web: _Web) -> lidarr_setup.LidarrSetupView | None:
 
 async def lidarr_library(request: Request) -> Response:
     """POST /settings/lidarr-library: save the root folder and quality profile picked from Lidarr's
-    own lists (#3), through the same backed-up write as every other save. A value must be one the
+    own lists, through the same backed-up write as every other save. A value must be one the
     newest preview listed, so the form can only ever write a name Lidarr has."""
     web = _web(request)
     posted = await _posted(request)
@@ -1029,7 +1029,7 @@ async def lidarr_library(request: Request) -> Response:
 
 
 def _after_setup_preview(web: _Web, meta: JobMeta) -> None:
-    """A preview's after-callback (#3): with no root folder chosen and exactly one in Lidarr, use
+    """A preview's after-callback: with no root folder chosen and exactly one in Lidarr, use
     it - there is nothing to choose between. Written like any Settings save, backup included. The
     quality profile is always picked by hand: Lidarr ships several."""
     view = lidarr_setup.parse_setup_profiles_json(web.runner.output(meta.id))
@@ -1055,7 +1055,7 @@ def _after_setup_preview(web: _Web, meta: JobMeta) -> None:
 
 
 def preview_setup_if_needed(web: _Web) -> None:
-    """At start (#3): with the Lidarr URL set but a root folder or quality profile not chosen, ask
+    """At start: with the Lidarr URL set but a root folder or quality profile not chosen, ask
     Lidarr for its lists now, so Settings has them and a single root folder is taken by itself."""
     try:
         lidarr = web.config().lidarr
@@ -1087,7 +1087,7 @@ async def doctor_start(request: Request) -> Response:
 
 
 def doctor_redirect(request: Request) -> Response:
-    """GET /doctor: Doctor is a Settings section now (#85); old links land on it."""
+    """GET /doctor: Doctor is a Settings section now; old links land on it."""
     return RedirectResponse("/settings#doctor", status_code=303)
 
 

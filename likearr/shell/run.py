@@ -9,7 +9,7 @@ through leaves a consistent picture that the next run finishes rather than a lie
 recover from.
 
 This module is the command that ties them together under the run lock. The parts live in their
-own modules (#156): `plan` in `shell.plan`, `apply` in `shell.apply`, their results in
+own modules: `plan` in `shell.plan`, `apply` in `shell.apply`, their results in
 `shell.run_types`, and the health record and the printed summaries in `shell.run_report`. The
 names other modules import are re-exported here.
 
@@ -170,14 +170,14 @@ def run_command(
         # run that is already applying. A hand run (`run`, `run --apply`, no `--scheduled`) never
         # reaches this check: pause stops the cron line, not the user. `ts` still has to
         # stay fresh for the HA dead-man, so this still publishes, exactly like the skipped-lock
-        # path below. The first-apply gate (#111) is the same check for the same reasons, and it
+        # path below. The first-apply gate is the same check for the same reasons, and it
         # comes before `plan`, so a fire before Spotify is connected is `paused`, not `error`.
         log.info("scheduled run skipped: %s", held)
         _publish(ctx, _held_record(held, dry_run=dry_run), diff=None)
         return EXIT_OK
 
     if setup_needed := ctx.config.lidarr.library_needed:
-        # Issue #3: a first start has no root folder or quality profile until one is picked, and
+        # A first start has no root folder or quality profile until one is picked, and
         # a plan without them could not add an artist anywhere. Refused, not skipped, so a
         # scheduled run past the first-apply gate still turns the health sensor.
         log.error("refusing to run: %s", setup_needed)
@@ -248,7 +248,7 @@ def run_command(
             log.debug("%s", "".join(traceback.format_exception(cause)))
         if made and made >= stop.planned:
             # Every planned change reached Lidarr (a batch it applied but then answered with an
-            # error, #174) - "stopped part-way" would be wrong, nothing was left undone.
+            # error) - "stopped part-way" would be wrong, nothing was left undone.
             message = (
                 f"the apply finished: all {stop.planned} planned changes were made, but confirming it failed: {why}"
             )
@@ -285,7 +285,7 @@ def run_command(
         return EXIT_ERROR
     except QuotaExceeded as exc:
         if scheduled:
-            # A spent quota (detected since #61) is not this run's fault and
+            # A spent quota is not this run's fault and
             # will not clear before the next regular slot, so it exits clean rather than error -
             # and, critically, the scheduler must not treat it as a missed fire: retrying sooner
             # only spends more of a quota that is already gone. A hand run keeps today's behaviour
@@ -371,7 +371,7 @@ def run_command(
 
 
 FIRST_APPLY_MESSAGE = "waiting for your first reviewed apply: connect Spotify, then review and apply your first plan"
-"""The `paused` message of a scheduled run held until a hand `run --apply` has completed (#111).
+"""The `paused` message of a scheduled run held until a hand `run --apply` has completed.
 On a new install the schedule is on from the start, and without this the first unattended fire
 after Connect Spotify would apply the whole first plan - every artist add and every monitor -
 with nobody having seen it."""
@@ -424,7 +424,7 @@ def scheduled_run_without_state(config: Config, sinks: Sequence[HealthSink], *, 
 
 
 def _record_first_apply(ctx: Context, now: datetime) -> None:
-    """Record the first hand apply (#111), which lets scheduled applies start. Bookkeeping after an
+    """Record the first hand apply, which lets scheduled applies start. Bookkeeping after an
     apply that already succeeded, so a failure here is logged, never the run's result."""
     try:
         ctx.state.record_first_apply(now)
@@ -465,7 +465,7 @@ def _run_locked(
         # A usage outcome, not a fault: nothing was planned or changed, and the remedy is a
         # re-plan the user is about to make. So stdout and the runs table only - publishing it to
         # a retained sink would light Home Assistant's amber (`stale` is a member) and reset its
-        # dead-man's switch for a run that did nothing, just as a hand dry-run would (issue #19).
+        # dead-man's switch for a run that did nothing, just as a hand dry-run would.
         _publish(
             ctx,
             _record(status=RunStatus.STALE, exit_code=EXIT_STALE, message=str(exc), dry_run=False),
@@ -495,7 +495,7 @@ def _run_locked(
     print_applied(applied, diff)
     if not scheduled:
         # A hand `run --apply` of a reviewed diff (the browser's Apply, or a terminal) that got
-        # through its apply step: from here on, scheduled applies may go ahead (#111).
+        # through its apply step: from here on, scheduled applies may go ahead.
         _record_first_apply(ctx, now)
     fresh = replace(fresh, lidarr_metadata_ok=applied.lidarr_metadata_ok)
     observation, delta, verdict = _assess(ctx, fresh, applied, diff)

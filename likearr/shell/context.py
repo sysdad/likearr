@@ -128,7 +128,7 @@ class Context:
     """Where a name collision's MusicBrainz disambiguations come from. Normally the composite
     lookup; a separate field so the dependency is explicit and a test can supply just this."""
     artist_relations: CreditRelations | None = None
-    """Where a liked track's credit is joined to MusicBrainz's by a relationship (issue #14).
+    """Where a liked track's credit is joined to MusicBrainz's by a relationship.
     Normally the composite lookup; ``None`` runs the resolver without that rule."""
     spotify_error: str | None = None
     """Why Spotify is unavailable, when it is. `doctor` reports it; `run` refuses without it."""
@@ -193,7 +193,7 @@ def build_context(
 
     try:
         # The API key travels in X-Api-Key, which httpx does not strip on a cross-origin
-        # redirect, so no request (redirect hops included) may leave Lidarr's own origin (#171).
+        # redirect, so no request (redirect hops included) may leave Lidarr's own origin.
         lidarr_client = build_client(timeout=LIDARR_TIMEOUT, pinned_origin=config.lidarr.url)
         closeables.append(lidarr_client)
         lidarr = LidarrClient(config.lidarr, lidarr_client)
@@ -209,7 +209,7 @@ def build_context(
         closeables.append(musicbrainz)
         # A snapshot, not a live read: nothing else writes to this table while the run is in
         # progress, and `plan` decides at the *end* of the run whether to write anything back
-        # (issue #18 - only when at least one other Lidarr metadata lookup succeeded this run).
+        # (only when at least one other Lidarr metadata lookup succeeded this run).
         composite = CompositeLookup(
             musicbrainz,
             lidarr,

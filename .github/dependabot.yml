@@ -9,7 +9,7 @@ updates:
       minor-and-patch:
         update-types: ["minor", "patch"]
 
-  # Actions used by .github/workflows/ci.yml. CI pins each action to a commit SHA (#136);
+  # Actions used by .github/workflows/ci.yml. CI pins each action to a commit SHA;
   # these updates keep those pins current.
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -23,7 +23,7 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    # Digest bumps only. Moving Python past 3.12 or uv past 0.6 is a deliberate upgrade (#126),
+    # Digest bumps only. Moving Python past 3.12 or uv past 0.6 is a deliberate upgrade,
     # not bot work.
     ignore:
       - dependency-name: "python"

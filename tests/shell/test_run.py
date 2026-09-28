@@ -91,7 +91,7 @@ NEW_ALBUM = rg("rg-new", "Just Out", released="2026-09-11")
 
 
 def new_release_world(*, lidarr_gets_it: bool = True) -> tuple[FakeSource, FakeLookup, FakeLidarr]:
-    """Issue #8: MusicBrainz has the artist's new album; Lidarr's catalogue does not yet.
+    """MusicBrainz has the artist's new album; Lidarr's catalogue does not yet.
 
     `lidarr_gets_it` decides whether a RefreshArtist actually brings the album in, which is the
     difference between "Lidarr was simply behind" and "Lidarr's metadata is stuck on this artist".
@@ -177,7 +177,7 @@ def _saved_album_world(tmp_path: Path, sink: CapturingSink, lookup: FakeLookup) 
 
 
 def test_a_cached_answer_expires_and_picks_up_a_musicbrainz_correction(tmp_path: Path, sink: CapturingSink) -> None:
-    """Issue #165, end to end: a young cached answer is reused with no lookup; one past its jittered
+    """End to end: a young cached answer is reused with no lookup; one past its jittered
     max age (at least 4/3 of `positive_cache_days`, so 120 days by default) is looked up again."""
     corrected = rg("rg-fixed", "First Album")
     lookup = FakeLookup().add(ALBUM, corrected)
@@ -202,7 +202,7 @@ def test_a_cached_answer_expires_and_picks_up_a_musicbrainz_correction(tmp_path:
 
 
 def test_an_expired_single_fallback_is_never_unmonitored(tmp_path: Path, sink: CapturingSink) -> None:
-    """#165 review, end to end: a liked song settled on its undated single by the pending clock is
+    """End to end: a liked song settled on its undated single by the pending clock is
     applied, its clock cleared; when the answer expires the re-check keeps the single, so the
     second apply unmonitors nothing and nothing goes back to waiting."""
     from tests.unit.fakes import track_intent
@@ -260,7 +260,7 @@ def test_a_zero_positive_cache_age_checks_every_answer_every_run() -> None:
 def test_every_run_refuses_while_the_root_folder_or_quality_profile_is_unset(
     tmp_path: Path, sink: CapturingSink, unset: str, do_apply: bool, scheduled: bool
 ) -> None:
-    """Issue #3: a first start leaves both unset until Settings picks them. No plan or apply runs,
+    """A first start leaves both unset until Settings picks them. No plan or apply runs,
     none touches Lidarr, and the refusal is published, so a scheduled one still reaches the sinks."""
     source, lookup, lidarr = followed_world()
     config = make_config(tmp_path)
@@ -308,7 +308,7 @@ def _h11_refuses_the_headers(request: httpx.Request) -> httpx.Response:
 def test_a_lidarr_key_with_a_raw_newline_reaches_no_error_log_webhook_or_mqtt_payload(
     tmp_path: Path, sink: CapturingSink, capsys: pytest.CaptureFixture[str], preserve_root_logging: None
 ) -> None:
-    """Issue #7. Config strips the key when it reads it; this builds the client with the raw key to
+    """Config strips the key when it reads it; this builds the client with the raw key to
     prove the redaction behind that stripping holds on its own, all the way to every sink.
 
     Logging is set up as `likearr run -v` sets it up, after `capsys`, so every log line lands on
@@ -518,7 +518,7 @@ def test_a_diff_planned_before_a_release_was_denied_is_refused(tmp_path: Path, s
 
 
 def test_a_denied_release_of_a_followed_artist_is_not_monitored(tmp_path: Path, sink: CapturingSink) -> None:
-    """#153, option B: `deny_releases` reaches the followed catalogue, so "Not this one" on a
+    """`deny_releases` reaches the followed catalogue, so "Not this one" on a
     followed artist's EP keeps it out of Lidarr while the rest of the catalogue is monitored."""
     source, lookup, lidarr = followed_world()
     with make_context(tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink) as ctx:
@@ -629,7 +629,7 @@ def test_a_ratchet_refresh_failure_also_skips_that_artists_own_unmonitor(tmp_pat
     already exists, is due a profile ratchet, and owns a release that should now come off - and the
     RefreshArtist that follows the ratchet fails. The artist must be skipped exactly as an add's
     failed refresh would skip it, so the stale ownership row survives instead of being unmonitored
-    against a catalogue Lidarr never finished reading (issue #132, kills M1 and M2)."""
+    against a catalogue Lidarr never finished reading (kills M1 and M2)."""
     saved = spotify_album("Live At Somewhere", spotify_id="sp-live", upc="222")
     lookup = FakeLookup().add(ALBUM, LIVE)
     lookup.catalogues["artist-1"] = ["rg-1"]  # the EP has left the followed catalogue this run
@@ -703,7 +703,7 @@ def test_a_newly_skipped_artist_degrades_once_there_is_a_baseline(tmp_path: Path
     assert "1 artist(s) newly skipped" in sink.last.message
 
 
-# ------------------------------------------------- an artist Lidarr refuses to add (issue #173)
+# ------------------------------------------------- an artist Lidarr refuses to add
 
 
 def two_artist_world() -> tuple[FakeSource, FakeLookup, FakeLidarr]:
@@ -781,7 +781,7 @@ def test_a_metadata_outage_on_add_skips_that_artist_and_the_rest_applies(tmp_pat
 def test_a_metadata_outage_on_add_is_a_skipped_artist_not_a_catalogue_gap(tmp_path: Path, sink: CapturingSink) -> None:
     """Nothing was ever added for this artist, so its releases must not be reported as a Lidarr
     catalogue gap either: that would retry them as `unmapped_in_lidarr` forever alongside the skip,
-    double-counting one failure as two different faults (issue #132, kills M3)."""
+    double-counting one failure as two different faults (kills M3)."""
     source, lookup, lidarr = two_artist_world()
     lidarr.fail_add = {"artist-2"}
     with make_context(tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink) as ctx:
@@ -794,7 +794,7 @@ def test_a_metadata_outage_on_add_is_a_skipped_artist_not_a_catalogue_gap(tmp_pa
 
 
 def test_a_refused_add_does_not_hold_back_an_existing_artists_monitor(tmp_path: Path, sink: CapturingSink) -> None:
-    """Rig B (#173): an artist already in Lidarr with a wanted album unmonitored, and a followed
+    """Rig B: an artist already in Lidarr with a wanted album unmonitored, and a followed
     artist Lidarr refuses. The album is monitored on the same run."""
     source, lookup, lidarr = two_artist_world()
     lidarr.seed(lidarr_artist("artist-1"), lidarr_album(ALBUM, id=101), lidarr_album(EP, id=102))
@@ -808,7 +808,7 @@ def test_a_refused_add_does_not_hold_back_an_existing_artists_monitor(tmp_path: 
 
 
 def test_a_bad_request_on_add_still_stops_the_apply(tmp_path: Path, sink: CapturingSink) -> None:
-    """Only the refusals #173 names are skipped. A 400 about what likearr sent (a root folder, a
+    """Only an "already exists" refusal is skipped. A 400 about what likearr sent (a root folder, a
     profile) is likearr's mistake, and skipping it would hide it on every run."""
     source, lookup, lidarr = two_artist_world()
     lidarr.reject_add = {"artist-2"}
@@ -820,7 +820,7 @@ def test_a_bad_request_on_add_still_stops_the_apply(tmp_path: Path, sink: Captur
     assert "Root folder" in sink.last.message
 
 
-# ------------------------------------------------- an artist someone else adds first (issue #4)
+# ------------------------------------------------- an artist someone else adds first
 
 
 def test_an_artist_someone_else_added_first_is_left_to_them(
@@ -857,7 +857,7 @@ def test_an_artist_someone_else_added_first_is_left_to_them(
 
 def test_an_artist_carrying_likearrs_tag_is_likearrs_own_add_resumed(tmp_path: Path, sink: CapturingSink) -> None:
     """The same "already exists" on an artist that carries likearr's tag is likearr's own add from
-    a run that stopped before recording it: recorded, refreshed and re-monitored, as before #4."""
+    a run that stopped before recording it: recorded, refreshed and re-monitored."""
     source, lookup, lidarr = two_artist_world()
     lidarr.added_elsewhere = {"artist-2": True}
     with make_context(tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink) as ctx:
@@ -875,7 +875,7 @@ def test_an_artist_carrying_likearrs_tag_is_likearrs_own_add_resumed(tmp_path: P
 
 
 def test_a_reviewed_plan_goes_stale_when_an_artist_it_adds_appears(tmp_path: Path, sink: CapturingSink) -> None:
-    """Issue #4: the artist appeared in Lidarr between the review and the apply."""
+    """The artist appeared in Lidarr between the review and the apply."""
     source, lookup, lidarr = two_artist_world()
     out = tmp_path / "diff.json"
     with make_context(tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink) as ctx:
@@ -888,7 +888,7 @@ def test_a_reviewed_plan_goes_stale_when_an_artist_it_adds_appears(tmp_path: Pat
     assert "add_artist" not in [name for name, _ in lidarr.calls[before:]]
 
 
-# ------------------------------------------------- a followed artist's new album (issue #8)
+# ------------------------------------------------- a followed artist's new album
 
 
 def test_a_new_release_lidarr_lacks_is_planned_as_a_refresh_not_buried_in_the_gaps(
@@ -910,7 +910,7 @@ def test_a_new_release_lidarr_lacks_is_planned_as_a_refresh_not_buried_in_the_ga
 def test_applying_refreshes_the_artist_so_the_next_run_monitors_the_new_album(
     tmp_path: Path, sink: CapturingSink
 ) -> None:
-    """The whole point of #8: without this the album waits on Lidarr's own schedule, or for ever."""
+    """Without this, the album waits on Lidarr's own schedule, or for ever."""
     source, lookup, lidarr = new_release_world()
     with make_context(tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink) as ctx:
         assert run_command(ctx, now=NOW, out=tmp_path / "diff.json", do_apply=True, scheduled=True) == EXIT_OK
@@ -1019,7 +1019,7 @@ def test_the_recency_window_is_configurable(tmp_path: Path, sink: CapturingSink)
     assert diff_summary(result.diff)["catalogue_gaps"] == 1, "outside the window it is an ordinary gap"
 
 
-# ------------------------------------ following an artist swaps the single out (issue #9)
+# ------------------------------------ following an artist swaps the single out
 
 
 def test_following_an_artist_swaps_the_liked_single_for_the_album_without_an_alarm(
@@ -1159,12 +1159,12 @@ def test_an_outage_while_sizing_gets_the_floor_and_leaves_mb_ok_alone(tmp_path: 
     assert composite.mb_ok is True
 
 
-# --------------------------------------------------------------------------- lidarr metadata cache/outage (issue #18)
+# --------------------------------------------------------------------------- lidarr metadata cache/outage
 
 
 def _composite_world(tmp_path: Path, sink: CapturingSink, **overrides: object) -> Context:
     """A `Context` whose `ctx.composite` is a bare fake, so `plan()`'s reads off it are directly
-    controllable - the same pattern `_sizing_world` uses, extended with the issue #18 fields."""
+    controllable - the same pattern `_sizing_world` uses, extended with more fields."""
     source, lookup, lidarr = followed_world()
     defaults: dict[str, object] = dict(
         mb_ok=True,
@@ -1234,7 +1234,7 @@ def test_negative_caching_is_skipped_on_a_read_only_plan(tmp_path: Path, sink: C
 
 
 def test_a_lidarr_metadata_outage_degrades_the_run(tmp_path: Path, sink: CapturingSink) -> None:
-    """The scenario rule 9 could not see (issue #18): most of this run's Lidarr lookups failed."""
+    """The scenario rule 9 could not see: most of this run's Lidarr lookups failed."""
     with _composite_world(
         tmp_path,
         sink,
@@ -1295,7 +1295,7 @@ def test_a_crash_mid_apply_leaves_only_committed_batches_and_the_next_run_finish
         assert code == EXIT_ERROR
         assert len(owned_after_crash) == 1
         assert sink.last.status is RunStatus.ERROR
-        # #54: what reached Lidarr before the failure is recorded, so Status can say how far it got.
+        # What reached Lidarr before the failure is recorded, so Status can say how far it got.
         crash = sink.last
         assert crash.changes_made is not None and crash.changes_planned is not None
         assert 0 < crash.changes_made < crash.changes_planned
@@ -1313,7 +1313,7 @@ def test_a_crash_mid_apply_leaves_only_committed_batches_and_the_next_run_finish
 def test_a_monitor_batch_lidarr_applied_but_answered_with_an_error_is_owned_and_later_unmonitored(
     tmp_path: Path, sink: CapturingSink, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """#174: the reply to batch two is lost after the change landed. likearr still owns it."""
+    """The reply to batch two is lost after the change landed. likearr still owns it."""
     monkeypatch.setattr("likearr.shell.apply.BATCH_SIZE", 1)
     source, lookup, lidarr = followed_world()
     lidarr.fail_monitor_batch = 2
@@ -1327,7 +1327,7 @@ def test_a_monitor_batch_lidarr_applied_but_answered_with_an_error_is_owned_and_
         assert sorted(k.rg_mbid for k in owned_after_crash) == ["rg-1", "rg-2"]
         assert lidarr.album("artist-1", "rg-2").monitored is True  # type: ignore[union-attr]
         assert sink.last.counts["monitored"] == 2, "both albums were confirmed monitored"
-        # #174 follow-up: everything planned actually landed, so this must not read as partial.
+        # Everything planned actually landed, so this must not read as partial.
         assert sink.last.changes_made == sink.last.changes_planned == 3, "add + both monitors"
         assert sink.last.message == (
             "the apply finished: all 3 planned changes were made, but confirming it failed: "
@@ -1352,7 +1352,7 @@ def test_a_monitor_batch_lidarr_applied_but_answered_with_an_error_is_owned_and_
 def test_a_monitor_batch_lidarr_applied_in_part_owns_only_the_applied_albums(
     tmp_path: Path, sink: CapturingSink
 ) -> None:
-    """#174: Lidarr's 500 on a stale id still flips the rest. Own exactly what it flipped."""
+    """Lidarr's 500 on a stale id still flips the rest. Own exactly what it flipped."""
     source, lookup, lidarr = followed_world()
     lidarr.fail_monitor_batch = 1
     lidarr.fail_monitor_batch_applies = 1
@@ -1377,7 +1377,7 @@ def test_a_monitor_batch_lidarr_applied_in_part_owns_only_the_applied_albums(
 def test_a_failed_monitor_batch_keeps_its_rows_when_lidarr_cannot_be_read_back(
     tmp_path: Path, sink: CapturingSink, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """#174: with no way to tell what landed, keep the rows. An owned row on an unmonitored album is harmless."""
+    """With no way to tell what landed, keep the rows. An owned row on an unmonitored album is harmless."""
     monkeypatch.setattr("likearr.shell.apply.BATCH_SIZE", 1)
     source, lookup, lidarr = followed_world()
     lidarr.fail_monitor_batch = 2
@@ -1395,7 +1395,7 @@ def test_a_failed_monitor_batch_keeps_its_rows_when_lidarr_cannot_be_read_back(
 def test_a_failed_monitor_batch_puts_back_an_ownership_row_that_was_already_there(
     tmp_path: Path, sink: CapturingSink
 ) -> None:
-    """#174: undoing the row written ahead restores what was owned before, rather than deleting it."""
+    """Undoing the row written ahead restores what was owned before, rather than deleting it."""
     source, lookup, _ = followed_world()
     lidarr = FakeLidarr(catalogue={"artist-1": [ALBUM, EP]})
     lidarr.seed(
@@ -1493,7 +1493,7 @@ def test_an_already_monitored_album_is_never_claimed(tmp_path: Path, sink: Captu
 def test_hand_monitoring_between_plan_and_apply_is_not_claimed_with_force(tmp_path: Path, sink: CapturingSink) -> None:
     """Plan wants the EP monitored; a human beats it to it in Lidarr before the reviewed diff is
     force-applied. Without `--force` the Lidarr digest mismatch alone would refuse the diff as
-    stale, so this exercises the live re-check inside `_monitor` itself (issue #132, kills M4)."""
+    stale, so this exercises the live re-check inside `_monitor` itself (kills M4)."""
     source, lookup, _ = followed_world()
     artist = lidarr_artist("artist-1", id=1, name="Test Artist")
     lidarr = FakeLidarr(catalogue={"artist-1": [ALBUM, EP]})
@@ -1555,7 +1555,7 @@ def test_a_guarded_run_holds_back_an_unmonitor_no_guard_targeted(tmp_path: Path,
     source-shrink guard on `liked_tracks` only dooms the live album's unmonitor; a second owned
     release, monitored under a `saved` reason no guard ever looks at, is due for unmonitor too and
     survives `block()` untouched. `Diff.guarded` must still hold it back: a guard holds back every
-    unmonitor, not just the ones it named (issue #132, kills M5)."""
+    unmonitor, not just the ones it named (kills M5)."""
     source, lookup, _ = followed_world()
     saved_gone = rg("rg-4", "The Saved One")
     artist = lidarr_artist("artist-1", id=1, name="Test Artist")
@@ -1621,7 +1621,7 @@ def test_unmonitor_drops_ownership_when_the_reason_really_left(tmp_path: Path, s
     assert lidarr.album("artist-1", "rg-3").monitored is False  # type: ignore[union-attr]
 
 
-# --------------------------------------------------------------------------- guards keep their baseline (#2)
+# --------------------------------------------------------------------------- guards keep their baseline
 
 
 def _liked_world(tmp_path: Path, sink: CapturingSink):
@@ -1790,7 +1790,7 @@ def test_accept_shrink_on_a_hand_run_plan_carries_through_a_reviewed_apply(tmp_p
 
 
 def test_accept_shrink_apply_does_not_repeat_the_shrink_advice(tmp_path: Path, sink: CapturingSink) -> None:
-    """Issue #182: the apply that carried out the accepted shrink must not tell the operator to go
+    """The apply that carried out the accepted shrink must not tell the operator to go
     run `--accept-shrink` - they just did, and the diff they applied carries no shrink guard."""
     ctx, _lidarr = _liked_world(tmp_path, sink)
     out = tmp_path / "diff.json"
@@ -1850,7 +1850,7 @@ def test_a_scheduled_run_will_not_apply_a_diff_that_carries_accept_shrink(tmp_pa
     assert lidarr.album("artist-1", "rg-3").monitored is True  # type: ignore[union-attr]
 
 
-# --------------------------------------------------------------------------- projected-wanted is advisory (#3)
+# --------------------------------------------------------------------------- projected-wanted is advisory
 
 
 def _over_the_wanted_limit(tmp_path: Path, sink: CapturingSink):
@@ -1889,7 +1889,7 @@ def test_projected_wanted_over_the_limit_is_still_reported_on_a_dry_run(tmp_path
     assert len(diff.unmonitor) == 1
 
 
-# --------------------------------------------------------------------------- unmonitored artists (#11)
+# --------------------------------------------------------------------------- unmonitored artists
 
 
 def _unmonitored_artist_world() -> tuple[FakeSource, FakeLookup, FakeLidarr]:
@@ -1955,7 +1955,7 @@ def _unmonitored_and_new_artist_world() -> tuple[FakeSource, FakeLookup, FakeLid
 
 
 def test_apply_does_not_count_a_newly_added_artist_as_re_monitored(tmp_path: Path, sink: CapturingSink) -> None:
-    """Issue #182: a just-added artist is always re-monitored (Lidarr can silently unmonitor it on
+    """A just-added artist is always re-monitored (Lidarr can silently unmonitor it on
     add), but that is part of the add, not a second event - `artists_monitored` must not count it,
     even though `set_artists_monitored` still covers it."""
     source, lookup, lidarr = followed_world()
@@ -2007,7 +2007,7 @@ def test_the_lock_is_reported_not_crashed_into(tmp_path: Path, sink: CapturingSi
     with context_for(tmp_path, sink) as ctx, run_lock(ctx.lock_path):
         code = run_command(ctx, now=NOW, out=tmp_path / "diff.json", do_apply=False)
 
-    assert code == EXIT_BUSY  # #54: its own code, not the generic error
+    assert code == EXIT_BUSY  # its own code, not the generic error
     assert sink.last.status is RunStatus.ERROR
     assert sink.last.exit_code == EXIT_BUSY
     assert sink.last.message == "another run holds the lock"
@@ -2030,7 +2030,7 @@ def test_a_scheduled_run_that_finds_the_lock_held_is_skipped_not_an_error(tmp_pa
 
 
 def test_a_paused_scheduled_run_does_nothing_and_publishes_paused(tmp_path: Path, sink: CapturingSink) -> None:
-    """Issue #68 phase 1: `[schedule] enabled = false` stops a scheduled run cold, with no Spotify,
+    """`[schedule] enabled = false` stops a scheduled run cold, with no Spotify,
     MusicBrainz or Lidarr call at all - it never even reaches the source read."""
     source, lookup, lidarr = followed_world()
     config = make_config(tmp_path, schedule=ScheduleConfig(enabled=False, paused_reason="maintenance window"))
@@ -2084,7 +2084,7 @@ def test_a_paused_scheduled_run_takes_no_lock(tmp_path: Path, sink: CapturingSin
     assert sink.last.status is RunStatus.PAUSED
 
 
-# ---------------------------------------------------------------- the first reviewed apply (#111)
+# ---------------------------------------------------------------- the first reviewed apply
 
 FIRST_APPLY = "waiting for your first reviewed apply: connect Spotify, then review and apply your first plan"
 
@@ -2092,7 +2092,7 @@ FIRST_APPLY = "waiting for your first reviewed apply: connect Spotify, then revi
 def test_a_scheduled_run_before_the_first_reviewed_apply_does_nothing_and_publishes_paused(
     tmp_path: Path, sink: CapturingSink
 ) -> None:
-    """Issue #111: a fresh config (no `[schedule]` block, so the schedule is on) holds scheduled
+    """A fresh config (no `[schedule]` block, so the schedule is on) holds scheduled
     applies until a hand apply has happened: no Spotify, MusicBrainz or Lidarr call at all."""
     source, lookup, lidarr = followed_world()
     config = make_config(tmp_path)
@@ -2197,7 +2197,7 @@ def test_a_stale_hand_apply_is_not_the_first_apply(tmp_path: Path, sink: Capturi
 def test_with_no_state_database_a_scheduled_run_publishes_paused_and_creates_nothing(
     tmp_path: Path, sink: CapturingSink
 ) -> None:
-    """Issue #111: a brand-new install has no state DB, and a scheduled fire must not create one
+    """A brand-new install has no state DB, and a scheduled fire must not create one
     (the healthcheck reads a missing file as "no runs yet"). It is decided before a `Context` -
     which opens the database - is ever built, and it publishes to the sinks only."""
     from likearr.shell.run import scheduled_run_without_state
@@ -2238,7 +2238,7 @@ def test_with_a_state_database_the_run_goes_on_to_run_command(tmp_path: Path, si
 
 
 def test_a_dry_run_leaves_retained_sinks_untouched(tmp_path: Path) -> None:
-    """Issue #19: a hand-run dry-run must not overwrite the retained MQTT record or reset the
+    """A hand-run dry-run must not overwrite the retained MQTT record or reset the
     Home Assistant dead-man's-switch built on it. It still prints, and it still gets recorded."""
     source, lookup, lidarr = followed_world()
     local = CapturingSink(local=True)
@@ -2283,7 +2283,7 @@ def test_a_scheduled_skip_still_publishes_everywhere(tmp_path: Path) -> None:
     assert remote.records and remote.last.status is RunStatus.SKIPPED
 
 
-# --------------------------------------------------------------------------- a problems-only webhook (#112)
+# --------------------------------------------------------------------------- a problems-only webhook
 
 HOOK = "https://hooks.example.invalid/likearr"
 
@@ -2360,7 +2360,7 @@ def test_a_problems_webhook_stays_quiet_through_a_clean_apply_and_a_pause(tmp_pa
     assert not route.called
 
 
-# --------------------------------------------------------------------------- the apply-phase marker (issue #68 phase 3)
+# --------------------------------------------------------------------------- the apply-phase marker
 
 
 def test_the_apply_phase_marker_is_printed_once_before_the_apply(
@@ -2594,7 +2594,7 @@ def test_a_release_group_lidarr_does_not_have_is_reported_not_fatal(tmp_path: Pa
 def test_a_wider_reason_set_is_written_through_apply(tmp_path: Path, sink: CapturingSink) -> None:
     """The album is already owned for being followed; it becomes saved too this run. Apply must
     write the wider reason set to state itself, not just leave `diff.update_reasons` sitting there
-    unapplied (issue #69, issue #132, kills M11)."""
+    unapplied (kills M11)."""
     saved = spotify_album("First Album", spotify_id="sp-alb1", upc="111")
     lookup = FakeLookup().add(ALBUM)
     lookup.catalogues["artist-1"] = ["rg-1"]
@@ -2824,7 +2824,7 @@ def test_the_summary_names_both_artists_and_what_the_skip_cost(
 def test_the_collision_advice_is_what_lidarr_can_actually_do(
     tmp_path: Path, sink: CapturingSink, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Issue #32. Lidarr copies an artist's name from MusicBrainz on every refresh
+    """Lidarr copies an artist's name from MusicBrainz on every refresh
     (`Artist.ApplyChanges` never copies Name) and throws `MultipleArtistsFoundException` on import
     when two share one, so "add them under a distinct name" was advice nobody could follow."""
     source, lookup, lidarr = collision_world(tmp_path)
@@ -2849,7 +2849,7 @@ def test_the_collision_advice_is_what_lidarr_can_actually_do(
 
 
 def test_a_same_name_ambiguity_is_one_unmapped_intent_and_no_collision(tmp_path: Path, sink: CapturingSink) -> None:
-    """Issue #32: the wrong Jungle was chosen, and the collision guard then refused it,
+    """The wrong Jungle was chosen, and the collision guard then refused it,
     so the run went degraded for a guess. Refusing the guess instead is a plain unmapped intent."""
     london = rg("rg-london", "Jungle", artist_mbid="mbid-london", artist_name="Jungle", released="2014-07-14")
     us = rg("rg-1969", "Jungle", artist_mbid="mbid-us", artist_name="Jungle", released="1969-01-01")
@@ -3030,7 +3030,7 @@ def test_a_musicbrainz_outage_degrades_however_quiet_the_rest_of_the_run_is(
 def test_a_composers_catalogue_too_large_for_a_liked_tracks_title_search_is_no_outage(
     tmp_path: Path, sink: CapturingSink
 ) -> None:
-    """#151: the title search for a liked Bach track cannot browse Bach's catalogue. That is a
+    """The title search for a liked Bach track cannot browse Bach's catalogue. That is a
     permanent property of the artist, not MusicBrainz failing, so the run is not degraded and there
     is no `mb-outage`; the track lands on the compilation Spotify named."""
     comp = rg(
@@ -3086,7 +3086,7 @@ def test_the_record_does_not_claim_a_baseline_write_that_failed(
     assert sink.last.baseline_advanced is False
 
 
-# ---------------------------------------------- issue #42: an answer an outage produced is not kept
+# ---------------------------------------------- an answer an outage produced is not kept
 
 
 class _LidarrFinds(FakeLidarr):
@@ -3138,7 +3138,7 @@ def test_the_same_answer_after_a_plain_musicbrainz_miss_is_cached_as_before(
     assert cached.release_group.mbid == "rg-fallback"
 
 
-# ---------------------------------------------- issue #53: any answer reached after an MB error
+# ---------------------------------------------- any answer reached after an MB error
 
 
 _LONDON = rg("rg-london", "Jungle", artist_mbid="jungle-london", artist_name="Jungle", released="2014-07-14")
@@ -3174,8 +3174,9 @@ def _jungle_world(tmp_path: Path, sink: CapturingSink, *, mb_down: bool, lidarr:
 def test_an_isrc_stand_in_answer_after_a_musicbrainz_error_is_used_but_not_cached(
     tmp_path: Path, sink: CapturingSink
 ) -> None:
-    """The gap in #42's fix. The name search errors, Lidarr finds nothing, and the ISRC names the
-    release: no Lidarr release group is involved, but MusicBrainz still never answered the search."""
+    """The name search errors, Lidarr finds nothing, and the ISRC names the release: no Lidarr
+    release group is involved, but MusicBrainz still never answered the search, so the answer
+    must not be cached."""
     diff, cached, liked, _, _ = _jungle_world(tmp_path, sink, mb_down=True, lidarr=FakeLidarr())
 
     assert [m.key.rg_mbid for m in diff.monitor] == ["rg-london"]
@@ -3192,7 +3193,7 @@ def test_the_same_isrc_stand_in_answer_after_a_plain_miss_is_cached(tmp_path: Pa
 
 
 def test_two_same_named_artists_behind_the_fallback_through_a_whole_run(tmp_path: Path, sink: CapturingSink) -> None:
-    """#53's shell-level two-artist case. The liked track's ISRC picks the London band and that is
+    """The two-artist case, end to end. The liked track's ISRC picks the London band and that is
     monitored, uncached; the saved album has no ISRC, so it is ambiguous and monitors nothing."""
     from likearr.core.resolver import AMBIGUOUS_SAME_NAME_STEP
 
@@ -3251,7 +3252,7 @@ def _outage_shaped(tmp_path: Path, sink: CapturingSink, *, attempts: int, failur
 
 
 def test_no_negative_cache_entry_when_the_run_looks_like_a_lidarr_outage(tmp_path: Path, sink: CapturingSink) -> None:
-    """#53: one success is not enough when most lookups failed - a partial api.lidarr.audio outage
+    """One success is not enough when most lookups failed - a partial api.lidarr.audio outage
     during a MusicBrainz outage would otherwise cache every term it touched for a week."""
     from likearr.core.health import LIDARR_METADATA_OUTAGE_MIN_ATTEMPTS
 
@@ -3272,7 +3273,7 @@ def test_a_negative_cache_entry_is_still_written_below_the_outage_line(tmp_path:
     assert ctx.state.lidarr_negative_cache() == {"album-search:Leopold Stokowski|Rhapsody": NOW}
 
 
-# ---------------------------------------------- issue #14: the relationship join, wired end to end
+# ---------------------------------------------- the relationship join, wired end to end
 
 
 _TRY = rg(
@@ -3346,7 +3347,7 @@ def test_build_context_wires_the_composite_lookup_as_the_relationship_lookup(
 def test_an_apply_that_fails_before_changing_anything_records_nothing_changed(
     tmp_path: Path, sink: CapturingSink
 ) -> None:
-    """#54: a source failure during an apply's own plan changed nothing, and the record says so."""
+    """A source failure during an apply's own plan changed nothing, and the record says so."""
     source, lookup, lidarr = followed_world()
     source.error = SourceError("spotify: 503")
     with make_context(tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink) as ctx:
@@ -3392,7 +3393,7 @@ def _ratchet_world(refresh: Exception) -> tuple[FakeSource, FakeLookup, FakeLida
 def test_a_profile_set_before_a_failed_refresh_is_never_called_nothing_changed(
     tmp_path: Path, sink: CapturingSink
 ) -> None:
-    """#67 review: the ratchet sets the Full profile, then the refresh POST answers 502. No counted
+    """The ratchet sets the Full profile, then the refresh POST answers 502. No counted
     change landed, but Lidarr was written to, so the record must not say "changed nothing"."""
     source, lookup, lidarr = _ratchet_world(LidarrError("lidarr POST /command: 502"))
     with make_context(tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink) as ctx:
@@ -3443,7 +3444,7 @@ class _ProfilesUnreadable(FakeLidarr):
 
 
 def test_a_phase_a_failure_with_the_tag_already_present_changed_nothing(tmp_path: Path, sink: CapturingSink) -> None:
-    """#67 re-review: the tag exists, so ensuring it only read; then Lidarr drops. Nothing was
+    """The tag exists, so ensuring it only read; then Lidarr drops. Nothing was
     written, and the record says so rather than "settings may have changed"."""
     source, lookup, _ = followed_world()
     lidarr = _ProfilesUnreadable()
@@ -3486,11 +3487,11 @@ def test_a_failure_after_the_tag_was_created_reads_as_settings_changed(tmp_path:
     assert "Lidarr settings may have changed" in record.message
 
 
-# --------------------------------------------------------------------------- "Monitor New Albums" (#172)
+# --------------------------------------------------------------------------- "Monitor New Albums"
 
 
 def _hand_artist_world() -> tuple[FakeSource, FakeLookup, FakeLidarr]:
-    """#172's H2: an artist added by hand in Lidarr ("Monitor New Albums: All", no likearr tag), and
+    """An artist added by hand in Lidarr ("Monitor New Albums: All", no likearr tag), and
     one album of theirs the user saved on Spotify, already monitored in Lidarr."""
     saved = spotify_album("First Album", spotify_id="sp-alb", upc="111")
     lookup = FakeLookup().add(ALBUM, EP)
@@ -3537,7 +3538,7 @@ def _claiming_world() -> tuple[FakeSource, FakeLookup, FakeLidarr]:
 def test_the_run_that_claims_a_hand_added_artists_album_sets_none_so_the_next_plan_is_empty(
     tmp_path: Path, sink: CapturingSink
 ) -> None:
-    """The accepted caveat of #172: a saved album that was not already monitored is claimed, so the
+    """An accepted caveat: a saved album that was not already monitored is claimed, so the
     artist now holds a release likearr owns. The write lands with the claim, not a run later."""
     source, lookup, lidarr = _claiming_world()
     with make_context(tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink) as ctx:
@@ -3574,7 +3575,7 @@ def _widening_world() -> tuple[FakeSource, FakeLookup, FakeLidarr]:
 def test_widening_a_hand_added_artist_monitors_none_of_the_release_types_it_shows(
     tmp_path: Path, sink: CapturingSink
 ) -> None:
-    """#172: widening to Full must not auto-monitor every album it shows. "Monitor New
+    """Widening to Full must not auto-monitor every album it shows. "Monitor New
     Albums" goes to None before the widening refresh, so what was monitored stays monitored and
     nothing it reveals is; the next run claims the one release the widening was for."""
     source, lookup, lidarr = _widening_world()
@@ -3699,7 +3700,7 @@ def test_an_apply_whose_only_change_is_monitor_new_albums_says_it_changed_lidarr
 
 
 def test_an_apply_that_stops_after_the_write_counts_it_as_a_change_made(tmp_path: Path, sink: CapturingSink) -> None:
-    """#54's part-way record: phase (c) set "Monitor New Albums" to None, then the widening refresh in
+    """A part-way record: phase (c) set "Monitor New Albums" to None, then the widening refresh in
     phase (d) failed. One planned change reached Lidarr, and the record says so."""
     source, lookup, lidarr = _ratchet_world(LidarrError("lidarr POST /command: 502"))
     lidarr.artists["artist-1"] = replace(lidarr.artists["artist-1"], monitor_new_items="all")
@@ -3768,7 +3769,7 @@ def test_no_widening_warning_for_an_artist_already_on_none(
     assert not any(r.getMessage().startswith("widening") for r in caplog.records)
 
 
-# ---------------------------------------------------------------------------- issue #119: progress
+# ---------------------------------------------------------------------------- progress
 
 
 class _SteppingClock:
@@ -3788,7 +3789,7 @@ class _SteppingClock:
 def _many_saved_albums(n: int) -> tuple[FakeSource, FakeLookup]:
     """`n` saved albums, each its own artist and release group, so each one costs the fake lookup
     exactly one call - enough of them pushes a cold plan's live-call count past the ETA's ~50-call
-    threshold (the "Want" in issue #119 shows an ETA only once there have been that many)."""
+    threshold (an ETA is shown only once there have been that many)."""
     groups = [rg(f"rg-a{i}", f"Album {i}", artist_mbid=f"artist-a{i}", artist_name=f"Artist {i}") for i in range(n)]
     lookup = FakeLookup().add(*groups)
     albums = [
@@ -3816,7 +3817,7 @@ def test_a_cold_plan_logs_progress_with_lookup_counts_and_an_eta_past_fifty_live
     lines = [r.getMessage() for r in caplog.records if r.getMessage().startswith("progress: resolving")]
     assert lines, "expected at least one progress line"
     # the last intent always logs a final line, with no ETA, even though 55 live calls is well past
-    # the threshold that would otherwise show one (issue #267's "Want" #1)
+    # the threshold that would otherwise show one
     assert lines[-1] == "progress: resolving 55/55 songs and artists, 55 MusicBrainz lookups (55 live)"
 
     # nothing is shown before the run has actually made ~50 live calls; every line at or past that
@@ -3840,7 +3841,7 @@ def test_a_warm_plan_all_cache_hits_logs_progress_without_an_eta(
     """The same world, replanned against a state db that already holds every resolution: the
     resolver never calls the lookup, so a fresh lookup's `live_calls` stays at 0 and the line has
     no ETA - "a warm run is almost all cache hits and should show no ETA rather than a misleading
-    one" (issue #119)."""
+    one"."""
     from likearr.adapters.lookup import CompositeLookup
 
     source, lookup = _many_saved_albums(5)
@@ -3884,7 +3885,7 @@ def test_plan_logs_progress_no_more_than_once_per_60s_of_fake_time(
 
     lines = [r.getMessage() for r in caplog.records if r.getMessage().startswith("progress: resolving")]
     # a clock that never advances past the 60s throttle still logs exactly twice: the first call
-    # (nothing to throttle against yet) and the always-unthrottled final line (issue #267's "Want" #1)
+    # (nothing to throttle against yet) and the always-unthrottled final line
     assert len(lines) == 2, lines
     assert lines[0].startswith("progress: resolving 1/5")
     assert lines[-1] == "progress: resolving 5/5 songs and artists, 0 MusicBrainz lookups (0 live)"
@@ -3893,7 +3894,7 @@ def test_plan_logs_progress_no_more_than_once_per_60s_of_fake_time(
 def test_a_plan_logs_a_post_resolve_marker_once_resolving_ends(
     tmp_path: Path, sink: CapturingSink, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """Issue #267's "Want" #2: nothing after resolving used to log progress at all, so the job page
+    """Nothing after resolving used to log progress at all, so the job page
     kept showing the last resolve line (ETA included) for as long as reading Lidarr and building
     the diff took. `plan` now logs a marker the moment resolving is over, before either of those."""
     source, lookup = _many_saved_albums(5)
@@ -3914,7 +3915,7 @@ def test_a_plan_logs_a_post_resolve_marker_once_resolving_ends(
 def test_plan_shows_under_a_few_minutes_instead_of_a_precise_eta_under_two_minutes(
     tmp_path: Path, sink: CapturingSink, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """Issue #267's "Want" #3: the tail of a resolve run is the noisiest part of the estimate (a
+    """The tail of a resolve run is the noisiest part of the estimate (a
     cache-warm stretch near the end skews the live-calls-per-intent rate), so once the estimated
     remaining time drops under two minutes the line reads "under a few minutes left" instead of
     naming a specific, falsely precise duration."""
@@ -3940,7 +3941,7 @@ def test_plan_shows_under_a_few_minutes_instead_of_a_precise_eta_under_two_minut
 
 def _three_followed_artists() -> tuple[FakeSource, FakeLookup, FakeLidarr]:
     """Three followed artists, each with one album already in their MusicBrainz catalogue, so an
-    apply adds all three (issue #119's add-loop progress test)."""
+    apply adds all three."""
     groups = [rg(f"rg-b{i}", f"Album {i}", artist_mbid=f"artist-b{i}", artist_name=f"Band {i}") for i in range(3)]
     lookup = FakeLookup().add(*groups)
     for i, group in enumerate(groups):
@@ -3969,7 +3970,7 @@ def test_an_apply_that_adds_three_artists_logs_progress_per_artist_with_its_refr
     ]
 
 
-# --------------------------------------------------------------------------- lost state (#175)
+# --------------------------------------------------------------------------- lost state
 
 LOST_STATE_RECORD_MESSAGE = (
     "1 artist(s) with likearr's Lidarr tag have no record in the state database: "

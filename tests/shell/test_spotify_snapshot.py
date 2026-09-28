@@ -1,5 +1,5 @@
-"""`shell.spotify_snapshot`: a cancelled scheduled run's Spotify read, saved for reuse
-(issue #68 phase 3). No real sleeps; only a fake clock."""
+"""`shell.spotify_snapshot`: a cancelled scheduled run's Spotify read, saved for reuse.
+No real sleeps; only a fake clock."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Issue #32: two MusicBrainz artists share a name *and* an album title.
+"""Two MusicBrainz artists share a name *and* an album title.
 
 A real, public case, as a fixture: a liked "Busy Earnin'" by Jungle, the London modern soul
 collective, from their 2014 self-titled album. A release-group search for "Jungle" by "Jungle"
@@ -115,7 +115,7 @@ def test_the_search_keeps_both_same_name_artists_instead_of_picking_the_earliest
 def test_one_artists_same_titled_releases_all_come_back_in_date_then_mbid_order(lookup: MusicBrainzLookup) -> None:
     """The adapter no longer chooses within an artist (the resolver does, knowing what Spotify
     asked for); it returns them all, deterministically ordered. The plain `search_release_group`
-    still answers with the earliest, as #23 did."""
+    still answers with the earliest, as before."""
     later = _rg_json("00000000-0000-4000-8000-00000000000a", LONDON, "2016")
     same_day_higher = _rg_json("00000000-0000-4000-8000-00000000000c", LONDON, "2014-07-14")
     same_day_lower = _rg_json("00000000-0000-4000-8000-00000000000b", LONDON, "2014-07-14")

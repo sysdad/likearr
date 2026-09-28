@@ -1,4 +1,4 @@
-"""Docs-drift regression tests (issue #117): text-level checks, like
+"""Docs-drift regression tests: text-level checks, like
 `test_compose_example.py`, that the install instructions and a few other reader-facing claims
 match what the code actually does. No behaviour under test here - just words.
 """
@@ -17,10 +17,9 @@ PYPROJECT_PATH = REPO_ROOT / "pyproject.toml"
 
 DOCS_FILES = [README_PATH, CLI_PATH, DEPLOY_PATH]
 
-# The backup section (out of scope for #117 - covered by the backup and restore issue) uses
-# "cron" to mean a host cron job that runs a backup after likearr finishes. Everything else in
-# DEPLOY.md either means the [schedule] block's own `cron` expression or explicitly says there is
-# no host cron any more.
+# The backup section uses "cron" to mean a host cron job that runs a backup after likearr
+# finishes. Everything else in DEPLOY.md either means the [schedule] block's own `cron`
+# expression or explicitly says there is no host cron any more.
 _DEPLOY_BACKUP_SECTION_MARKER = "## Backup and restore"
 
 
@@ -69,9 +68,9 @@ def test_deploy_md_cron_wording_is_only_the_schedule_expression_or_the_backup_se
     text = DEPLOY_PATH.read_text()
     before_backup, _, after_backup = text.partition(_DEPLOY_BACKUP_SECTION_MARKER)
     assert after_backup, "DEPLOY.md's Backup and restore section is missing"
-    # Before the backup section, "cron" only ever means: the absence of host cron (the
-    # single-service cutover, #68), the [schedule] block's own `cron` key/expression, or a
-    # comment referring to that expression. It must not say exit code 4 is cron-only any more.
+    # Before the backup section, "cron" only ever means: the absence of host cron, the
+    # [schedule] block's own `cron` key/expression, or a comment referring to that expression.
+    # It must not say exit code 4 is cron-only any more.
     assert "never from cron" not in before_backup
     assert "4 comes only from a hand-run command" in before_backup
 
@@ -97,7 +96,7 @@ def test_every_pinned_image_and_release_tag_matches_pyprojects_version() -> None
 
     readme = README_PATH.read_text()
     assert image_ref in readme, "README.md's compose block doesn't pin the current version"
-    # The quick start fetches nothing by tag since #3, but any release-tag URL added later must match.
+    # The quick start fetches nothing by tag, but any release-tag URL added later must match.
     for tag in re.findall(r"/likearr/v(\d+\.\d+\.\d+)/", readme):
         assert tag == version, "a README.md release-tag URL doesn't point at the current version"
 
@@ -123,7 +122,7 @@ def test_models_write_scopes_docstring_names_the_real_endpoint() -> None:
 
 
 # --------------------------------------------------------------------------------------------- #
-# README storefront (issue #108): requirements and "is this for you" before Quick start, the
+# README storefront: requirements and "is this for you" before Quick start, the
 # resolver detail moved to docs/dev/DESIGN.md, and every link and image path the README carries
 # resolves.
 
@@ -226,7 +225,7 @@ def test_design_md_still_has_the_resolver_detail_sections() -> None:
 
 
 # --------------------------------------------------------------------------------------------- #
-# What can't be synced (issue #103): the README, docs/dev/DESIGN.md, the picker and `likearr
+# What can't be synced: the README, docs/dev/DESIGN.md, the picker and `likearr
 # playlists`' own text must all say the same thing about which playlists work - owned ones, and
 # collaborative ones once Spotify is re-authorized with playlist-read-collaborative (item 3) - and
 # use the same reason and workaround wording, not each their own paraphrase.

@@ -115,13 +115,13 @@ _ISRC_SEARCH_FIELDS: _FieldSpec = {
         "releases": {"release-group": {"id": None}},
     }
 }
-"""What an ``isrc-search:`` row keeps (issue #123), and who reads each field:
+"""What an ``isrc-search:`` row keeps, and who reads each field:
 
 - ``recordings[].isrcs``: `MusicBrainzLookup.release_groups_for_isrc` (skips a fuzzy hit for
   another ISRC) and `scripts/replay_resolver.py` ``_isrc_index`` (the same filter).
 - ``recordings[].releases[].release-group.id``: both of them, for the release groups to fetch or
   index.
-- ``recordings[].title``: `MusicBrainzLookup.recordings_for_isrc` (issue #163), and the replay's
+- ``recordings[].title``: `MusicBrainzLookup.recordings_for_isrc`, and the replay's
   ``by_title`` index.
 - ``recordings[].artist-credit[].name``: the replay only, for that index (it reads the first
   credit's name).
@@ -133,7 +133,7 @@ field must add it here first, or it reads nothing from a cached row -
 """
 
 _RG_TRACKS_FIELDS: _FieldSpec = {"releases": {"status": None, "media": {"tracks": {"title": None}}}}
-"""What an ``rg-tracks:`` row keeps (issue #123): ``releases[].status`` (to prefer an Official
+"""What an ``rg-tracks:`` row keeps: ``releases[].status`` (to prefer an Official
 release) and ``releases[].media[].tracks[].title``, which is all
 `MusicBrainzLookup.release_group_track_titles` and `_track_titles` read."""
 
@@ -233,7 +233,7 @@ def _normalize(value: str) -> str:
     diacritics, "&" as "and", and every run of characters that are not letters or digits turned
     into one space - MusicBrainz's U+2010 hyphen included, so "All<U+2010>American" matches
     Spotify's "All-American". Letters outside plain Latin are kept, in any script, so "MØ" is not
-    "M" (issue #166).
+    "M".
     """
     return fold_title(_PAREN_RE.sub(" ", value))
 
@@ -363,8 +363,8 @@ def _artist_credit(*candidates: object) -> tuple[str, str]:
 
 
 _FEATURING_JOINS = frozenset({"feat", "ft", "featuring"})
-"""Join phrases, trimmed and lowercased, that introduce a featured guest rather than a main artist
-(issue #164). "with" is deliberately not one: in MusicBrainz credits it joins co-billed performers
+"""Join phrases, trimmed and lowercased, that introduce a featured guest rather than a main artist.
+"with" is not one: in MusicBrainz credits it joins co-billed performers
 as often as guests ("Stan Getz With Arthur Fiedler", "Elvis Presley with the Royal Philharmonic
 Orchestra"), so it stays a main credit."""
 
@@ -402,8 +402,8 @@ def _main_artist_mbids(*candidates: object) -> tuple[str, ...]:
 
 
 def _release_group(raw: Mapping[str, Any]) -> ReleaseGroup | None:
-    """A release group from its own JSON, credited by its own ``artist-credit`` and nothing else
-    (issue #268: a release's credit is not its release group's)."""
+    """A release group from its own JSON, credited by its own ``artist-credit`` and nothing else:
+    a release's credit is not its release group's."""
     mbid = raw.get("id")
     if not mbid:
         return None
@@ -421,7 +421,7 @@ def _release_group(raw: Mapping[str, Any]) -> ReleaseGroup | None:
 
 
 def _gtin(value: object) -> str:
-    """A barcode as a GTIN: its leading zeros dropped, since they carry no meaning (issue #150).
+    """A barcode as a GTIN: its leading zeros dropped, since they carry no meaning.
 
     Spotify sends 13- and 14-digit forms, MusicBrainz stores 12-digit UPC-As and 13-digit EANs,
     so both sides are stripped rather than one side padded. All zeros is ``""``, which matches
@@ -503,7 +503,7 @@ class MusicBrainzLookup:
         self._limiter = RateLimiter(config.min_interval_s, monotonic=monotonic, sleep=sleep)
         self._catalogue_memo: dict[str, tuple[ReleaseGroup, ...]] = {}
         self._too_large: dict[str, CatalogueTooLarge] = {}
-        """Artists found over `_MAX_CATALOGUE_PAGES` this run, so the crawl is not repeated (#151)."""
+        """Artists found over `_MAX_CATALOGUE_PAGES` this run, so the crawl is not repeated."""
         self._sleep = sleep
         self._now = now
         self._max_age_days = max_age_days
@@ -519,7 +519,7 @@ class MusicBrainzLookup:
         for a lookup that had no answer at all, which is when something is genuinely lost.
         """
         self.cache_hits = 0
-        """Queries this run answered from a fresh cache entry, no request sent (issue #119)."""
+        """Queries this run answered from a fresh cache entry, no request sent."""
         self.live_calls = 0
         """Queries this run that actually went out over the network, whatever the answer. Together
         with `cache_hits` this is what the shell's progress line and ETA are built from: the ratio
@@ -546,11 +546,11 @@ class MusicBrainzLookup:
         """Every distinct release group holding a release that carries this barcode.
 
         A lucene barcode query is fuzzy, so only an exact barcode is trusted - compared as a GTIN
-        (`_gtin`), because Spotify pads its UPC with leading zeros MusicBrainz does not store
-        (issue #150). Release groups with an Official release come first. When they are several,
+        (`_gtin`), because Spotify pads its UPC with leading zeros MusicBrainz does not store.
+        Release groups with an Official release come first. When they are several,
         choosing one needs the album's title and credit, which only the resolver has.
 
-        Each match carries its release group's **own** credit, never the release's (issue #268):
+        Each match carries its release group's **own** credit, never the release's:
         Lidarr files an album under its release group's artist, and a search result's embedded
         release group has no credit, so it is fetched (cached) as the ISRC path fetches it. Art
         Blakey's *At the Jazz Corner of the World* is the case: the digital release on Spotify's
@@ -599,7 +599,7 @@ class MusicBrainzLookup:
         return tuple(_dedupe(g for recording in self.recordings_for_isrc(isrc) for g in recording.release_groups))
 
     def recordings_for_isrc(self, isrc: str) -> tuple[IsrcRecording, ...]:
-        """`release_groups_for_isrc`, kept per recording with the recording's title (issue #163).
+        """`release_groups_for_isrc`, kept per recording with the recording's title.
 
         The same cached search and the same release-group fetches, so it costs nothing extra. A
         recording's title is already in the trimmed ``isrc-search:`` row (`_ISRC_SEARCH_FIELDS`).
@@ -692,10 +692,10 @@ class MusicBrainzLookup:
         Choosing needs two things only the caller knows. One artist often has several releases by
         one title - Yellowcard's *Lights and Sounds* is an album (2006) and a single (2005) - and
         which of them Spotify meant depends on what Spotify says the release *is*: the earliest
-        date, which this method used to pick by (#23), sent a saved album to its lead single.
+        date, which this method used to pick by, sent a saved album to its lead single.
         And two MusicBrainz artists can share a name and a title - "Jungle" by Jungle is both a
         London band's 2014 album and a US band's 1969 one - which only evidence tied to the track,
-        its ISRC, can settle (issue #32). `core.resolver` does both. Returned in date/MBID order,
+        its ISRC, can settle. `core.resolver` does both. Returned in date/MBID order,
         which is only there to make the result deterministic.
         """
         groups = [g for g in self._searched_release_groups(artist, title) if _credits_match(g.artist_name, artist)]
@@ -718,7 +718,7 @@ class MusicBrainzLookup:
         This is not a loosening of the credit gate, and nothing here accepts anything. Most of what
         it returns is an unrelated artist who happens to share the title - the same-title matches in
         `search_release_group_candidates`'s docstring are exactly that - and `core.resolver` takes
-        one only on a MusicBrainz relationship joining the two artists (issue #14).
+        one only on a MusicBrainz relationship joining the two artists.
         """
         groups = [
             g
@@ -781,7 +781,7 @@ class MusicBrainzLookup:
 
         The same cached search `search_artist` reads, so asking both costs one request. Several
         answers are namesakes - "Evangeline" is a Seattle band, a New Orleans artist and an L.A.
-        singer - which only evidence about the track can tell apart (issue #152).
+        singer - which only evidence about the track can tell apart.
         """
         if not name.strip():
             return ()
@@ -824,7 +824,7 @@ class MusicBrainzLookup:
             return memo
         too_large = self._too_large.get(artist_mbid)
         if too_large is not None:
-            raise too_large  # remembered for the run: the 30-page crawl is paid once (#151)
+            raise too_large  # remembered for the run: the 30-page crawl is paid once
         groups: list[ReleaseGroup] = []
         offset = 0
         pages = 0
@@ -1156,7 +1156,7 @@ class MusicBrainzLookup:
             return None
         age_days = max(0.0, (self._now() - float(fetched_at)) / 86400.0)
         if negative:
-            # Jittered by key like a positive entry (#166): rows written in one run would otherwise
+            # Jittered by key like a positive entry: rows written in one run would otherwise
             # fall due together, be refetched together, and stay in step every week after.
             stale = age_days >= jittered_max_age(self._config.negative_cache_days, key)
         else:

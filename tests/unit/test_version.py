@@ -1,4 +1,4 @@
-"""`likearr.__version__`, `commit()` and `build_info()` (issue #113).
+"""`likearr.__version__`, `commit()` and `build_info()`.
 
 One version source: the static `version` in `pyproject.toml`, read at import time through
 `importlib.metadata` off the installed distribution. These tests are hermetic - no subprocess, no
@@ -17,7 +17,7 @@ import likearr
 
 
 def test_dunder_version_matches_the_installed_distribution() -> None:
-    """The acceptance test from #113: the two can no longer drift apart, because there is only
+    """The two can no longer drift apart, because there is only
     one of them - `__version__` *is* what `importlib.metadata` reports, not a hand-kept copy."""
     assert likearr.__version__ == metadata.version("likearr")
 

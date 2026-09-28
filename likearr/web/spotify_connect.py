@@ -1,4 +1,4 @@
-"""Connect / re-authorize Spotify from the web UI (issue #79).
+"""Connect / re-authorize Spotify from the web UI.
 
 Reuses `adapters.spotify.SpotifyAuth` end to end - `build_authorize_url` and `exchange_code`, the
 same calls `likearr auth --manual` makes - so there is exactly one PKCE implementation, in
@@ -28,9 +28,9 @@ the flow started can ever hold a valid one - there is no separate session bindin
 of it, and none is needed. `PendingSpotifyAuthStore.consume` compares the presented `state` against
 each stored one with `hmac.compare_digest` rather than a dict-key equality check, so a wrong guess
 costs no more information than "no match" a bit at a time. Single use (`consume` removes the entry
-the moment it is checked, matched or not) and a ten-minute expiry, per issue #79's Requirements.
+the moment it is checked, matched or not) and a ten-minute expiry.
 
-**Which scopes an attempt asks for** (#161) is decided in `spotify_connect_start`, behind the login
+**Which scopes an attempt asks for** is decided in `spotify_connect_start`, behind the login
 gate: read-only, unless the user opted into promote-save's write scopes or the token being replaced
 already has them (`adapters.spotify.asks_for_write_scopes`). The choice is baked into the authorize
 URL and recorded in the pending attempt (`PendingAuth.include_write`) beside the verifier, so the
@@ -87,14 +87,14 @@ __all__ = [
 ]
 
 SPOTIFY_ACCOUNTS_ORIGIN = "https://" + urllib.parse.urlsplit(ACCOUNTS_AUTHORIZE_URL).netloc
-"""Where the direct-callback flow's form POST is redirected to (#11)."""
+"""Where the direct-callback flow's form POST is redirected to."""
 
 _HOST_NAME = re.compile(r"[a-z0-9]([a-z0-9.-]*[a-z0-9])?")
 """A plain DNS host name, lower-cased. A `public_url` host of any other shape never goes into a CSP
 header: it keeps the two-click link instead."""
 
 PENDING_AUTH_TTL_S = 600.0
-"""Ten minutes (issue #79's Requirements): a state token older than this is refused as expired."""
+"""Ten minutes: a state token older than this is refused as expired."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,11 +103,11 @@ class PendingAuth:
     verifier: str
     redirect_uri: str
     mode: str
-    """``"paste"`` (the default, everywhere) or ``"callback"`` (issue #79's direct-https mode,
+    """``"paste"`` (the default, everywhere) or ``"callback"`` (the direct-https mode,
     only offered when `[ui] public_url` is configured)."""
     created_at: float
     include_write: bool = False
-    """Whether the authorize URL asked for promote-save's write scopes (#161). Server-side only."""
+    """Whether the authorize URL asked for promote-save's write scopes. Server-side only."""
 
 
 class PendingSpotifyAuthStore:
@@ -217,7 +217,7 @@ def build_authorize(
     """A throwaway `SpotifyAuth` for `SpotifyAuth.build_authorize_url` - no network call, so this
     is cheap enough to call straight from a route without `anyio.to_thread`, but callers do anyway
     for symmetry with `exchange` and because a future PKCE step here should not have to remember.
-    `include_write` adds promote-save's write scopes (#161); the caller records it with the
+    `include_write` adds promote-save's write scopes; the caller records it with the
     attempt (`PendingSpotifyAuthStore.start`)."""
     with build_client() as client:
         return SpotifyAuth(config, client).build_authorize_url(redirect_uri=redirect_uri, include_write=include_write)
@@ -257,7 +257,7 @@ def _host_and_port(host: str, port: int | None) -> tuple[str, int | None]:
 
 def one_click_form_action(host_header: str, public_url: str) -> tuple[str, ...]:
     """The extra `form-action` sources a page or a Connect POST needs for one-click Connect
-    Spotify (#11), or ``()`` when it keeps the two-click "Continue to Spotify" link.
+    Spotify, or ``()`` when it keeps the two-click "Continue to Spotify" link.
 
     One click needs direct-callback mode and a request that reached likearr at `public_url`'s own
     origin. Chromium and WebKit check `form-action` on every hop of a form submission's redirect

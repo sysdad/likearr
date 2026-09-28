@@ -545,7 +545,7 @@ def test_owned_playlists_keeps_only_the_users_own(
 def test_all_playlists_lists_every_entry_marked_owned_or_not(
     spotify_config: SpotifyConfig, client: httpx.Client, clock: FakeClock
 ) -> None:
-    """The picker's listing (issue #103, item 1): nothing is dropped, each row says whether
+    """The picker's listing: nothing is dropped, each row says whether
     Development Mode will read its items."""
     mock_me()
     respx.get(url__startswith=f"{API}/me/playlists").mock(
@@ -572,7 +572,7 @@ def test_all_playlists_lists_every_entry_marked_owned_or_not(
 
 
 OLD_SCOPES = "user-follow-read user-library-read playlist-read-private user-follow-modify user-library-modify"
-"""What a token granted before #103 item 3 carries: read and write, no playlist-read-collaborative."""
+"""What a token granted before the collaborative scope carries: read and write, no playlist-read-collaborative."""
 
 
 def _collaborative_listing() -> None:
@@ -599,7 +599,7 @@ def _collaborative_listing() -> None:
 def test_a_collaborative_playlist_someone_else_owns_is_readable_with_the_scope(
     spotify_config: SpotifyConfig, client: httpx.Client, clock: FakeClock
 ) -> None:
-    """#103 item 3: with playlist-read-collaborative granted, a playlist you collaborate on is a
+    """With playlist-read-collaborative granted, a playlist you collaborate on is a
     source like one you own - listed as readable, and among `owned_playlists` (the picker's
     selectable set). A followed playlist stays unreadable."""
     _collaborative_listing()

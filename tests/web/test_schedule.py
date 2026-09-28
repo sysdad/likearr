@@ -66,7 +66,7 @@ def runner(tmp_path: Path, fake_cli: list[str]) -> Iterator[JobRunner]:
     yield runner
     # `fire_now`/`submit_scheduled` start a queue thread and a watcher thread in the background;
     # a test that does not itself wait for them can otherwise leave one running past the test,
-    # logging into a stream a later test's `capsys` has already closed (issue #137).
+    # logging into a stream a later test's `capsys` has already closed.
     runner.shutdown(timeout=5)
 
 
@@ -239,8 +239,8 @@ def test_an_edit_whose_next_fire_has_already_passed_does_not_fire_on_save(config
 
 
 def test_paused_still_fires_the_fixed_job_the_child_reads_the_pause(config_path: Path, runner: JobRunner) -> None:
-    # Recommendation (issue #68 phase 2): one code path. The scheduler never checks `enabled`
-    # itself; `run --scheduled --apply` does, and publishes PAUSED without doing any work.
+    # One code path: the scheduler never checks `enabled` itself; `run --scheduled --apply` does,
+    # and publishes PAUSED without doing any work.
     text = config_path.read_text().replace("[schedule]\n", "[schedule]\nenabled = false\n")
     config_path.write_text(text)
     clock = FakeClock(datetime(2026, 9, 24, 18, 20, 1, tzinfo=UTC))
