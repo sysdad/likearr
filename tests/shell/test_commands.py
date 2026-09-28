@@ -13,7 +13,7 @@ import httpx
 import pytest
 
 from likearr.adapters.lock import LockHeld, run_lock
-from likearr.adapters.spotify import SpotifyAuth, TokenSet
+from likearr.adapters.spotify import SpotifyAccount, SpotifyAuth, TokenSet
 from likearr.adapters.spotify_library import OwnedPlaylist, PlaylistEntry
 from likearr.models import EXIT_ERROR, EXIT_OK, EXIT_STALE, ReasonKind, ReleaseGroup, ReleaseKey
 from likearr.ports import CatalogueTooLarge, MetadataError, SourceError
@@ -599,7 +599,7 @@ class _ScriptedAuth(SpotifyAuth):
 def test_auth_prints_when_reauth_will_be_due(
     tmp_path: Path, sink: CapturingSink, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(commands, "_spotify_me", lambda ctx: "Test User (fake-user)")
+    monkeypatch.setattr(commands, "_spotify_me", lambda ctx: SpotifyAccount("fake-user", "Test User"))
     with make_context(tmp_path, sink=sink) as ctx:
         ctx.auth = _ScriptedAuth(ctx.config.spotify, httpx.Client())
         code = commands.auth_command(ctx)
@@ -640,7 +640,7 @@ def _auth_printing_the_url(
     **kwargs: Any,
 ) -> tuple[int, str]:
     monkeypatch.setenv("LIKEARR_SPOTIFY_CLIENT_ID", "fake-client-id")
-    monkeypatch.setattr(commands, "_spotify_me", lambda ctx: "Test User (fake-user)")
+    monkeypatch.setattr(commands, "_spotify_me", lambda ctx: SpotifyAccount("fake-user", "Test User"))
     monkeypatch.setattr(
         "builtins.input", lambda _prompt: "http://127.0.0.1:8765/callback?code=fake-code&state=fake-state"
     )
@@ -836,6 +836,18 @@ def test_auth_names_the_account_get_me_returns(
 
     assert code == EXIT_OK
     assert "account: Test User (fake-user)" in capsys.readouterr().out
+
+
+def test_auth_records_the_account_in_the_token_file(
+    tmp_path: Path, sink: CapturingSink, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Settings reads "Connected as" from the token file."""
+    spotify = FakeSpotify({"/v1/me": httpx.Response(200, json={"display_name": "Test User", "id": "fake-other"})})
+    with make_context(tmp_path, sink=sink) as ctx:
+        auth_against(ctx, spotify, monkeypatch)
+        on_disk = json.loads(ctx.config.spotify.token_file.read_text())
+
+    assert (on_disk["user_id"], on_disk["display_name"]) == ("fake-other", "Test User")
 
 
 # --------------------------------------------------------------------------- playlists

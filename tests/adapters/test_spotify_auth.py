@@ -44,6 +44,8 @@ def write_tokens(config: SpotifyConfig, **overrides: object) -> None:
         "expires_at": 9_999_999_999.0,
         "scope": ALL_SCOPES,
         "token_type": "Bearer",
+        # Recorded, so a refresh has no account to ask for (see test_spotify_account.py).
+        "user_id": "fake-user",
     }
     data.update(overrides)
     config.token_file.write_text(json.dumps(data))

@@ -140,6 +140,7 @@ class _Web:
         # Not `or`: a limiter with no failures recorded is falsy (it has a length).
         self.limiter = settings.limiter if settings.limiter is not None else LoginLimiter()
         self.spotify_pending = spotify_connect.PendingSpotifyAuthStore(now=lambda: settings.now().timestamp())
+        self.spotify_switches = spotify_connect.PendingSwitchStore(now=lambda: settings.now().timestamp())
         """Server-side PKCE state for "Connect Spotify" (issue #79): see `spotify_connect`."""
         self.templates = Jinja2Templates(directory=str(_HERE / "templates"))
         self.templates.env.filters["when"] = self._when

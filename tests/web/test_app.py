@@ -3259,5 +3259,5 @@ def test_status_and_settings_say_to_re_authorize_for_collaborative_playlists_onl
     settings = client.get("/settings").text
 
     assert ("To also sync playlists you collaborate on, re-authorize" in status) is noted
-    assert ("Re-authorize Spotify to also sync playlists you collaborate on" in settings) is noted
+    assert ("Re-authorize to also sync playlists you collaborate on" in settings) is noted
     assert "All good." in status

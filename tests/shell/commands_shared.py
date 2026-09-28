@@ -69,6 +69,7 @@ def token_file_data(**overrides: object) -> dict[str, object]:
         "expires_at": 9_999_999_999.0,
         "scope": "user-follow-read",
         "token_type": "Bearer",
+        "user_id": "fake-user",  # recorded, so a refresh has no account to ask for
     }
     data.update(overrides)
     return data

@@ -54,6 +54,7 @@ def make_library(
                 "expires_at": 9_999_999_999.0,
                 "scope": scope,
                 "token_type": "Bearer",
+                "user_id": "fake-user",
             }
         )
     )

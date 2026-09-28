@@ -50,6 +50,7 @@ ROUTES = [
     ("/settings/playlists/{job_id}", ("GET", "HEAD"), "playlists_poll"),
     ("/settings/spotify/connect", ("POST",), "spotify_connect_start"),
     ("/settings/spotify/finish", ("POST",), "spotify_connect_finish"),
+    ("/settings/spotify/switch", ("POST",), "spotify_switch"),
     ("/spotify/callback", ("GET", "HEAD"), "spotify_callback"),
     ("/settings/lidarr-setup/preview", ("POST",), "lidarr_setup_preview_start"),
     ("/settings/lidarr-library", ("POST",), "lidarr_library"),

@@ -6,7 +6,7 @@
 <p class="subtitle">Albums on disk that nothing on Spotify asks for. Decide what to keep, and what to trash.</p>
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
 <section class="card">
-  <p>This finds every album with files that no Spotify like, follow or playlist backs, grouped by artist. For each artist you choose to keep it with no change on Spotify, keep it and follow the artist on Spotify, keep it and save all their albums on Spotify, or trash its albums; one album can be decided on its own. What you kept in an earlier review is filled in again as a keep, so you only decide what is new; a follow or save is only asked of Spotify when you choose it in this review. The page only <strong>exports</strong> your decisions: moving files (<code>prune-stage</code>) and anything on Spotify (<code>promote-save</code>) stay commands you run yourself. Trash goes to a holding folder; nothing is deleted until you empty it yourself.</p>
+  <p>For each artist with albums on disk that no like, follow or playlist backs, choose to keep it (optionally following or saving it on Spotify) or trash it. This page only exports your decisions: moving files and changing Spotify stay commands you run yourself (<a href="https://github.com/sysdad/likearr#optional-clean-up" target="_blank" rel="noopener">how</a>).</p>
   {% if latest %}
   <div class="actions">
     <a class="button primary" href="/prune/{{ latest.id }}">Continue the review from {{ latest.started_at | when }}</a>

@@ -15,36 +15,29 @@
   <p class="error">Spotify is not configured: {{ spotify.client_id_error }}. Set LIKEARR_SPOTIFY_CLIENT_ID and restart likearr.</p>
   {% else %}
     {% if spotify.has_token %}
-    <p class="{{ 'error' if spotify.reauth.tone == 'bad' else ('warn' if spotify.reauth.tone == 'warn' else 'note') }}">
-      {% if spotify.granted_scopes %}Granted scopes: <code>{{ spotify.granted_scopes | join(" ") }}</code>.{% endif %}
-      {% if spotify.reauth.due is none %}The re-authorization date is unknown.
-      {% elif spotify.reauth.days_left < 0 %}Re-authorization was due {{ spotify.reauth.due | when }}.
-      {% else %}Re-authorize by {{ spotify.reauth.due | when }}.{% endif %}
+    <p>Connected{% if spotify.account %} as <strong>{{ spotify.account.label }}</strong>{% endif %}{% if spotify.granted_scopes %}, {{ "read and write" if spotify.keeps_write else "read" }} access{% endif %}{% if spotify.reauth.due is not none %}, {{ "expired" if spotify.reauth.days_left < 0 else "until" }} {{ spotify.reauth.due | when }}{% endif %}.</p>
+    {% endif %}
+    {% set reason = spotify.reason %}
+    <p class="{{ 'error' if reason in ('revoked', 'overdue') else ('note' if reason == 'switch-only' else 'warn') }}">
+      {%- if reason == "never" %}Spotify has never been connected. Scheduled runs will fail until it is.
+      {%- elif reason == "revoked" %}Spotify refused the saved authorization on the last run. Re-authorize to fix it.
+      {%- elif reason == "overdue" %}Spotify's six months are up. Re-authorize to fix it.
+      {%- elif reason == "due-soon" %}Spotify ends each authorization after six months. Re-authorize before then.
+      {%- elif reason == "unknown-date" %}The authorization date is unknown. Re-authorize to record it.
+      {%- elif reason == "collaborative" %}Re-authorize to also sync playlists you collaborate on.
+      {%- else %}Re-authorize only to switch Spotify accounts.{% endif -%}
     </p>
-    {% else %}
-    <p class="warn">Spotify has never been connected. Scheduled runs will fail until it is.</p>
-    {% endif %}
-    {% if spotify.callback_mode %}
-    <p class="note">A public URL is configured ({{ spotify.public_url }}), so this connects directly: Spotify redirects back here with no copy/paste. <code>{{ spotify.public_url }}/spotify/callback</code> must be registered as a redirect URI in the Spotify developer app.</p>
-    {% else %}
-    <p class="note">You will be shown a link to open, and asked to paste back the address it sends you to (it will fail to load - that is expected). <code>{{ spotify.redirect_uri }}</code> must be registered as a redirect URI in the Spotify developer app.</p>
-    {% endif %}
-    {% if spotify.keeps_write %}
-    <p class="note">This token can follow artists and save albums for promote-save, so re-authorizing keeps the write access.</p>
-    {% endif %}
-    {% if spotify.needs_collaborative %}
-    <p class="warn">Re-authorize Spotify to also sync playlists you collaborate on: this authorization is from before likearr asked to read them. Everything else keeps syncing as it is.</p>
-    {% endif %}
     {% if spotify_continue_url %}
     {# The attempt is already started, with the scopes it asked for; a second Connect form here
        would restart it, possibly without the write access Clean up's button asked for. #}
     <div class="spotify-continue">
       <p><a class="button primary" id="spotify-continue" href="{{ spotify_continue_url }}">Continue to Spotify</a> to approve access. Spotify then sends you back here.</p>
+      <p class="note">Spotify says the redirect URI is invalid? Add <code>{{ spotify.public_url }}/spotify/callback</code> to your Spotify app (<a href="{{ spotify.docs }}#if-connecting-fails" target="_blank" rel="noopener">help</a>).</p>
     </div>
     {% else %}
     <form method="post" action="/settings/spotify/connect">
       {% if cleanup.enabled and not spotify.keeps_write %}
-      <label class="check"><input type="checkbox" name="promote_save" value="1"> Also let promote-save follow artists and save albums on Spotify. <span class="optional">Asks Spotify for write access. Without it, likearr asks to read only, which is all everything else needs.</span></label>
+      <label class="check"><input type="checkbox" name="promote_save" value="1"> Also let promote-save follow artists and save albums (write access).</label>
       {% endif %}
       <button type="submit" class="spotify-button">
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.36-.66.48-1.021.24-2.82-1.74-6.36-2.1-10.561-1.14-.418.12-.779-.18-.899-.54-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.18.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.18-1.2-.181-1.38-.721-.18-.6.18-1.2.72-1.381 4.26-1.26 11.28-1.021 15.721 1.62.539.3.719 1.021.419 1.561-.299.421-1.02.599-1.559.3z"/></svg>
@@ -55,6 +48,7 @@
     {% if spotify_authorize_url %}
     <div class="spotify-paste-back">
       <p><a href="{{ spotify_authorize_url }}" target="_blank" rel="noopener">Open this link and approve access</a>. It redirects to a page that fails to load - that is expected.</p>
+      <p class="note">Spotify says the redirect URI is invalid? Add <code>{{ spotify.redirect_uri }}</code> to your Spotify app (<a href="{{ spotify.docs }}#if-connecting-fails" target="_blank" rel="noopener">help</a>).</p>
       <form method="post" action="/settings/spotify/finish">
         <label for="spotify-redirect-url">Paste the full address it sent you to</label>
         <input id="spotify-redirect-url" name="redirect_url" placeholder="{{ spotify.redirect_uri }}?code=...">

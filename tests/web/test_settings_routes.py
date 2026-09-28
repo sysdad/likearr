@@ -1081,6 +1081,7 @@ def test_connecting_spotify_fetches_names_once_the_token_exists(
         assert state is not None
         url = f"http://127.0.0.1:8765/callback?code=some-code&state={state[1]}"
         with respx.mock:
+            respx.get(ME_URL).mock(return_value=httpx.Response(200, json=ME))
             respx.post(TOKEN_URL).mock(
                 return_value=httpx.Response(
                     200,
@@ -1106,6 +1107,8 @@ SPOTIFY_CLIENT_ID = "spotify-client-id-SENTINEL"
 
 
 TOKEN_URL = "https://accounts.spotify.com/api/token"
+ME_URL = "https://api.spotify.com/v1/me"
+ME = {"id": "fake-user", "display_name": "Test User"}
 
 
 def _connect_start(client: TestClient) -> str:
@@ -1135,32 +1138,28 @@ def test_connect_spotify_shows_the_authorize_link_and_paste_back_form(
     assert 'action="/spotify/callback"' not in page  # paste-back mode: no direct callback offered
 
 
-def test_settings_shows_the_default_redirect_uri_to_register_in_paste_back_mode(
+def test_the_redirect_uri_to_register_is_named_while_connecting_in_paste_back_mode(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Paste-back mode (issue #109) used to name the redirect URI only in callback mode. It has to
-    name it here too, or a user who registered something else has no way to notice before hitting
-    Spotify's INVALID_CLIENT. `data_dir`'s CONFIG doesn't set `[spotify] redirect_uri`, so this is
-    the config default (`likearr/config.py`'s `SpotifyConfig.redirect_uri`)."""
+    """The redirect URI is shown once a connect is under way, where Spotify's "invalid
+    redirect URI" is seen, not on the Settings page itself. `data_dir`'s CONFIG doesn't set
+    `[spotify] redirect_uri`, so this is the config default."""
     monkeypatch.setenv("LIKEARR_SPOTIFY_CLIENT_ID", SPOTIFY_CLIENT_ID)
     _login(client)
 
-    page = client.get("/settings").text
-
-    assert "http://127.0.0.1:8765/callback" in page
-    assert "must be registered as a redirect URI in the Spotify developer app" in page
+    assert "http://127.0.0.1:8765/callback" not in client.get("/settings").text
 
     page = _connect_start(client)
 
+    assert "Add <code>http://127.0.0.1:8765/callback</code> to your Spotify app" in page
     assert 'placeholder="http://127.0.0.1:8765/callback?code=...' in page
 
 
-def test_settings_shows_a_configured_redirect_uri_not_the_default(
+def test_a_configured_redirect_uri_is_named_not_the_default(
     data_dir: Path, fake_cli: list[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """With `[spotify] redirect_uri` set to something other than the default, both the "must be
-    registered" note and the paste-back field's placeholder must show that value - never a
-    hardcoded default that no longer matches what likearr actually sends Spotify."""
+    """With `[spotify] redirect_uri` set, the connect step names that value - never a hardcoded
+    default that no longer matches what likearr actually sends Spotify."""
     monkeypatch.setenv("LIKEARR_LIDARR_API_KEY", API_KEY_SENTINEL)
     monkeypatch.setenv("LIKEARR_SPOTIFY_CLIENT_ID", SPOTIFY_CLIENT_ID)
     (data_dir / "config.toml").write_text(
@@ -1174,42 +1173,22 @@ def test_settings_shows_a_configured_redirect_uri_not_the_default(
     )
     with TestClient(app) as client:
         _login(client)
-
-        page = client.get("/settings").text
-        assert "http://127.0.0.1:9999/callback" in page
-        assert "http://127.0.0.1:8765/callback" not in page
-
         page = _connect_start(client)
-        assert 'placeholder="http://127.0.0.1:9999/callback?code=...' in page
+
+    assert "Add <code>http://127.0.0.1:9999/callback</code> to your Spotify app" in page
+    assert 'placeholder="http://127.0.0.1:9999/callback?code=...' in page
+    assert "http://127.0.0.1:8765/callback" not in page
 
 
-def test_callback_mode_redirect_uri_wording_is_unchanged(
+def test_callback_mode_names_its_redirect_uri_while_connecting(
     data_dir: Path, fake_cli: list[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Callback mode (issue #79) already named its redirect URI correctly; issue #109 must not
-    change that wording."""
-    monkeypatch.setenv("LIKEARR_LIDARR_API_KEY", API_KEY_SENTINEL)
-    monkeypatch.setenv("LIKEARR_SPOTIFY_CLIENT_ID", SPOTIFY_CLIENT_ID)
-    (data_dir / "config.toml").write_text(
-        CONFIG.replace(
-            "[ui]\n",
-            '[ui]\npublic_url = "https://likearr.example.org"\n',
-        )
-    )
-    app = create_app(
-        WebSettings(config_path=data_dir / "config.toml", password=PASSWORD, cli=fake_cli, now=lambda: NOW)
-    )
+    app = _callback_app(data_dir, fake_cli, monkeypatch)
     with TestClient(app) as client:
         _login(client)
+        page = client.post("/settings/spotify/connect", follow_redirects=False).text
 
-        page = client.get("/settings").text
-
-        assert (
-            "A public URL is configured (https://likearr.example.org), so this connects directly: "
-            "Spotify redirects back here with no copy/paste. "
-            "<code>https://likearr.example.org/spotify/callback</code> must be registered as a "
-            "redirect URI in the Spotify developer app." in page
-        )
+    assert "Add <code>https://likearr.example.org/spotify/callback</code> to your Spotify app" in page
 
 
 def test_the_spotify_button_shows_the_icon_when_re_authorizing(
@@ -1452,6 +1431,7 @@ def test_a_reused_state_is_refused_and_leaves_the_token_untouched(
     url = f"http://127.0.0.1:8765/callback?code=some-code&state={state[1]}"
 
     with respx.mock:
+        respx.get(ME_URL).mock(return_value=httpx.Response(200, json=ME))
         respx.post(TOKEN_URL).mock(
             return_value=httpx.Response(
                 200,
@@ -1580,6 +1560,7 @@ def test_a_valid_state_from_an_unauthenticated_client_still_connects(
 
     with TestClient(app) as anon:  # a fresh client: no cookies, standing in for the redirected browser
         with respx.mock:
+            respx.get(ME_URL).mock(return_value=httpx.Response(200, json=ME))
             respx.post(TOKEN_URL).mock(
                 return_value=httpx.Response(
                     200,
@@ -1694,7 +1675,7 @@ def test_settings_offers_write_access_only_when_the_token_lacks_it(
     page = client.get("/settings").text
     form = page.split('action="/settings/spotify/connect"', 1)[1].split("</form>", 1)[0]
     assert 'name="promote_save"' not in form
-    assert "keeps the write access" in page
+    assert "read and write access" in page
 
 
 def _callback_app(data_dir: Path, fake_cli: list[str], monkeypatch: pytest.MonkeyPatch) -> Any:
@@ -1709,6 +1690,7 @@ def _callback_app(data_dir: Path, fake_cli: list[str], monkeypatch: pytest.Monke
 def _callback_with(app: Any, state: str, granted: str, **extra: str) -> str:
     """Finish a direct-callback attempt from a cookie-less client, Spotify granting `granted`."""
     with TestClient(app) as anon, respx.mock:
+        respx.get(ME_URL).mock(return_value=httpx.Response(200, json=ME))
         respx.post(TOKEN_URL).mock(
             return_value=httpx.Response(
                 200, json={"access_token": "at-cb", "refresh_token": "rt-cb", "expires_in": 3600, "scope": granted}
@@ -1799,6 +1781,7 @@ def test_a_successful_exchange_writes_the_token_0600_and_updates_authorized_at(
     url = f"http://127.0.0.1:8765/callback?code=some-code&state={state[1]}"
 
     with respx.mock:
+        respx.get(ME_URL).mock(return_value=httpx.Response(200, json=ME))
         respx.post(TOKEN_URL).mock(
             return_value=httpx.Response(
                 200,
