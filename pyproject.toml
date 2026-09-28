@@ -66,8 +66,8 @@ packages = ["likearr"]
 [tool.ruff]
 line-length = 120
 target-version = "py312"
-# scripts/ holds repo tooling (demo data, screenshots, replays, the identity guard and narrative
-# lint); it is not part of the package and is not held to its lint/type bar.
+# scripts/ holds repo tooling (demo data, screenshots, replays); it is not part of the package and
+# is not held to its lint/type bar.
 extend-exclude = ["scripts"]
 
 [tool.ruff.lint]

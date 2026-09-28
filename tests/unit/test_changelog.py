@@ -70,8 +70,6 @@ def test_the_0_5_0_section_is_a_short_bulleted_summary() -> None:
 def test_the_0_5_0_section_names_no_issue_person_or_host() -> None:
     section = _the_0_5_0_section()
     assert not re.search(r"#\d+", section)
-    # Personal names and host labels are the identity guard's job (scripts/identity_guard.py, which
-    # reads the private list); this keeps only the generic check.
     assert "homelab" not in section
 
 

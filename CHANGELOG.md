@@ -88,13 +88,6 @@ and the service does not start.
   Check for changes, to take noticeably longer and to make many more MusicBrainz requests. Only
   answers reached through the Lidarr album-search fallback can change (see Fixed).
 
-### Added
-
-- A narrative lint in CI (`scripts/narrative_lint.py`) fails when a tracked file uses first-person
-  voice in docs or comments, or wording that describes one install or one person rather than the
-  project. The phrase list is `scripts/narrative_lint_phrases.txt`; `narrative:allow` on a line
-  keeps a real third-party hit.
-
 ### Changed
 
 - With `[ui] public_url` set and likearr opened at that address, Connect Spotify in Settings, and
@@ -132,8 +125,6 @@ and the service does not start.
 - Contributing, security and packaging docs now agree that likearr has a tagged release:
   releases are `vX.Y.Z`, only the latest is supported, and the project is Beta.
 - New-source feature requests go to an issue now, not a GitHub Discussion (which is disabled).
-  Contributing docs also now say a fork PR's identity-guard check always fails and isn't something
-  the contributor can fix - the PR is checked by hand against the real list before merging.
 - Deploy docs and the example templates no longer describe one-time upgrade steps or private
   tracking numbers left over from before the first public release.
 - The quick start now covers what an unwritable `/data` directory looks like (an unhealthy
@@ -145,9 +136,6 @@ and the service does not start.
   compose example for the second instance.
 - The quick start now pastes a Docker Compose block instead of cloning the repository first just
   to copy three files out of it.
-- The identity guard has a `--counts-only` option, and CI uses it: a failing check in CI now says
-  how many hits there are, not which file, line, commit or denylist entry, since the CI logs of a
-  public repository can be read by anyone. Run the guard locally with the list to see where.
 - `docker compose up -d` with only environment variables and an empty `/data` is now a complete
   install (breaking; see Breaking above). Where likearr runs and how it is reached come only from the environment:
   `LIKEARR_LIDARR_URL` (required), `LIKEARR_ALLOWED_HOSTS` (optional, comma-separated) and
@@ -207,10 +195,6 @@ and the service does not start.
   that is empty after stripping counts as unset. `LIKEARR_UI_PASSWORD` is still taken exactly as
   given. Secret redaction now also catches a value's escaped form (`\n` written as two characters),
   so such a key is never printed even when it reaches a request some other way.
-- The identity guard's commit check (the pre-push hook and CI) now also reads every line each
-  pushed or pull-request commit added. A denylisted string added in one commit and removed in the
-  next is caught, where before only the final tree was scanned and the string still reached the
-  published history.
 - With `[ui] public_url` set, Connect Spotify in Settings, and Clean up's "Authorize write access"
   button, did nothing in Chrome, Edge, Safari and other Chromium or WebKit browsers: the browser
   silently blocked the jump to Spotify. They now show a "Continue to Spotify" link that works in
