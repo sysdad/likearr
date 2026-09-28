@@ -6,15 +6,20 @@ import pytest
 
 from likearr.core.adopt import plan_adoption
 from likearr.core.desire import CATALOGUE_ERROR_STEP, CATALOGUE_TOO_LARGE_STEP
-from likearr.models import ArtistResolution, ReasonKind, ReleaseKey, ResolutionStatus
+from likearr.core.resolver import METADATA_ERROR_STEP
+from likearr.models import ArtistResolution, ReasonKind, ReleaseKey, Resolution, ResolutionStatus
 from tests.unit.fakes import (
     NOW,
+    album_intent,
     lidarr_album,
     lidarr_artist,
     lidarr_view,
     owned,
     reason,
     rg,
+    snapshot,
+    spotify_album,
+    track_intent,
 )
 from tests.unit.test_diff import desired_state
 
@@ -215,3 +220,60 @@ def test_an_artist_unmapped_for_another_reason_is_not_held() -> None:
     plan = plan_adoption(desired, _view(lidarr_album(album, monitored=True)), {}, set(), now=NOW)
     assert [u.key.rg_mbid for u in plan.unmonitor] == ["rg-1"]
     assert plan.held == []
+
+
+def _failed(intent_key: str, step: str = METADATA_ERROR_STEP) -> Resolution:
+    return Resolution(intent_key=intent_key, status=ResolutionStatus.UNMAPPED, step=step)
+
+
+def test_a_failed_lookup_holds_the_album_it_names_by_title_and_artist() -> None:
+    """A liked song on "Record (Deluxe Edition)" and a saved "Other Record" whose lookups failed
+    hold the Lidarr albums of that name by that artist; the keep list still wins, and an album
+    nothing names is unmonitored as before."""
+    liked = track_intent("Song", spotify_album("Record (Deluxe Edition)", spotify_id="sp-1"), spotify_id="sp-t")
+    saved = album_intent(spotify_album("Other Record", spotify_id="sp-2"))
+    view = _view(
+        lidarr_album(rg("rg-1", "Record"), id=101, monitored=True),
+        lidarr_album(rg("rg-2", "Other Record"), id=102, monitored=True),
+        lidarr_album(rg("rg-3", "Unnamed"), id=103, monitored=True),
+    )
+    desired = desired_state(unmapped=[_failed(liked.reason.key), _failed(saved.reason.key)])
+    source = snapshot(albums=[saved], tracks=[liked])
+
+    plan = plan_adoption(desired, view, {}, set(), now=NOW, snapshot=source)
+
+    assert [(h.key.rg_mbid, h.step, h.own_lookup) for h in plan.held] == [
+        ("rg-1", METADATA_ERROR_STEP, True),
+        ("rg-2", METADATA_ERROR_STEP, True),
+    ]
+    assert "could not be looked up" in plan.held[0].reason
+    assert [u.key.rg_mbid for u in plan.unmonitor] == ["rg-3"]
+
+    kept = plan_adoption(desired, view, {}, {"rg-2"}, now=NOW, snapshot=source)
+    assert [r.key.rg_mbid for r in kept.keep_as_manual] == ["rg-2"]
+    assert [h.key.rg_mbid for h in kept.held] == ["rg-1"]
+
+
+@pytest.mark.parametrize(
+    ("step", "artists", "with_snapshot"),
+    [
+        ("search:no-match", ("Test Artist",), True),
+        (METADATA_ERROR_STEP, ("Someone Else",), True),
+        (METADATA_ERROR_STEP, ("Test Artist",), False),
+    ],
+    ids=["unmapped-for-another-reason", "another-artist", "no-snapshot"],
+)
+def test_a_failed_lookup_that_names_no_album_holds_nothing(
+    step: str, artists: tuple[str, ...], with_snapshot: bool
+) -> None:
+    """Only a lookup error ties an unmapped item to an album, and only by the same artist and
+    title; anything else leaves the album to be unmonitored, under the degraded-run warning."""
+    saved = album_intent(spotify_album("Record", spotify_id="sp-1", artists=artists))
+    desired = desired_state(unmapped=[_failed(saved.reason.key, step)])
+    view = _view(lidarr_album(rg("rg-1", "Record"), monitored=True))
+    source = snapshot(albums=[saved]) if with_snapshot else None
+
+    plan = plan_adoption(desired, view, {}, set(), now=NOW, snapshot=source)
+
+    assert plan.held == []
+    assert [u.key.rg_mbid for u in plan.unmonitor] == ["rg-1"]

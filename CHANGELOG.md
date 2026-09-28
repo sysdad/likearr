@@ -40,6 +40,9 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
 - `likearr auth` no longer accepts an `[::1]` redirect URI, which its callback server couldn't
   serve. `doctor` shows the config file it loaded, and a `prune-stage` that stops part-way prints
   `stopped:`.
+- **`adopt` holds back an album whose saved album or liked song failed its MusicBrainz lookup**
+  instead of planning it for unmonitor. The album is matched by title and artist and listed as
+  held with the reason.
 
 ### Changed
 
