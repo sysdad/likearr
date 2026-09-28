@@ -26,6 +26,7 @@ from likearr.models import (
     PHASE_MARKER_APPLY,
     RESOLVER_VERSION,
     Diff,
+    LidarrAlbum,
     LidarrArtist,
     LidarrView,
     MonitorRelease,
@@ -593,24 +594,16 @@ def _settle_failed_batch(
 
     Returns how many albums of the batch Lidarr is confirmed to have monitored.
     """
-    now_monitored: set[ReleaseKey] = set()
-    for artist_mbid in sorted({r.key.artist_mbid for r in batch}):
-        try:
-            albums = ctx.lidarr.load_albums(artists[artist_mbid])
-        except Exception as exc:
-            log.warning(
-                "could not read Lidarr back after a failed monitor batch (%s); keeping all %d "
-                "ownership row(s) of that batch so none of its albums is left monitored and unowned",
-                redact(str(exc)),
-                len(batch),
-            )
-            return 0
-        for record in batch:
-            if record.key.artist_mbid != artist_mbid:
-                continue
-            album = albums.get(record.key.rg_mbid)
-            if album is not None and album.monitored:
-                now_monitored.add(record.key)
+    albums, error = _read_back(ctx, [r.key for r in batch], artists)
+    if error is not None:
+        log.warning(
+            "could not read Lidarr back after a failed monitor batch (%s); keeping all %d "
+            "ownership row(s) of that batch so none of its albums is left monitored and unowned",
+            redact(str(error)),
+            len(batch),
+        )
+        return 0
+    now_monitored = {key for key, album in albums.items() if album.monitored}
 
     not_applied = [r for r in batch if r.key not in now_monitored]
     restore = [owned_before[r.key] for r in not_applied if r.key in owned_before]
@@ -633,7 +626,11 @@ def _unmonitor(
     skipped: set[str],
     result: ApplyResult,
 ) -> None:
-    """Unmonitor in batches, dropping ownership only for what Lidarr confirmed as flipped."""
+    """Unmonitor in batches, dropping ownership only for what Lidarr confirmed as flipped.
+
+    A batch that raises is read back by `_settle_failed_unmonitor_batch`, which drops ownership
+    for the albums Lidarr unmonitored anyway.
+    """
     owned = ctx.state.owned_releases()
     pairs: list[tuple[int, ReleaseKey]] = []
     for item in unmonitor:
@@ -649,7 +646,76 @@ def _unmonitor(
 
     for start in range(0, len(pairs), BATCH_SIZE):
         batch = pairs[start : start + BATCH_SIZE]
-        ctx.lidarr.set_albums_monitored([album_id for album_id, _ in batch], False)
+        try:
+            ctx.lidarr.set_albums_monitored([album_id for album_id, _ in batch], False)
+        except Exception:
+            result.unmonitored += _settle_failed_unmonitor_batch(ctx, [key for _, key in batch], view)
+            raise
         with ctx.state.transaction():
             ctx.state.record_unmonitored([key for _, key in batch])
         result.unmonitored += len(batch)
+
+
+def _settle_failed_unmonitor_batch(ctx: Context, batch: Sequence[ReleaseKey], view: LidarrView) -> int:
+    """After an unmonitor PUT raised, drop ownership for the albums Lidarr did unmonitor.
+
+    Lidarr can apply a batch and still answer with an error (see `_settle_failed_batch`). A row
+    left on an album Lidarr did unmonitor would let the next run undo a later hand monitor of it,
+    so read the batch's albums back and drop the rows whose album is now unmonitored. A row whose
+    album is still monitored, is gone, or belongs to an artist Lidarr no longer has is kept.
+
+    The read-back stops at the first artist it cannot read, like `_settle_failed_batch`, but keeps
+    what it confirmed before that: here a kept row is the risky side, not the safe one. A row kept
+    on an album that did flip is not retried by the next run, whose plan only unmonitors albums
+    that are still monitored.
+
+    Returns how many albums of the batch Lidarr is confirmed to have unmonitored.
+    """
+    albums, error = _read_back(ctx, batch, view.artists)
+    now_unmonitored = [key for key in batch if key in albums and not albums[key].monitored]
+    with ctx.state.transaction():
+        ctx.state.record_unmonitored(now_unmonitored)
+    if error is not None:
+        log.warning(
+            "could not read Lidarr back after a failed unmonitor batch (%s); let go of the %d album(s) "
+            "confirmed unmonitored before the read failed and kept the other %d ownership row(s)",
+            redact(str(error)),
+            len(now_unmonitored),
+            len(batch) - len(now_unmonitored),
+        )
+    else:
+        log.warning(
+            "an unmonitor batch failed; Lidarr shows %d of its %d album(s) unmonitored, "
+            "and likearr let go of only those",
+            len(now_unmonitored),
+            len(batch),
+        )
+    return len(now_unmonitored)
+
+
+def _read_back(
+    ctx: Context, keys: Sequence[ReleaseKey], artists: Mapping[str, LidarrArtist]
+) -> tuple[dict[ReleaseKey, LidarrAlbum], Exception | None]:
+    """Re-read the albums of `keys` after a failed batch, one artist at a time.
+
+    Returns the albums found (a key whose artist or album Lidarr no longer has is left out) and the
+    error that stopped the read, if any. It stops at the first artist it cannot read, so a Lidarr
+    that is down costs one more failed read, not one per artist.
+    """
+    by_artist: dict[str, list[ReleaseKey]] = {}
+    for key in keys:
+        by_artist.setdefault(key.artist_mbid, []).append(key)
+    found: dict[ReleaseKey, LidarrAlbum] = {}
+    for artist_mbid in sorted(by_artist):
+        artist = artists.get(artist_mbid)
+        if artist is None:
+            continue
+        try:
+            albums = ctx.lidarr.load_albums(artist)
+        except Exception as exc:
+            return found, exc
+        for key in by_artist[artist_mbid]:
+            album = albums.get(key.rg_mbid)
+            if album is not None:
+                found[key] = album
+    return found, None

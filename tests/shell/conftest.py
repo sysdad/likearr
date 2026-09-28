@@ -8,8 +8,8 @@ the real thing in the four ways that matter to `apply`:
 - `refresh_artist` monitors the albums it finds as the artist's stored "Monitor New Albums" says
   (`all`, `new` or `none`), which is how a widened profile could monitor every new release type;
 - `refresh_artist` can fail for a named artist, which is how a Lidarr metadata outage looks;
-- `set_albums_monitored` can be made to raise on the Nth batch, which is how a crash halfway
-  through an apply looks. It can raise before flipping anything, after flipping part of the
+- `set_albums_monitored` can be made to raise on the Nth monitor or unmonitor batch, which is how
+  a crash halfway through an apply looks. It can raise before flipping anything, after flipping part of the
   batch, or after flipping all of it, because a real Lidarr can answer with an error either way.
 
 Everything else is a plain dict, and every call is recorded in `calls` so a test can assert that
@@ -279,12 +279,20 @@ class FakeLidarr:
     lost after the change had landed."""
     down_after_monitor_failure: bool = False
     """After the failing monitor batch, every `load_albums` raises too, like a Lidarr that crashed."""
+    fail_unmonitor_batch: int | None = None
+    """1-based index of the `set_albums_monitored(.., False)` batch that raises."""
+    fail_unmonitor_batch_applies: int = 0
+    """How many albums, from the front of the failing unmonitor batch, Lidarr flips before it
+    answers with the error, as `fail_monitor_batch_applies`."""
+    down_after_unmonitor_failure: bool = False
+    """After the failing unmonitor batch, every `load_albums` raises too."""
 
     refresh_timeouts: dict[str, float] = field(default_factory=dict)
     """artist mbid -> the `timeout_s` the last RefreshArtist for them was given."""
 
     calls: list[tuple[str, Any]] = field(default_factory=list)
     monitor_batches: int = 0
+    unmonitor_batches: int = 0
     _down: bool = False
     _next_artist_id: int = 1000
     _next_album_id: int = 5000
@@ -450,8 +458,14 @@ class FakeLidarr:
             self.monitor_batches += 1
             if self.fail_monitor_batch is not None and self.monitor_batches == self.fail_monitor_batch:
                 self._flip(album_ids[: self.fail_monitor_batch_applies], monitored)
-                self._down = self.down_after_monitor_failure
+                self._down = self._down or self.down_after_monitor_failure
                 raise LidarrError(f"fake: lidarr fell over on monitor batch {self.monitor_batches}")
+        else:
+            self.unmonitor_batches += 1
+            if self.fail_unmonitor_batch is not None and self.unmonitor_batches == self.fail_unmonitor_batch:
+                self._flip(album_ids[: self.fail_unmonitor_batch_applies], monitored)
+                self._down = self._down or self.down_after_unmonitor_failure
+                raise LidarrError(f"fake: lidarr fell over on unmonitor batch {self.unmonitor_batches}")
         self._flip(album_ids, monitored)
 
     def _flip(self, album_ids: Sequence[int], monitored: bool) -> None:
