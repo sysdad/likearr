@@ -11,12 +11,19 @@ from __future__ import annotations
 
 import functools
 import json
+from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
 
 from likearr.adapters.http import build_client
 from likearr.adapters.lock import run_lock
-from likearr.adapters.spotify import asks_for_write_scopes, authorized_request, can_read_collaborative, reauth_due
+from likearr.adapters.spotify import (
+    SpotifyAccount,
+    asks_for_write_scopes,
+    authorized_request,
+    can_read_collaborative,
+    reauth_due,
+)
 from likearr.adapters.spotify_library import PlaylistEntry
 from likearr.core.adopt import HeldRelease, adopt_digest, plan_adoption
 from likearr.core.explain import explain_report, render_report
@@ -128,12 +135,14 @@ def auth_command(
     if who is None:
         emit("WARN  GET /me named no account; the token was still written")
         return EXIT_OK
-    emit(f"      account: {who}")
+    emit(f"      account: {who.name} ({who.id})" if who.name else f"      account: {who.id}")
+    with suppress(SourceError, OSError):  # only Settings' "Connected as" line misses it
+        ctx.auth.record_account(who)
     return EXIT_OK
 
 
-def _spotify_me(ctx: Context) -> str | None:
-    """``display_name (id)`` for the authorized account, or None if the answer named neither.
+def _spotify_me(ctx: Context) -> SpotifyAccount | None:
+    """The authorized account, or None if the answer had no id.
 
     Raises:
         SourceError: the request failed. `QuotaExceeded` among them, and never retried, like
@@ -143,9 +152,8 @@ def _spotify_me(ctx: Context) -> str | None:
         return None
     with build_client() as client:
         payload = authorized_request(client, ctx.auth, "GET", SPOTIFY_ME_URL, context="GET /me")
-    name = str(payload.get("display_name") or "")
     account_id = str(payload.get("id") or "")
-    return f"{name} ({account_id})" if name else account_id or None
+    return SpotifyAccount(account_id, str(payload.get("display_name") or "")) if account_id else None
 
 
 # ---------------------------------------------------------------------------- playlists

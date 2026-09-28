@@ -38,7 +38,7 @@ import time
 import urllib.parse
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager, suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -66,9 +66,12 @@ from likearr.ports import QuotaExceeded, SchemaError, SourceError
 
 __all__ = [
     "ALL_SCOPES",
+    "ME_URL",
     "READ_SCOPES",
     "REFRESH_TOKEN_LIFETIME_MONTHS",
     "TOKEN_REQUEST_WORST_CASE_S",
+    "AccountRefused",
+    "SpotifyAccount",
     "SpotifyAuth",
     "SpotifySource",
     "TokenSet",
@@ -77,7 +80,9 @@ __all__ = [
     "authorized_request",
     "can_read_collaborative",
     "describe_wait",
+    "fetch_account",
     "lacks_collaborative",
+    "read_account",
     "read_authorized_at",
     "read_granted_scopes",
     "reauth_due",
@@ -86,6 +91,7 @@ __all__ = [
 ACCOUNTS_AUTHORIZE_URL = "https://accounts.spotify.com/authorize"
 ACCOUNTS_TOKEN_URL = "https://accounts.spotify.com/api/token"
 API_BASE = "https://api.spotify.com/v1"
+ME_URL = f"{API_BASE}/me"
 
 READ_SCOPES = " ".join(SPOTIFY_READ_SCOPES)
 """What a sign-in asks for by default (#161): read follows, the library, and playlists the user
@@ -168,6 +174,10 @@ class TokenSet:
     token written before this was recorded. It starts Spotify's six-month refresh-token clock
     (see `REFRESH_TOKEN_LIFETIME_MONTHS`), so a refresh carries it forward unchanged; only a new
     authorization ever sets it."""
+    user_id: str | None = None
+    """The Spotify account the token belongs to (``GET /me``'s ``id``), or ``None`` until recorded.
+    A refresh carries it forward, and records it when it is missing."""
+    display_name: str | None = None
 
     def expired(self, now: float, *, skew: float = _REFRESH_SKEW_S) -> bool:
         return self.expires_at - skew <= now
@@ -184,7 +194,15 @@ class TokenSet:
         # field existed round-trips byte-for-byte through a refresh.
         if self.authorized_at is not None:
             data["authorized_at"] = self.authorized_at
+        if self.user_id is not None:
+            data["user_id"] = self.user_id
+            data["display_name"] = self.display_name or ""
         return json.dumps(data, indent=2)
+
+    def with_account(self, account: SpotifyAccount | None) -> TokenSet:
+        if account is None:
+            return self
+        return replace(self, user_id=account.id, display_name=account.name)
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any]) -> TokenSet:
@@ -196,6 +214,8 @@ class TokenSet:
                 scope=str(data.get("scope") or ""),
                 token_type=str(data.get("token_type") or "Bearer"),
                 authorized_at=_epoch_or_none(data.get("authorized_at")),
+                user_id=_text_or_none(data.get("user_id")),
+                display_name=_text_or_none(data.get("display_name")),
             )
         except (KeyError, TypeError, ValueError) as exc:
             raise SourceError(f"spotify: token file is missing or malformed ({exc})") from exc
@@ -212,6 +232,83 @@ def _epoch_or_none(value: object) -> float | None:
         return None
     number = float(value)
     return number if math.isfinite(number) and number > 0 else None
+
+
+def _text_or_none(value: object) -> str | None:
+    """A non-empty string, or ``None``: like `_epoch_or_none`, the account fields never stop a
+    token from loading."""
+    return value if isinstance(value, str) and value else None
+
+
+@dataclass(frozen=True, slots=True)
+class SpotifyAccount:
+    """Who a token belongs to: ``GET /me``'s ``id`` and ``display_name`` (which may be empty)."""
+
+    id: str
+    name: str
+
+    @property
+    def label(self) -> str:
+        return self.name or self.id
+
+
+def read_account(token_file: Path) -> SpotifyAccount | None:
+    """The account recorded in the token file, or ``None``. The same guarantees as
+    `read_authorized_at`: no lock, no token returned, and ``None`` for any problem at all."""
+    try:
+        data = json.loads(token_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    user_id = _text_or_none(data.get("user_id"))
+    if user_id is None:
+        return None
+    return SpotifyAccount(user_id, _text_or_none(data.get("display_name")) or "")
+
+
+class AccountRefused(SourceError):
+    """``GET /me`` answered 403: Spotify let this account approve the app, but the app may not
+    serve it. A Development Mode app serves only the accounts on its dashboard's User Management
+    list."""
+
+
+def fetch_account(
+    client: httpx.Client, access_token: str, *, sleep: Callable[[float], None] = time.sleep
+) -> SpotifyAccount:
+    """``GET /me`` with `access_token` - not the stored token - on the token endpoint's short
+    retry profile, since it can run inside the token lock.
+
+    Raises:
+        AccountRefused: a 403.
+        SchemaError: the answer has no ``id``.
+        SourceError: any other failure, `QuotaExceeded` among them.
+    """
+    try:
+        response = request_with_retries(
+            client,
+            "GET",
+            ME_URL,
+            headers={"Authorization": f"Bearer {access_token}"},
+            retry_on=_retry_on,
+            sleep=sleep,
+            max_attempts=_TOKEN_ATTEMPTS,
+            max_backoff=_TOKEN_MAX_BACKOFF_S,
+            timeout=_TOKEN_TIMEOUT,
+        )
+    except HttpError as exc:
+        if exc.status_code == 403:
+            raise AccountRefused(f"spotify GET /me: Spotify refused this account (HTTP 403). ({exc})") from exc
+        raise _as_source_error(exc, "spotify GET /me") from exc
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise SourceError("spotify GET /me: response body is not valid JSON") from exc
+    user_id = payload.get("id") if isinstance(payload, dict) else None
+    if not isinstance(user_id, str) or not user_id:
+        raise SchemaError("spotify GET /me: the answer has no 'id'")
+    name = payload.get("display_name")
+    return SpotifyAccount(user_id, name if isinstance(name, str) else "")
 
 
 _SCOPE_NAME = re.compile(r"[a-z0-9-]{1,64}")
@@ -467,6 +564,9 @@ class SpotifyAuth:
                 "code_challenge": _pkce_challenge(verifier),
                 "state": state,
                 "scope": ALL_SCOPES if include_write else READ_SCOPES,
+                # Always show Spotify's page, which names the account about to approve: without
+                # it, an app that already holds every scope is sent straight back.
+                "show_dialog": "true",
             }
         )
         return f"{ACCOUNTS_AUTHORIZE_URL}?{query}", verifier, state
@@ -563,6 +663,14 @@ class SpotifyAuth:
         `code` - Spotify rejects a mismatch - so it defaults the same way: the configured loopback
         URI unless the caller (the web UI's direct-callback mode) passes its own.
         """
+        with self._token_lock():
+            tokens = self.request_code_tokens(code, verifier, redirect_uri=redirect_uri)
+            self._save(tokens)
+            return tokens
+
+    def request_code_tokens(self, code: str, verifier: str, *, redirect_uri: str | None = None) -> TokenSet:
+        """`exchange_code` without the save: the tokens for `code`, written nowhere. The web UI
+        checks whose account they are before it calls `save_authorization`."""
         form = {
             "grant_type": "authorization_code",
             "code": code,
@@ -570,8 +678,18 @@ class SpotifyAuth:
             "client_id": self._config.client_id,
             "code_verifier": verifier,
         }
+        return self._token_request(form, previous_refresh_token="", authorized_at=self._now(), save=False)
+
+    def save_authorization(self, tokens: TokenSet) -> None:
+        """Write tokens from `request_code_tokens`, under the token lock."""
         with self._token_lock():
-            return self._token_request(form, previous_refresh_token="", authorized_at=self._now())
+            self._save(tokens)
+
+    def record_account(self, account: SpotifyAccount) -> None:
+        """Add `account` to the stored token, changing nothing else."""
+        with self._token_lock():
+            self._tokens = None
+            self._save(self._load().with_account(account))
 
     def refresh(self) -> TokenSet:
         """Force a refresh using the stored refresh token and persist the result.
@@ -623,14 +741,28 @@ class SpotifyAuth:
             "refresh_token": tokens.refresh_token,
             "client_id": self._config.client_id,
         }
-        return self._token_request(
+        fresh = self._token_request(
             form, previous_refresh_token=tokens.refresh_token, authorized_at=tokens.authorized_at
         )
+        if tokens.user_id is not None:
+            account: SpotifyAccount | None = SpotifyAccount(tokens.user_id, tokens.display_name or "")
+        else:
+            # A token file from before accounts were recorded: record it now, or leave it for the
+            # next refresh. The refreshed token is already saved either way.
+            try:
+                account = fetch_account(self._client, fresh.access_token, sleep=self._sleep)
+            except SourceError:
+                account = None
+        if account is None:
+            return fresh
+        fresh = fresh.with_account(account)
+        self._save(fresh)
+        return fresh
 
     def _token_request(
-        self, form: dict[str, str], *, previous_refresh_token: str, authorized_at: float | None
+        self, form: dict[str, str], *, previous_refresh_token: str, authorized_at: float | None, save: bool = True
     ) -> TokenSet:
-        """POST to the token endpoint and persist the answer.
+        """POST to the token endpoint and persist the answer (unless `save` is false).
 
         `authorized_at` is the caller's decision, never derived here: now for a code exchange,
         the stored value for a refresh.
@@ -639,10 +771,12 @@ class SpotifyAuth:
         if secret:
             form = {**form, "client_secret": secret}
         with _stop_signals_deferred():
-            return self._send_and_save(form, previous_refresh_token=previous_refresh_token, authorized_at=authorized_at)
+            return self._send_and_save(
+                form, previous_refresh_token=previous_refresh_token, authorized_at=authorized_at, save=save
+            )
 
     def _send_and_save(
-        self, form: dict[str, str], *, previous_refresh_token: str, authorized_at: float | None
+        self, form: dict[str, str], *, previous_refresh_token: str, authorized_at: float | None, save: bool
     ) -> TokenSet:
         try:
             response = request_with_retries(
@@ -678,7 +812,8 @@ class SpotifyAuth:
             token_type=str(payload.get("token_type") or "Bearer"),
             authorized_at=authorized_at,
         )
-        self._save(tokens)
+        if save:
+            self._save(tokens)
         return tokens
 
     # ---------------------------------------------------------------- cross-process lock
