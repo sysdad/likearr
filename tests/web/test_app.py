@@ -2340,7 +2340,7 @@ def test_left_out_rows_link_the_setting_that_leaves_them_out(client: TestClient,
 def test_the_unmatched_list_before_any_run_says_so(client: TestClient) -> None:
     _login(client)
 
-    assert "No run has been recorded yet" in client.get("/unmatched").text
+    assert "appears after the next run" in client.get("/unmatched").text
 
 
 def test_status_and_the_unmatched_list_share_the_parsed_last_run(

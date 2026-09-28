@@ -7,9 +7,9 @@
 {% if config_error %}
 <p class="error">config.toml does not load: {{ config_error }}</p>
 {% elif not last %}
-<p class="note">No run has been recorded yet. Every run records one when it finishes, so this list appears after the next one.</p>
+<p class="note">Nothing yet: this list appears after the next run finishes.</p>
 {% else %}
-<p class="subtitle">What you like, follow or keep in playlists that the last run ({{ last.ran_at | when }}) monitors nothing for, and why. One row per album; <a href="/explain">Look up</a> any of them for the detail.</p>
+<p class="subtitle">What you like, follow or keep in playlists that the last run ({{ last.ran_at | when }}) monitors nothing for, and why. <a href="/explain">Look up</a> any of them for detail.</p>
 {% if coverage %}<div class="stats">{{ coverage_card(coverage) }}</div>{% endif %}
 <div class="stats five">
   {% for c in card_list %}

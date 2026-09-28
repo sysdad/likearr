@@ -88,7 +88,7 @@ GROUPS: tuple[Group, ...] = (
     Group(
         "unmatched",
         "Couldn't be matched",
-        "likearr has nothing it can monitor for these. What helps depends on why - each part says.",
+        "likearr has nothing it can monitor for these.",
     ),
     Group(
         "ambiguous",
