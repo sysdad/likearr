@@ -62,11 +62,20 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from likearr.adapters.http import build_client
-from likearr.adapters.spotify import ACCOUNTS_AUTHORIZE_URL, SpotifyAccount, SpotifyAuth, TokenSet, fetch_account
+from likearr.adapters.spotify import (
+    ACCOUNTS_AUTHORIZE_URL,
+    AccountRefused,
+    SpotifyAccount,
+    SpotifyAuth,
+    TokenSet,
+    fetch_account,
+)
 from likearr.config import SpotifyConfig
+from likearr.ports import SourceError
 
 __all__ = [
     "PENDING_AUTH_TTL_S",
+    "AccountCheckFailed",
     "PendingAuth",
     "PendingSpotifyAuthStore",
     "PendingSwitch",
@@ -154,6 +163,10 @@ class PendingSpotifyAuthStore:
             del self._pending[key]
 
 
+class AccountCheckFailed(SourceError):
+    """The code was exchanged, but ``GET /me`` failed for a reason other than a 403."""
+
+
 @dataclass(frozen=True, slots=True)
 class PendingSwitch:
     """A token for another Spotify account than the one recorded, waiting for the user's confirm."""
@@ -217,17 +230,25 @@ def exchange(config: SpotifyConfig, code: str, verifier: str, redirect_uri: str)
 
     Raises:
         AccountRefused: ``GET /me`` answered 403.
-        SourceError: the exchange or the account check failed.
+        AccountCheckFailed: ``GET /me`` failed otherwise.
+        SourceError: the exchange failed.
     """
     with build_client() as client:
         tokens = SpotifyAuth(config, client).request_code_tokens(code, verifier, redirect_uri=redirect_uri)
-        return tokens.with_account(fetch_account(client, tokens.access_token))
+        try:
+            account = fetch_account(client, tokens.access_token)
+        except AccountRefused:
+            raise
+        except SourceError as exc:
+            raise AccountCheckFailed(str(exc)) from exc
+        return tokens.with_account(account)
 
 
-def save(config: SpotifyConfig, tokens: TokenSet) -> None:
-    """The same atomic, 0600, lock-held token write `likearr auth` does. From a worker thread."""
+def save(config: SpotifyConfig, tokens: TokenSet, *, replacing: str | None) -> bool:
+    """The same atomic, 0600, lock-held token write `likearr auth` does, if the stored token
+    still belongs to `replacing` (`SpotifyAuth.save_authorization`). From a worker thread."""
     with build_client() as client:
-        SpotifyAuth(config, client).save_authorization(tokens)
+        return SpotifyAuth(config, client).save_authorization(tokens, replacing=replacing)
 
 
 def _host_and_port(host: str, port: int | None) -> tuple[str, int | None]:

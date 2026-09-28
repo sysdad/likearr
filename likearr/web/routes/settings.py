@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import re
+import sqlite3
 import tomllib
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta
@@ -535,7 +536,7 @@ def _refused_on_last_run(config: Config, authorized_at: datetime | None) -> bool
     try:
         with SqliteState(config.state_db) as state:
             last = state.last_run()
-    except Exception:  # a broken state database is Status's to report, not this line's
+    except (sqlite3.Error, OSError, ValueError, KeyError, TypeError):  # Status reports a broken database
         return False
     if last is None or last.status is not RunStatus.ERROR or "invalid_grant" not in last.message:
         return False
@@ -697,13 +698,14 @@ async def _finish_spotify_auth(
             "on its User Management list. Add the account there, then connect again. The current connection "
             "is unchanged."
         )
+    except spotify_connect.AccountCheckFailed as exc:
+        log.info("spotify account check failed: %s", exc)
+        return (
+            f"likearr could not check which Spotify account that is ({exc}), so nothing was saved. "
+            "The current connection is unchanged; try again."
+        )
     except SourceError as exc:
         log.info("spotify authorization failed: %s", exc)
-        if "GET /me" in str(exc):
-            return (
-                f"likearr could not check which Spotify account that is ({exc}), so nothing was saved. "
-                "The current connection is unchanged; try again."
-            )
         return (
             f"Spotify authorization failed: {exc}. Check that {pending.redirect_uri} is a redirect URI "
             f"in your Spotify app ({SPOTIFY_DOCS})."
@@ -713,8 +715,15 @@ async def _finish_spotify_auth(
     if new is not None and previous is not None and previous.id != new.id:
         log.info("spotify authorization is for another account; waiting for the user to confirm the switch")
         return web.spotify_switches.hold(tokens, previous=previous, new=new, include_write=pending.include_write)
-    await anyio.to_thread.run_sync(spotify_connect.save, config.spotify, tokens)
+    replacing = previous.id if previous is not None else None
+    if not await anyio.to_thread.run_sync(lambda: spotify_connect.save(config.spotify, tokens, replacing=replacing)):
+        return _CHANGED_MEANWHILE
     return await _connected(web, config, tokens, include_write=pending.include_write)
+
+
+_CHANGED_MEANWHILE = (
+    "The Spotify connection changed since you were asked, so nothing was saved. Re-authorize Spotify to try again."
+)
 
 
 async def _connected(web: _Web, config: Config, tokens: TokenSet, *, include_write: bool) -> str:
@@ -771,14 +780,12 @@ async def spotify_switch(request: Request) -> Response:
     except ConfigError as exc:
         request.session["flash"] = f"config.toml does not load, so nothing was saved: {exc}"
         return RedirectResponse("/settings#spotify", status_code=303)
-    current = read_account(config.spotify.token_file)
-    if current is None or current.id != switch.previous.id:
-        request.session["flash"] = (
-            "The Spotify connection changed since you were asked, so nothing was saved. "
-            "Re-authorize Spotify to try again."
-        )
+    saved = await anyio.to_thread.run_sync(
+        lambda: spotify_connect.save(config.spotify, switch.tokens, replacing=switch.previous.id)
+    )
+    if not saved:
+        request.session["flash"] = _CHANGED_MEANWHILE
         return RedirectResponse("/settings#spotify", status_code=303)
-    await anyio.to_thread.run_sync(spotify_connect.save, config.spotify, switch.tokens)
     log.info("spotify switched to another account from the web UI")
     request.session["flash"] = await _connected(web, config, switch.tokens, include_write=switch.include_write)
     return RedirectResponse("/settings#spotify", status_code=303)

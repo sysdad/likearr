@@ -684,10 +684,20 @@ class SpotifyAuth:
         }
         return self._token_request(form, previous_refresh_token="", authorized_at=self._now(), save=False)
 
-    def save_authorization(self, tokens: TokenSet) -> None:
-        """Write tokens from `request_code_tokens`, under the token lock."""
+    def save_authorization(self, tokens: TokenSet, *, replacing: str | None) -> bool:
+        """Write tokens from `request_code_tokens`, under the token lock, if the stored token
+        still belongs to account `replacing` (``None``: none recorded, or no token). False, and
+        nothing written, when another connect changed it since the caller looked."""
         with self._token_lock():
+            self._tokens = None
+            try:
+                current = self._load().user_id
+            except SourceError:
+                current = None
+            if current != replacing:
+                return False
             self._save(tokens)
+            return True
 
     def record_account(self, account: SpotifyAccount) -> None:
         """Add `account` to the stored token, changing nothing else."""

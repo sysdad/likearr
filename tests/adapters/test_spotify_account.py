@@ -130,9 +130,20 @@ def test_save_authorization_writes_the_tokens_with_their_account(
 ) -> None:
     tokens = TokenSet("fake-access-new", "fake-refresh-new", 1.0, user_id="alex-1", display_name="Alex")
 
-    SpotifyAuth(spotify_config, client).save_authorization(tokens)
+    assert SpotifyAuth(spotify_config, client).save_authorization(tokens, replacing=None)
 
     assert json.loads(spotify_config.token_file.read_text())["user_id"] == "alex-1"
+
+
+def test_save_authorization_refuses_when_the_stored_account_changed(
+    spotify_config: SpotifyConfig, client: httpx.Client
+) -> None:
+    _write(spotify_config, user_id="kim-3")
+    before = spotify_config.token_file.read_text()
+    tokens = TokenSet("fake-access-new", "fake-refresh-new", 1.0, user_id="alex-1", display_name="Alex")
+
+    assert not SpotifyAuth(spotify_config, client).save_authorization(tokens, replacing="alex-1")
+    assert spotify_config.token_file.read_text() == before
 
 
 @respx.mock
