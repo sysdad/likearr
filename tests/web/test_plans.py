@@ -36,8 +36,8 @@ from likearr.web.plans import (
     select_rows,
 )
 from tests.adapters.test_state_sqlite import _diff
+from tests.web.app_support import NOW
 
-NOW = datetime(2026, 9, 23, 18, 0, tzinfo=UTC)
 A1 = "a1a1a1a1-1111-2222-3333-444444444444"
 RG1 = "b1b1b1b1-1111-2222-3333-444444444444"
 

@@ -23,9 +23,10 @@ from likearr.adapters.musicbrainz import MusicBrainzLookup
 from likearr.config import MusicBrainzConfig
 from likearr.core.resolver import AMBIGUOUS_SAME_NAME_STEP, resolve_album, resolve_track
 from likearr.models import LIKED_TRACK_SCOPE_ALBUM, LIKED_TRACK_SCOPE_SMALLEST, ResolutionStatus
+from tests.clock import FakeClock
 from tests.unit.fakes import NOW, album_intent, spotify_album, track_intent
 
-from .conftest import MB_URL, FakeClock
+from .conftest import MB_URL
 
 LONDON = "6bbb3983-ce8a-4971-96e0-7cae73268fc4"
 """Jungle, the London modern soul collective: the band the liked track is by."""

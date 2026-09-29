@@ -22,8 +22,8 @@ from likearr.web.status import (
     short_message,
     source_counts,
 )
+from tests.web.app_support import NOW
 
-NOW = datetime(2026, 9, 23, 18, 0, tzinfo=UTC)
 NY = ZoneInfo("America/New_York")
 
 

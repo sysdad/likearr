@@ -23,6 +23,7 @@ from likearr.web.schedule import (
     fire_now,
     scheduled_argv,
 )
+from tests.clock import FakeClock
 
 CONFIG = """\
 [lidarr]
@@ -68,19 +69,6 @@ def runner(tmp_path: Path, fake_cli: list[str]) -> Iterator[JobRunner]:
     # a test that does not itself wait for them can otherwise leave one running past the test,
     # logging into a stream a later test's `capsys` has already closed.
     runner.shutdown(timeout=5)
-
-
-class FakeClock:
-    """A controllable `now()`. `advance` is what an injected `wait` calls instead of sleeping."""
-
-    def __init__(self, start: datetime) -> None:
-        self.value = start
-
-    def __call__(self) -> datetime:
-        return self.value
-
-    def advance(self, seconds: float) -> None:
-        self.value += timedelta(seconds=seconds)
 
 
 def _wait_that_parks_after_n_fires(runner: JobRunner, clock: FakeClock, fires: int = 1):

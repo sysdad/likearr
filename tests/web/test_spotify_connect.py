@@ -10,14 +10,7 @@ import pytest
 from likearr.adapters.spotify import ALL_SCOPES, READ_SCOPES
 from likearr.config import SpotifyConfig
 from likearr.web.spotify_connect import PendingSpotifyAuthStore, build_authorize, one_click_form_action
-
-
-class FakeClock:
-    def __init__(self, start: float = 1_000.0) -> None:
-        self.now = start
-
-    def time(self) -> float:
-        return self.now
+from tests.clock import FakeClock
 
 
 def test_a_started_attempt_can_be_consumed_once() -> None:

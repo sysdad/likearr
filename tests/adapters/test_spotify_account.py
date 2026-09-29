@@ -19,8 +19,7 @@ from likearr.adapters.spotify import (
 )
 from likearr.config import SpotifyConfig
 from likearr.ports import SourceError
-
-from .conftest import FakeClock
+from tests.clock import FakeClock
 
 TOKEN_URL = "https://accounts.spotify.com/api/token"
 ME_URL = "https://api.spotify.com/v1/me"

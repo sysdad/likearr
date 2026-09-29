@@ -15,8 +15,9 @@ from likearr.adapters.lidarr import LidarrClient
 from likearr.config import LidarrConfig
 from likearr.models import LidarrArtist, PrimaryType, Profile, SecondaryType
 from likearr.ports import LidarrArtistExists, LidarrArtistUnknown, LidarrError, LidarrMetadataError, LidarrPort
+from tests.clock import FakeClock
 
-from .conftest import FAKE_API_KEY, LIDARR_URL, FakeClock
+from .conftest import FAKE_API_KEY, LIDARR_URL
 
 V1 = f"{LIDARR_URL}/api/v1"
 
