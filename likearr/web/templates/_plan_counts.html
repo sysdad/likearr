@@ -14,4 +14,5 @@
 </div>
 {% endif %}
 {% if summary.claim %}<p class="note">likearr will start managing {{ summary.claim }} album{{ "" if summary.claim == 1 else "s" }} you already monitor.</p>{% endif %}
+{% if summary.disown %}<p class="note">Stops tracking {{ summary.disown }} album{{ "" if summary.disown == 1 else "s" }} already unmonitored or gone in Lidarr.</p>{% endif %}
 <p class="note">After this, {{ summary.projected_wanted }} release{{ "" if summary.projected_wanted == 1 else "s" }} would be monitored with no files yet.</p>

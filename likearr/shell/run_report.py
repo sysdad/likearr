@@ -247,6 +247,8 @@ def print_plan(result: PlanResult, out: Path, delta: HealthDelta | None = None, 
     emit(f"  {summary['update_reasons']:>6} reason-set updates (state only)")
     if diff.claim:
         emit(f"  {summary['claim']:>6} albums you already monitor to start managing (state only)")
+    if diff.disown:
+        emit(f"  {summary['disown']:>6} albums already unmonitored or gone in Lidarr to stop tracking (state only)")
     emit(f"  {summary['pending']:>6} pending (liked single with no album yet)")
     emit(f"  {summary['unmapped']:>6} unmapped")
     if summary.get("catalogue_gaps_recent"):
@@ -429,6 +431,8 @@ def print_applied(applied: ApplyResult, diff: Diff) -> None:
     emit(f"  {applied.unmonitored:>6} releases unmonitored")
     if applied.claimed:
         emit(f"  {applied.claimed:>6} albums you already monitor now managed")
+    if applied.disowned:
+        emit(f"  {applied.disowned:>6} albums already unmonitored or gone in Lidarr no longer tracked")
     emit(f"  {applied.ratcheted:>6} artists ratcheted to Full")
     emit(f'  {applied.new_items_none:>6} artists set "Monitor New Albums" to None')
     emit(f"  {applied.artists_monitored:>6} artists re-monitored")

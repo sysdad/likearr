@@ -95,6 +95,9 @@ class ApplyResult:
     claimed: int = 0
     """Releases already monitored in Lidarr that likearr now owns: the diff's `claim`, and the
     matches a first apply chose to manage. No Lidarr call."""
+    disowned: int = 0
+    """Owned releases Lidarr already showed unmonitored, or no longer had, that likearr stopped
+    owning: the diff's `disown`. No Lidarr call."""
     lidarr_metadata_ok: bool = True
     lidarr_written: bool = False
     """Set before any call to Lidarr that is not a known read (`_WriteWatch`): tags and profiles

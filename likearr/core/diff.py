@@ -295,6 +295,7 @@ def build_diff(
     monitor: list[MonitorRelease] = []
     claim: list[OwnedRelease] = []
     unmonitor: list[UnmonitorRelease] = []
+    disown: list[ReleaseKey] = []
     ratchets: list[ProfileRatchet] = []
     set_new_items_none: list[str] = []
     guard_list: list[Guard] = []
@@ -451,9 +452,6 @@ def build_diff(
         record = owned[key]
         if record.is_manual:
             continue
-        album = view.album(key)
-        if album is None or not album.monitored:
-            continue
         # A release still desired is never unmonitored, even when none of its old reasons survive
         # (unfollowed, but now saved): `update_reasons` re-tags it instead.
         if key in desired.releases:
@@ -461,6 +459,16 @@ def build_diff(
         if any(r.key in live_reason_keys and r.key not in resolved_at for r in record.reasons):
             # A reason this release had is still in the source and resolved nowhere this run; it
             # merely failed to resolve. Nothing was unliked, so nothing is unmonitored.
+            continue
+        album = view.album(key)
+        if album is None:
+            if view.lacks_album(key):
+                disown.append(key)
+            continue
+        if not album.monitored:
+            # Already unmonitored: nothing to write, but a row left here would unmonitor the
+            # album again after someone monitors it by hand.
+            disown.append(key)
             continue
         unmonitor.append(UnmonitorRelease(key=key, title=album.title, lost_reasons=frozenset(record.reasons)))
 
@@ -640,6 +648,14 @@ def build_diff(
             {u.key for u in unmonitor},
         )
 
+    if any(g.blocked_unmonitors for g in guard_list) or not schema_ok:
+        # A guarded run doubts what the sources say is no longer wanted, so it lets go of nothing.
+        disown = []
+    elif scheduled and len(disown) > guards.max_unmonitors_scheduled:
+        # As many as the unmonitor cap on an unattended run points at a bad read; a run by hand
+        # shows the count for review.
+        disown = []
+
     # ------------------------------------------------------------------ projected wanted
     projected_wanted = 0
     for key in desired.releases:
@@ -676,6 +692,7 @@ def build_diff(
             monitor_artists,
             refresh_artists,
             [a.artist_mbid for a in add_artists],
+            disown,
         ),
         add_artists=add_artists,
         monitor=monitor,
@@ -692,6 +709,7 @@ def build_diff(
         refresh_artists=refresh_artists,
         accept_shrink=accept_shrink,
         claim=claim,
+        disown=disown,
     )
 
 
@@ -704,6 +722,7 @@ def lidarr_digest(
     monitor_artists: Sequence[str] = (),
     refresh_artists: Sequence[str] = (),
     add_artists: Sequence[str] = (),
+    disown: Sequence[ReleaseKey] = (),
 ) -> str:
     """Hash the Lidarr state the diff depends on, so a stale diff can be refused.
 
@@ -718,7 +737,8 @@ def lidarr_digest(
     """
     h = hashlib.sha256()
     album_parts: list[str] = []
-    for key in sorted({m.key for m in monitor} | {u.key for u in unmonitor}, key=lambda k: (k.artist_mbid, k.rg_mbid)):
+    touched = {m.key for m in monitor} | {u.key for u in unmonitor} | set(disown)
+    for key in sorted(touched, key=lambda k: (k.artist_mbid, k.rg_mbid)):
         album = view.album(key)
         if album is not None:
             album_parts.append(f"{album.id}:{int(album.monitored)}")

@@ -138,6 +138,7 @@ def apply(
             diff.monitor_artists,
             diff.refresh_artists,
             [a.artist_mbid for a in diff.add_artists],
+            diff.disown,
         )
         if is_stale(diff, fresh.snapshot.digest(), current_lidarr):
             if not force:
@@ -501,6 +502,10 @@ def _execute(
     if diff.claim:
         result.claimed += _claim(ctx, diff.claim, view)
 
+    # (f3) ------------------------------------------------------------- disowns
+    if diff.disown:
+        result.disowned += _disown(ctx, diff.disown, view)
+
     # (g) -------------------------------------------------------------- unmonitor
     if not allow_unmonitors:
         if diff.unmonitor:
@@ -663,6 +668,24 @@ def _claim(ctx: Context, claims: Sequence[OwnedRelease], view: LidarrView) -> in
         with ctx.state.transaction():
             ctx.state.record_monitored(records)
     return len(records)
+
+
+def _disown(ctx: Context, keys: Sequence[ReleaseKey], view: LidarrView) -> int:
+    """Stop owning releases Lidarr shows unmonitored, or no longer has under an artist whose albums
+    were read. A manual record, or one Lidarr shows monitored again, is kept. No Lidarr call."""
+    owned = ctx.state.owned_releases()
+    drop: list[ReleaseKey] = []
+    for key in keys:
+        record = owned.get(key)
+        if record is None or record.is_manual:
+            continue
+        album = view.album(key)
+        if view.lacks_album(key) or (album is not None and not album.monitored):
+            drop.append(key)
+    if drop:
+        with ctx.state.transaction():
+            ctx.state.record_unmonitored(drop)
+    return len(drop)
 
 
 def _adopt_existing(ctx: Context, chosen: AdoptPlan, view: LidarrView, result: ApplyResult) -> None:

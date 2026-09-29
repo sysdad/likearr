@@ -26,6 +26,9 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
 
 ### Fixed
 
+- **An album you monitor by hand is no longer unmonitored again** because likearr still tracked it:
+  likearr now stops tracking an album you no longer like once Lidarr already shows it unmonitored,
+  or no longer has it. The plan and the review show how many.
 - **Unmonitoring the rest holds back an album MusicBrainz couldn't check** instead of unmonitoring
   it: a saved album or liked song of that title and artist whose lookup failed (Lidarr's fallback
   included), or a followed artist of that name whose lookup failed. The album is listed as held
