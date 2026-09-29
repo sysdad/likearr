@@ -56,6 +56,7 @@ __all__ = [
     "cross_origin_allowed",
     "password_matches",
     "refused_host_message",
+    "signed_in",
 ]
 
 log = logging.getLogger(__name__)
@@ -71,14 +72,15 @@ MAX_BODY_BYTES = 1024 * 1024
 _SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
 _OPEN_PATHS = frozenset({"/login", "/healthz", "/spotify/callback", "/favicon.ico"})
-"""What answers without a session, matched exactly. The login form and the container healthcheck
-need none by design; `/spotify/callback` is reached by a cross-site GET redirect from
-Spotify that never carries the `SameSite=Strict` session cookie, so it authorizes itself with a
-single-use, server-side PKCE `state` instead (see `web.spotify_connect`) and is exempted here
-rather than by loosening the cookie for every route. `/favicon.ico` is what a browser
-asks for on its own, ignoring the `<link rel="icon">` in the page head - without this entry a
-logged-out visitor's request for it 303s to `/login` instead of getting the icon. A prefix match
-would also open "/loginx" and any later route that happens to start the same way."""
+"""The paths that answer without a session, matched exactly; `/static/` (`_OPEN_PREFIX`) is open
+too, matched as a prefix. The login form and the container healthcheck need none by design;
+`/spotify/callback` is reached by a cross-site GET redirect from Spotify that never carries the
+`SameSite=Strict` session cookie, so it authorizes itself with a single-use, server-side PKCE
+`state` instead (see `web.spotify_connect`) and is exempted here rather than by loosening the
+cookie for every route. `/favicon.ico` is what a browser asks for on its own, ignoring the
+`<link rel="icon">` in the page head - without this entry a logged-out visitor's request for it
+303s to `/login` instead of getting the icon. A prefix match would also open "/loginx" and any
+later route that happens to start the same way."""
 
 _OPEN_PREFIX = "/static/"
 """The stylesheet and script the login form needs. A mount, so it is matched as a prefix."""
@@ -87,6 +89,11 @@ Scope = MutableMapping[str, Any]
 Receive = Callable[[], Any]
 Send = Callable[[MutableMapping[str, Any]], Any]
 ASGIApp = Callable[[Scope, Receive, Send], Any]
+
+
+def signed_in(session: Mapping[str, Any], generation: str) -> bool:
+    """Whether `session` is a logged-in one of the current `generation`."""
+    return session.get(SESSION_KEY) is True and session.get(GENERATION_KEY) == generation
 
 
 def password_matches(given: str, expected: str) -> bool:
@@ -258,7 +265,8 @@ class BodyLimitMiddleware:
 
 
 class AuthGateMiddleware:
-    """Everything except `_OPEN_PATHS` needs a logged-in session of the current generation.
+    """Everything except `_OPEN_PATHS` and `_OPEN_PREFIX` needs a logged-in session of the current
+    generation.
 
     Sits inside the session middleware.
 
@@ -279,8 +287,7 @@ class AuthGateMiddleware:
         if scope["type"] != "http" or scope["path"] in _OPEN_PATHS or scope["path"].startswith(_OPEN_PREFIX):
             await self.app(scope, receive, send)
             return
-        session = scope.get("session") or {}
-        if session.get(SESSION_KEY) is True and session.get(GENERATION_KEY) == self.generation():
+        if signed_in(scope.get("session") or {}, self.generation()):
             await self.app(scope, receive, send)
             return
         headers = _headers(scope)

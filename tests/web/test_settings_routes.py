@@ -21,6 +21,7 @@ import pytest
 import respx
 from starlette.testclient import TestClient
 
+from likearr import __version__
 from likearr.web.app import WebSettings, create_app
 from tests.web.app_support import (
     _PUBLIC_URL,
@@ -1480,6 +1481,7 @@ def test_the_callback_route_never_requires_login(
         assert response.status_code == 200
         assert "no longer valid" in response.text or "expired" in response.text
         assert "Log in" not in response.text  # never the login form
+        assert "app-footer" not in response.text and __version__ not in response.text
 
 
 def test_the_callback_hides_a_config_error_and_logs_it(

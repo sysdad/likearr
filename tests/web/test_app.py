@@ -96,6 +96,40 @@ def test_an_unknown_url_still_goes_to_login_when_logged_out(client: TestClient) 
     assert response.headers["location"] == "/login"
 
 
+def test_a_missing_static_file_is_a_bare_404_when_logged_out(client: TestClient) -> None:
+    """`/static/` is open without a session, so a missing file there reaches the 404 handler
+    logged out: it gets no nav, no running-job pill and no version."""
+    response = client.get("/static/missing", follow_redirects=False)
+
+    assert response.status_code == 404
+    assert response.headers["content-type"].startswith("text/plain")
+    assert response.text == "Not Found"
+    assert __version__ not in response.text
+
+
+def test_a_missing_static_file_is_styled_when_logged_in(client: TestClient) -> None:
+    _login(client)
+
+    response = client.get("/static/missing")
+
+    assert response.status_code == 404
+    assert 'href="/settings"' in response.text
+    assert "There is no such page." in response.text
+
+
+def test_a_session_from_before_a_logout_gets_the_bare_404(client: TestClient) -> None:
+    _login(client)
+    stolen = client.cookies.get("likearr_session")
+    assert stolen
+    client.post("/logout")
+    client.cookies.set("likearr_session", stolen)
+
+    response = client.get("/static/missing")
+
+    assert response.status_code == 404
+    assert response.text == "Not Found"
+
+
 def test_an_htmx_poll_without_a_session_moves_the_whole_page_to_login(client: TestClient) -> None:
     response = client.get("/jobs/2026-09-22T14-03-11Z-a1b2c3/fragment", headers={"HX-Request": "true"})
 

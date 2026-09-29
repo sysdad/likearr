@@ -57,6 +57,10 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
 - **The job page's phase line reads the whole log**, so a long apply no longer shows "Reading
   Spotify".
 - **Pressing "Run and apply now" twice starts one run.**
+- **Log lines redact the same credentials as error messages, tracebacks included**, and a
+  malformed log call is logged instead of raising. Redacted values now read `REDACTED`.
+- **A missing `/static/` file is a plain 404 when you're logged out**, without the nav or the
+  version, and the Spotify callback page no longer shows the version.
 
 ## [0.5.2]
 
