@@ -26,7 +26,7 @@ from likearr.models import (
 )
 from likearr.ports import CatalogueTooLarge, MetadataError, MetadataLookup
 
-from .resolver import METADATA_ERROR_STEP, ResolveResult
+from .resolver import METADATA_ERROR_STEP, ResolveResult, refuse_various_artists
 
 __all__ = ["CATALOGUE_TOO_LARGE_STEP", "CATALOGUE_UNREAD_STEPS", "build_desired"]
 
@@ -107,7 +107,7 @@ def build_desired(
 
     # ------------------------------------------------------------------ followed artists
     for key in sorted(resolve_result.artist_resolutions):
-        resolution = resolve_result.artist_resolutions[key]
+        resolution = refuse_various_artists(resolve_result.artist_resolutions[key])
         if resolution.status != ResolutionStatus.RESOLVED or not resolution.artist_mbid:
             unmapped.append(resolution)
             continue

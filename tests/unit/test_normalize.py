@@ -140,6 +140,66 @@ def test_a_title_of_punctuation_alone_still_keeps_a_distinguishing_form() -> Non
     assert normalize_name("!!!") != normalize_name("???")
 
 
+KANA_VOICING_PAIRS = [
+    # Kana that differ only by a dakuten or handakuten are different letters
+    ("ハート", "バート"),
+    ("パン", "バン"),
+    ("パン", "ハン"),
+    ("バン", "ハン"),
+    ("がっこう", "かっこう"),
+    ("ぱぴぷ", "はひふ"),
+    ("ヴ", "ウ"),
+]
+
+
+@pytest.mark.parametrize(("a", "b"), KANA_VOICING_PAIRS)
+def test_kana_voicing_marks_tell_names_and_titles_apart(a: str, b: str) -> None:
+    from likearr.adapters.musicbrainz import _normalize
+
+    assert normalize_name(a) != normalize_name(b)
+    assert normalize_title(a) != normalize_title(b)
+    assert not credits_match(a, b)
+    assert _normalize(a) != _normalize(b), "the adapter folds the same way"
+
+
+@pytest.mark.parametrize(
+    ("a", "b"),
+    [
+        ("バート", "ﾊﾞｰﾄ"),  # half-width katakana with a separate voicing mark
+        ("バート", "バート"),  # decomposed input
+        ("パン", "パン"),
+    ],
+)
+def test_a_voiced_kana_folds_the_same_however_it_is_written(a: str, b: str) -> None:
+    assert normalize_name(a) == normalize_name(b)
+    assert normalize_name(b) == a
+
+
+def test_only_kana_voicing_marks_are_recomposed() -> None:
+    """Hangul stays decomposed, so a Korean title still splits off its feat credit."""
+    assert normalize_title("봄날 feat. 아이유") == normalize_title("봄날")
+    assert normalize_name("か\u309aら") == "から", "a mark with no composed form is dropped"
+
+
+def test_voiced_kana_folds_are_idempotent() -> None:
+    for raw in ("バート", "ﾊﾞｰﾄ", "パン (Live)"):
+        once = normalize_title(raw)
+        assert normalize_title(once) == once
+
+
+@pytest.mark.parametrize(("a", "b"), [("(Live)", "[Demo]"), ("(Live)", "(Remastered)"), ("- Radio Edit", "(Live)")])
+def test_a_title_that_is_only_a_qualifier_keeps_it(a: str, b: str) -> None:
+    assert normalize_title(a) != normalize_title(b)
+    assert normalize_title(a) != ""
+
+
+def test_a_qualifier_only_title_folds_to_its_whole_text() -> None:
+    assert normalize_title("(Live)") == "live"
+    assert normalize_title("[Demo]") == "demo"
+    assert normalize_title("(Live)") == normalize_title("[Live]")
+    assert normalize_title("Song (Live)") == "song"
+
+
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [

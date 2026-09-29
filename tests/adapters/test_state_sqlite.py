@@ -5,6 +5,7 @@ import json
 import sqlite3
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -1060,6 +1061,111 @@ def test_a_v6_scheduler_state_row_gains_the_cancelled_column_at_zero(tmp_path: P
         assert state.schema_version() == SCHEMA_VERSION
         assert state.last_scheduled_fire() == datetime(2026, 9, 24, 18, 20, tzinfo=UTC)
         assert not state.scheduled_fire_cancelled()
+
+
+# ---------------------------------------------------------------- first open by two processes
+
+
+def test_the_schema_creates_scheduler_state_with_its_cancelled_column() -> None:
+    """A new file never needs the ALTER, so two first opens cannot both run it."""
+    from likearr.adapters.state_sqlite import _SCHEMA_SQL
+
+    conn = sqlite3.connect(":memory:")
+    try:
+        conn.executescript(_SCHEMA_SQL)
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(scheduler_state)")}
+    finally:
+        conn.close()
+    assert "cancelled" in columns
+
+
+def test_a_new_file_opened_twice_has_one_version_row(tmp_path: Path) -> None:
+    path = tmp_path / "s.sqlite"
+    with SqliteState(path), SqliteState(path) as state:
+        assert state._conn.execute("SELECT COUNT(*) FROM schema_version").fetchone()[0] == 1
+
+
+class _ConnProxy:
+    """Forwards to a real connection, except for the statements a test scripts."""
+
+    def __init__(self, conn: sqlite3.Connection, execute) -> None:
+        self._conn = conn
+        self._execute = execute
+
+    def execute(self, sql: str, *args: Any):
+        return self._execute(self._conn, sql, *args)
+
+    def __getattr__(self, name: str):
+        return getattr(self._conn, name)
+
+
+def test_a_column_another_process_added_first_counts_as_migrated(tmp_path: Path) -> None:
+    """The other process's ALTER lands between the column check and this one's ALTER."""
+    with SqliteState(tmp_path / "s.sqlite") as state:
+        real = state._conn
+
+        def execute(conn: sqlite3.Connection, sql: str, *args: Any):
+            if sql.startswith("PRAGMA table_info"):
+                return iter(())  # the check ran before the other process added the column
+            return conn.execute(sql, *args)
+
+        state._conn = _ConnProxy(real, execute)  # type: ignore[assignment]
+        try:
+            state._add_column("scheduler_state", "cancelled", "INTEGER NOT NULL DEFAULT 0")
+            with pytest.raises(sqlite3.OperationalError, match="no such table"):
+                state._add_column("no_such_table", "x", "INTEGER")
+        finally:
+            state._conn = real
+
+
+def _flaky_wal(failures: list[str]):
+    def execute(conn: sqlite3.Connection, sql: str, *args: Any):
+        if sql == "PRAGMA journal_mode=WAL" and failures:
+            raise sqlite3.OperationalError(failures.pop(0))
+        return conn.execute(sql, *args)
+
+    return execute
+
+
+def test_the_wal_switch_retries_while_the_database_is_busy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("likearr.adapters.state_sqlite._WAL_RETRY_PAUSE", 0.0)
+    with SqliteState(tmp_path / "s.sqlite") as state:
+        real = state._conn
+        failures = ["database is locked", "database is locked", "database is busy"]
+        state._conn = _ConnProxy(real, _flaky_wal(failures))  # type: ignore[assignment]
+        try:
+            state._switch_to_wal()
+        finally:
+            state._conn = real
+        assert failures == []
+        assert real.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+
+
+def test_the_wal_switch_gives_up_after_its_bound(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("likearr.adapters.state_sqlite._WAL_RETRY_PAUSE", 0.0)
+    monkeypatch.setattr("likearr.adapters.state_sqlite._WAL_RETRY_SECONDS", 0.0)
+    with SqliteState(tmp_path / "s.sqlite") as state:
+        real = state._conn
+        state._conn = _ConnProxy(real, _flaky_wal(["database is locked"] * 1000))  # type: ignore[assignment]
+        try:
+            with pytest.raises(sqlite3.OperationalError, match="locked"):
+                state._switch_to_wal()
+        finally:
+            state._conn = real
+
+
+def test_the_wal_switch_does_not_retry_other_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("likearr.adapters.state_sqlite._WAL_RETRY_PAUSE", 0.0)
+    with SqliteState(tmp_path / "s.sqlite") as state:
+        real = state._conn
+        failures = ["disk I/O error", "database is locked"]
+        state._conn = _ConnProxy(real, _flaky_wal(failures))  # type: ignore[assignment]
+        try:
+            with pytest.raises(sqlite3.OperationalError, match="disk I/O"):
+                state._switch_to_wal()
+        finally:
+            state._conn = real
+        assert failures == ["database is locked"], "raised on the first, non-busy error"
 
 
 # ---------------------------------------------------------------- first reviewed apply

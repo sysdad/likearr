@@ -68,6 +68,20 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
   malformed log call is logged instead of raising. Redacted values now read `REDACTED`.
 - **A missing `/static/` file is a plain 404 when you're logged out**, without the nav or the
   version, and the Spotify callback page no longer shows the version.
+- **Japanese names keep their voicing marks when compared**, so kana that differ only by a
+  dakuten or handakuten (like "ハート" and "バート") are no longer treated as the same artist or
+  title.
+- **A title that is only a qualifier, like "(Live)" or "[Demo]", no longer matches any other such
+  title.** It is compared as written.
+- **Following Spotify's "Various Artists" page no longer adds Various Artists to Lidarr** or marks
+  every run degraded. The follow is listed as not resolved; compilations still come in through
+  liked songs and saved albums.
+- **Two processes opening a new install's state database at the same moment** no longer fail with
+  "database is locked" or "duplicate column name".
+
+### Upgrade notes
+
+- The first run after upgrading re-resolves every cached answer, so it takes longer than usual.
 
 ## [0.5.2]
 

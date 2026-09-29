@@ -21,6 +21,7 @@ from likearr.adapters.state_sqlite import SqliteState
 from likearr.core.resolver import (
     AMBIGUOUS_SAME_NAME_STEP,
     ARTIST_AMBIGUOUS_NAME_STEP,
+    ARTIST_VARIOUS_ARTISTS_STEP,
     EXCLUDED_COMPILATION_STEP,
     EXCLUDED_DENIED_STEP,
     EXCLUDED_REMIX_STEP,
@@ -2008,6 +2009,27 @@ def test_a_near_miss_name_is_still_reported_not_resolved() -> None:
     assert "Lawrence Arabia" in result.detail
 
 
+def test_a_followed_various_artists_page_is_unmapped_by_its_link() -> None:
+    """Various Artists has no catalogue MusicBrainz will browse, so following it wants nothing."""
+    links = FakeLinks({"sp-va": [ArtistCandidate(VARIOUS_ARTISTS_MBID, "Various Artists", "")]})
+
+    result = resolve_artist(followed("Various Artists", spotify_id="sp-va"), FakeLookup(), links=links)
+
+    assert result.status is ResolutionStatus.UNMAPPED
+    assert result.step == ARTIST_VARIOUS_ARTISTS_STEP
+    assert result.artist_mbid == VARIOUS_ARTISTS_MBID
+    assert "Various Artists" in result.detail
+
+
+def test_a_followed_various_artists_page_is_unmapped_by_name() -> None:
+    lookup = FakeLookup(artists={VARIOUS_ARTISTS_MBID: "Various Artists"})
+
+    result = resolve_artist(followed("Various Artists", spotify_id="sp-va"), lookup, links=FakeLinks())
+
+    assert result.status is ResolutionStatus.UNMAPPED
+    assert result.step == ARTIST_VARIOUS_ARTISTS_STEP
+
+
 def test_the_link_lookup_is_asked_once_per_followed_artist() -> None:
     links = FakeLinks({SP_LAWRENCE: [NY_LAWRENCE]})
     snap = snapshot(artists=[followed()])
@@ -3263,7 +3285,7 @@ def test_resolve_all_passes_the_relationship_lookup_on() -> None:
     )
     resolution = result.resolutions[intent.reason.key]
     assert resolution.release_group == try_live
-    assert resolution.resolver_version == RESOLVER_VERSION == 12
+    assert resolution.resolver_version == RESOLVER_VERSION == 13
     assert not result.provisional
 
 

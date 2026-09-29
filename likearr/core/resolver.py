@@ -51,6 +51,7 @@ from likearr.ports import ArtistLinks, CatalogueTooLarge, CreditRelations, Metad
 __all__ = [
     "AMBIGUOUS_SAME_NAME_STEP",
     "ARTIST_AMBIGUOUS_NAME_STEP",
+    "ARTIST_VARIOUS_ARTISTS_STEP",
     "EXCLUDED_COMPILATION_STEP",
     "EXCLUDED_DENIED_STEP",
     "EXCLUDED_REMIX_STEP",
@@ -62,6 +63,7 @@ __all__ = [
     "ResolveResult",
     "is_excluded",
     "is_lookup_failed",
+    "refuse_various_artists",
     "resolve_album",
     "resolve_all",
     "resolve_artist",
@@ -145,12 +147,50 @@ every run, so a link added on MusicBrainz settles it on the next run.
 """
 
 
+ARTIST_VARIOUS_ARTISTS_STEP = "artist:various-artists"
+"""The followed Spotify artist is MusicBrainz's Various Artists, which has no catalogue to follow
+(the MusicBrainz adapter refuses to browse it). Always UNMAPPED."""
+
+
+def refuse_various_artists(resolution: ArtistResolution) -> ArtistResolution:
+    """`resolution` unchanged, or UNMAPPED at :data:`ARTIST_VARIOUS_ARTISTS_STEP` when it
+    resolved to Various Artists."""
+    if resolution.status != ResolutionStatus.RESOLVED or resolution.artist_mbid != VARIOUS_ARTISTS_MBID:
+        return resolution
+    return ArtistResolution(
+        intent_key=resolution.intent_key,
+        status=ResolutionStatus.UNMAPPED,
+        artist_mbid=VARIOUS_ARTISTS_MBID,
+        artist_name=resolution.artist_name,
+        step=ARTIST_VARIOUS_ARTISTS_STEP,
+        detail=(
+            f"{resolution.artist_name!r} is MusicBrainz's Various Artists, which has no catalogue to "
+            "follow, so likearr adds nothing for this follow. Its compilations still come in through "
+            "liked tracks and saved albums"
+        ),
+    )
+
+
 def resolve_artist(
     intent: ArtistIntent,
     lookup: MetadataLookup,
     *,
     links: ArtistLinks | None = None,
     known_artist_mbids: frozenset[str] = frozenset(),
+) -> ArtistResolution:
+    """Map a followed Spotify artist to a MusicBrainz artist, refusing Various Artists.
+
+    An answer of MusicBrainz's Various Artists is UNMAPPED at :data:`ARTIST_VARIOUS_ARTISTS_STEP`.
+    """
+    return refuse_various_artists(_resolve_artist(intent, lookup, links=links, known_artist_mbids=known_artist_mbids))
+
+
+def _resolve_artist(
+    intent: ArtistIntent,
+    lookup: MetadataLookup,
+    *,
+    links: ArtistLinks | None,
+    known_artist_mbids: frozenset[str],
 ) -> ArtistResolution:
     """Map a followed Spotify artist to a MusicBrainz artist.
 

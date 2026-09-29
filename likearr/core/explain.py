@@ -26,6 +26,7 @@ from datetime import date
 from likearr.core.normalize import normalize_name, normalize_title
 from likearr.core.resolver import (
     AMBIGUOUS_SAME_NAME_STEP,
+    ARTIST_VARIOUS_ARTISTS_STEP,
     REMIX_ONLY_STEP,
     UNAVAILABLE_STEP,
     is_excluded,
@@ -97,6 +98,7 @@ _STEPS = {
     "artist:search": "a followed artist, by name",
     "artist:ambiguous-name": "a followed artist whose name several MusicBrainz artists share",
     "artist:ambiguous-link": "a followed artist whose Spotify link points at several artists",
+    ARTIST_VARIOUS_ARTISTS_STEP: "a followed Various Artists page, which has no catalogue to follow",
     AMBIGUOUS_SAME_NAME_STEP: "a name and title that two different MusicBrainz artists share",
 }
 
