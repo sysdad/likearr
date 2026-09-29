@@ -17,6 +17,7 @@ from likearr.web.cleanup import (
     read_checks,
     read_spotify,
     read_stage,
+    trashes,
     write_binding,
 )
 
@@ -69,6 +70,28 @@ def test_the_decisions_digest_and_whether_they_ask_spotify(tmp_path: Path) -> No
     decisions.write_text(json.dumps({"trash": ["x"], "promote": [], "save": []}))
     assert not asks_spotify(decisions)
     assert decisions_digest(tmp_path / "missing.json") is None
+
+
+def test_whether_an_export_trashes_decides_the_preview_chain(tmp_path: Path) -> None:
+    decisions = tmp_path / "decisions.json"
+    decisions.write_text(json.dumps({"trash": [], "trash_artists": [], "promote": ["a"]}))
+
+    assert not trashes(decisions)
+    assert Binding("d", asks_spotify=True, trashes=False).chain() == ["spotify"]
+    assert Binding("d", trashes=False).chain() == []
+    assert Binding("d", asks_spotify=True).chain() == ["stage", "spotify", "checks"]
+    decisions.write_text(json.dumps({"trash": ["x"]}))
+    assert trashes(decisions)
+    decisions.write_text("{")
+    assert trashes(decisions), "an unreadable file goes to the move preview, which says what is wrong"
+
+
+def test_a_binding_written_before_it_said_whether_it_trashes_still_runs_the_move(tmp_path: Path) -> None:
+    (tmp_path / "previews.json").write_text('{"decisions_sha256": "abc", "stage": "s"}')
+
+    binding = read_binding(tmp_path)
+
+    assert binding is not None and binding.trashes and binding.chain() == ["stage", "checks"]
 
 
 @pytest.mark.parametrize("content", ["", "[]", "{", '{"files": "7", "remove": "x"}'])

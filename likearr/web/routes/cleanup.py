@@ -386,18 +386,20 @@ def _prune_dir(web: _Web, prune_id: str) -> Path | None:
 def preview_prune(web: _Web, prune_id: str) -> str:
     """Start the read-only previews of a report's current export, bound to it by the sha256 of its
     ``decisions.json``: the move first, then (see `_after_preview`) Spotify when the export asks
-    for a follow or a save, then the Lidarr checks. Returns why it could not start, or ""."""
-    return start_preview(web, prune_id, "stage", fresh=True)
+    for a follow or a save, then the Lidarr checks. An export that trashes nothing skips the move
+    and the checks. Returns why it could not start, or ""."""
+    return start_preview(web, prune_id, None, fresh=True)
 
 
-def start_preview(web: _Web, prune_id: str, step: str, *, fresh: bool = False) -> str:
+def start_preview(web: _Web, prune_id: str, step: str | None, *, fresh: bool = False) -> str:
     """Start one preview step for the current export, and record its job in the binding.
 
-    `fresh` begins a new chain: the binding is replaced only once its first job has started, so
-    a refused start (another job is running - perhaps this chain's own) leaves the previews on
-    the page as they were. Otherwise the step joins the binding's chain, and nothing starts when
-    the export changed since: a preview would be shown for an export it never saw. Every step
-    is read-only - no ``--apply``, no ``--force``."""
+    `fresh` begins a new chain, at `step` or, when `step` is None, at the chain's first step for
+    the export (nothing starts when the chain is empty): the binding is replaced only once its
+    first job has started, so a refused start (another job is running - perhaps this chain's own)
+    leaves the previews on the page as they were. Otherwise the step joins the binding's chain,
+    and nothing starts when the export changed since: a preview would be shown for an export it
+    never saw. Every step is read-only - no ``--apply``, no ``--force``."""
     job_dir = _prune_dir(web, prune_id)
     if job_dir is None:
         return "this report expired"
@@ -438,13 +440,12 @@ def start_preview(web: _Web, prune_id: str, step: str, *, fresh: bool = False) -
         ),
         "checks": ("prune-checks", ["prune-checks", "--out", "{job_dir}/checks.json"], "Check Lidarr"),
     }
-    kind, args, label = kinds[step]
     with _PREVIEW_LOCK:
         digest = cleanup.decisions_digest(decisions)
         if digest is None:
             return "export the decisions first"
         binding = (
-            cleanup.Binding(digest, asks_spotify=cleanup.asks_spotify(decisions))
+            cleanup.Binding(digest, asks_spotify=cleanup.asks_spotify(decisions), trashes=cleanup.trashes(decisions))
             if fresh
             else cleanup.read_binding(job_dir)
         )
@@ -452,6 +453,12 @@ def start_preview(web: _Web, prune_id: str, step: str, *, fresh: bool = False) -
             return "preview this export first (Preview again)"
         if binding.decisions_sha256 != digest:
             return "the export changed since; preview it again"
+        if step is None:
+            chain = binding.chain()
+            if not chain:
+                return ""
+            step = chain[0]
+        kind, args, label = kinds[step]
         try:
             meta = web.runner.start(kind, args, label=label, expand_job_dir=True, plan_id=prune_id)
         except JobRefused as exc:
@@ -473,8 +480,7 @@ def _after_preview(web: _Web, meta: JobMeta) -> None:
         binding = cleanup.read_binding(job_dir) if job_dir is not None else None
         if binding is None or getattr(binding, step) != meta.id:
             return
-        chain = ["stage", *(["spotify"] if binding.asks_spotify else []), "checks"]
-        then = next((s for s in chain if not getattr(binding, s)), None)
+        then = next((s for s in binding.chain() if not getattr(binding, s)), None)
     if then is not None and web.cleanup_enabled():  # turned off mid-chain: start nothing more
         problem = start_preview(web, meta.plan_id, then)
         if problem:
@@ -509,7 +515,7 @@ def _prune_finish_context(web: _Web, meta: JobMeta, job_dir: Path, summary: Mapp
     # The chain starts each step as the one before it finishes: a step not started yet, just after
     # its predecessor finished, is on its way - keep refreshing, briefly, rather than say "not
     # previewed". Bounded, so a start that was refused never keeps a page polling.
-    chain = ["stage", *(["spotify"] if binding is not None and binding.asks_spotify else []), "checks"]
+    chain = binding.chain() if binding is not None else []
     for before, step in itertools.pairwise(chain):
         prior = steps[before]["meta"]
         if (
@@ -532,6 +538,7 @@ def _prune_finish_context(web: _Web, meta: JobMeta, job_dir: Path, summary: Mapp
         "spotify": spotify,
         "checks": cleanup.read_checks(steps["checks"]["path"]),
         "asks_spotify": cleanup.asks_spotify(job_dir / "decisions.json"),
+        "trashes": cleanup.trashes(job_dir / "decisions.json"),
         "missing_scopes": sorted(REQUIRED_SCOPES - granted) if granted is not None else None,
         # In direct-callback mode the missing-write-scope hint can also start the flow itself.
         "callback_mode": bool(config.ui.public_url),

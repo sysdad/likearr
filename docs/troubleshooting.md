@@ -55,6 +55,9 @@ Status says what happened in words. By health status:
 An artist Lidarr can't add because its metadata doesn't know them yet is retried every run. It can
 take weeks for Lidarr's metadata to catch up.
 
+If Clean up says the Spotify read was incomplete, it builds no report and moves nothing. Try again
+later.
+
 ## Lidarr looks stuck
 
 likearr waits on Lidarr's `RefreshArtist` commands, up to 300 seconds plus 2 seconds per release,

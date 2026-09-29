@@ -754,6 +754,44 @@ def test_save_all_counts_the_albums_set_to_keep(view) -> None:
     ]
 
 
+UNREAD_REASON = "its artist is followed (followed:sp-q) but their catalogue could not be read this run, ..."
+
+
+@pytest.fixture
+def uview(tmp_path: Path):
+    """Queen is followed, but their catalogue could not be read: two studio albums are kept."""
+    unread = {"kind": "catalogue_unread", "intent_key": "followed:sp-q"}
+    report = {
+        "created_at": "",
+        "summary": {},
+        "candidates": [_frow(QUEEN, "Queen", FRG[1], "Live Killers", "Album", ["Live"], True)],
+        "protected": [
+            _frow(QUEEN, "Queen", rg, title, "Album", [], True, protected_reason=UNREAD_REASON, protection=unread)
+            for rg, title in ((FRG[2], "Innuendo"), (FRG[3], "Jazz"))
+        ],
+    }
+    path = tmp_path / "unread.json"
+    path.write_text(json.dumps(report))
+    view = read_report(path)
+    assert view is not None
+    return view
+
+
+def test_an_unread_catalogue_keeps_the_studio_albums_and_the_review_says_so_once(uview) -> None:
+    queen = uview.artist(QUEEN)
+    draft = dec(Draft(), uview, QUEEN, "trash")
+
+    assert decisions_file(uview, draft)["trash"] == [FRG[1]]
+    assert net_effect(queen, draft) == [
+        "Trashes the 1 album listed here (1 live album).",
+        "2 albums are kept: their catalogue couldn't be read this time.",
+    ]
+    innuendo = next(r for r in queen.releases if r.rg_mbid == FRG[2])
+    assert kept_why(innuendo).text == "You follow this artist, and their catalogue couldn't be read this time."
+    with pytest.raises(DecisionError, match="Innuendo is kept: its artist's catalogue couldn't be read"):
+        dec(Draft(), uview, QUEEN, "keep", **{FRG[2]: "trash"})
+
+
 # ---------------------------------------------------------------- why an album is always kept, in words
 
 ARETHA = "aaaaaaaa-0000-4000-8000-000000000064"

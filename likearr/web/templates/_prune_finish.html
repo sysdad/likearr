@@ -17,6 +17,7 @@
 <p class="note">Commands start with <code>{{ f.cli_command }}</code> (<code>[ui] cli_command</code>), which must run the <code>likearr-cli</code> service.</p>
 {% for e in f.prune_errors %}<p class="warn">{{ e }}</p>{% endfor %}
 <ol class="finish-steps">
+  {% if f.trashes %}
   <li>
     <h3>Preview the move {{ changes("ok", "changes nothing") }}</h3>
     {% if f.stage %}{% set s = f.stage %}
@@ -55,6 +56,9 @@
     <pre>{{ f.commands.stage_apply }}</pre>
     <p class="note">Files move into {{ f.holding }}, one folder per day. Then Lidarr removes and rescans the artists from step 1.</p>
   </li>
+  {% else %}
+  <li><h3>Files</h3><p>Nothing to move: this export trashes no album.</p></li>
+  {% endif %}
   {% if f.asks_spotify %}
   <li>
     <h3>Preview the Spotify changes {{ changes("ok", "reads Spotify only") }}</h3>
@@ -75,22 +79,24 @@
   <li>
     <h3>Follow and save on Spotify {{ changes("warn", "changes Spotify") }}</h3>
     {% if f.commands.spotify_apply %}
-    <p>After step 4, apply the plan step 5 made:</p>
+    <p>{% if f.trashes %}After step 4, apply the plan step 5 made{% else %}Apply the plan step 2 made{% endif %}:</p>
     <pre>{{ f.commands.spotify_apply }}</pre>
     <p class="note">If it says the plan is stale, make a fresh one and apply that:</p>
-    {% else %}<p>After step 4, make the plan and apply it:</p>{% endif %}
+    {% else %}<p>{% if f.trashes %}After step 4, make{% else %}Make{% endif %} the plan and apply it:</p>{% endif %}
     <pre>{{ f.commands.spotify_plan }}</pre>
     <pre>{{ f.commands.spotify_apply_fresh }}</pre>
   </li>
   {% else %}
   <li><h3>Spotify</h3><p>Nothing to do: this export follows and saves nothing.</p></li>
   {% endif %}
+  {% if f.trashes %}
   <li>
     <h3>Afterwards</h3>
     <p>The moved files sit in {{ f.holding }}, with a record of every move, so anything can go back by hand. Nothing is deleted until you empty that folder yourself: keep it a few weeks, until you're sure.</p>
   </li>
+  {% endif %}
 </ol>
-<form method="post" action="/prune/{{ f.job_id }}/preview" class="inline"><button type="submit">Preview again</button><span class="note">Runs steps 1, 2 and 5 again for this export.</span></form>
+{% if f.trashes or f.asks_spotify %}<form method="post" action="/prune/{{ f.job_id }}/preview" class="inline"><button type="submit">Preview again</button><span class="note">Runs {{ ("steps 1, 2 and 5" if f.asks_spotify else "steps 1 and 2") if f.trashes else "step 2" }} again for this export.</span></form>{% endif %}
 {% endif %}
 {% endif %}
 </div>

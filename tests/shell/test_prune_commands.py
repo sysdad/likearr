@@ -15,7 +15,7 @@ from typing import Any
 import pytest
 
 from likearr.adapters.lock import LockHeld, run_lock
-from likearr.models import EXIT_OK, PrimaryType, ReasonKind, SecondaryType
+from likearr.models import EXIT_ERROR, EXIT_OK, PrimaryType, ReasonKind, SecondaryType
 from likearr.ports import LidarrError
 from likearr.shell import prune_commands
 from tests.shell.commands_shared import STRANGER
@@ -508,6 +508,68 @@ def test_prune_stage_apply_refuses_a_manifest_whose_album_gained_a_spotify_reaso
     assert "Another Record" in str(exc.value)
     assert "Spotify" in str(exc.value)
     assert not (tmp_path / "holding").exists(), "nothing was moved"
+
+
+def test_prune_stage_apply_refuses_an_album_of_an_artist_followed_since_whose_catalogue_is_unread(
+    tmp_path: Path, sink: CapturingSink
+) -> None:
+    source, lookup, lidarr = _prune_world(tmp_path)
+    manifest = tmp_path / "prune.json"
+    with make_context(
+        tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink, config=_library_config(tmp_path)
+    ) as ctx:
+        assert prune_commands.prune_report_command(ctx, out=manifest, now=NOW) == EXIT_OK
+        assert json.loads(manifest.read_text())["candidates"], "the albums were candidates before the follow"
+        source.snapshot = snapshot(artists=[artist_intent("A Stranger", spotify_id="sp-a9")])
+        lookup.fail.add("artist_release_groups")
+        with pytest.raises(prune_commands.PruneStageError, match="catalogue could not be read"):
+            _stage_all(ctx, manifest, tmp_path)
+
+    assert not (tmp_path / "holding").exists(), "nothing was moved"
+
+
+def test_prune_report_refuses_a_short_spotify_read(
+    tmp_path: Path, sink: CapturingSink, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source, lookup, lidarr = _prune_world(tmp_path)
+    source.snapshot = snapshot(schema_ok=False)
+    out = tmp_path / "prune.json"
+    with make_context(tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink) as ctx:
+        code = prune_commands.prune_report_command(ctx, out=out, now=NOW)
+
+    assert code == EXIT_ERROR
+    assert not out.exists()
+    assert "Spotify read was incomplete" in capsys.readouterr().out
+
+
+def test_prune_stage_apply_refuses_when_the_spotify_read_is_short_now(tmp_path: Path, sink: CapturingSink) -> None:
+    source, lookup, lidarr = _prune_world(tmp_path)
+    manifest = tmp_path / "prune.json"
+    with make_context(
+        tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink, config=_library_config(tmp_path)
+    ) as ctx:
+        prune_commands.prune_report_command(ctx, out=manifest, now=NOW)
+        source.snapshot = snapshot(schema_ok=False)
+        with pytest.raises(prune_commands.PruneStageError, match="Spotify read was incomplete"):
+            _stage_all(ctx, manifest, tmp_path)
+
+    assert not (tmp_path / "holding").exists(), "nothing was moved"
+
+
+def test_prune_report_keeps_the_studio_albums_of_a_followed_artist_whose_catalogue_was_not_read(
+    tmp_path: Path, sink: CapturingSink
+) -> None:
+    source, lookup, lidarr = _prune_world(tmp_path)
+    source.snapshot = snapshot(artists=[artist_intent("A Stranger", spotify_id="sp-a9")])
+    lookup.fail.add("artist_release_groups")
+    out = tmp_path / "prune.json"
+    with make_context(tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink) as ctx:
+        assert prune_commands.prune_report_command(ctx, out=out, now=NOW) == EXIT_OK
+
+    payload = json.loads(out.read_text())
+    assert payload["candidates"] == []
+    assert {row["protection"]["kind"] for row in payload["protected"]} == {"catalogue_unread"}
+    assert {row["rg_mbid"] for row in payload["protected"]} == {"rg-8", "rg-9"}
 
 
 def test_prune_stage_apply_refuses_a_manifest_whose_album_became_owned(tmp_path: Path, sink: CapturingSink) -> None:

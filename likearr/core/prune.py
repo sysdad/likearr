@@ -5,8 +5,9 @@ This only ever produces a report. Nothing here deletes, moves or unmonitors anyt
 
 A row is a **candidate** when the album has files, no source wants it and likearr does not own it.
 A candidate is **protected** instead when deleting it would take away the only local copy of a
-song the user liked - see :func:`build_prune_report` for the rule. Why, is kept as data
-(`Protection`), so the review can say it in words with no id in them.
+song the user liked, or when it is a studio album or EP of a followed artist whose catalogue could
+not be read - see :func:`build_prune_report` for the rules. Why, is kept as data (`Protection`), so
+the review can say it in words with no id in them.
 """
 
 from __future__ import annotations
@@ -16,7 +17,9 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any
 
+from likearr.core.desire import CATALOGUE_UNREAD_STEPS
 from likearr.models import (
+    ArtistResolution,
     DesiredState,
     LidarrView,
     OwnedRelease,
@@ -34,14 +37,18 @@ __all__ = [
     "PruneReport",
     "PruneRow",
     "build_prune_report",
+    "follow_may_bring",
     "split_track_key",
+    "unread_catalogues",
 ]
 
 _TRACK_REASON_PREFIXES = ("liked:", "playlist:")
 
-PROTECTION_KINDS = ("pending_album", "album_not_downloaded")
+PROTECTION_KINDS = ("pending_album", "album_not_downloaded", "catalogue_unread")
 """``pending_album``: the song is waiting for its album to be released, so nothing is monitored
-for it. ``album_not_downloaded``: the album it matched has no files yet."""
+for it. ``album_not_downloaded``: the album it matched has no files yet. ``catalogue_unread``: the
+artist is followed, but their catalogue could not be read this run, so whether the follow wants
+this album is unknown."""
 
 
 def split_track_key(intent_key: str) -> tuple[str, str, str] | None:
@@ -64,7 +71,8 @@ class Protection:
     kind: str
     """One of `PROTECTION_KINDS`."""
     intent_key: str
-    """`Reason.key` of the liked song or playlist track whose only copy this is."""
+    """`Reason.key` of the liked song or playlist track whose only copy this is; for
+    ``catalogue_unread``, of the artist's follow."""
     song: str = ""
     """The track's title, from the run's snapshot; empty when the snapshot did not have it."""
     song_artists: tuple[str, ...] = ()
@@ -85,6 +93,11 @@ class Protection:
 
     def describe(self) -> str:
         """The terminal's line, ids and all: `prune-stage` quotes it when it refuses a trash."""
+        if self.kind == "catalogue_unread":
+            return (
+                f"its artist is followed ({self.intent_key}) but their catalogue could not be read this run, "
+                "so whether the follow wants it is unknown"
+            )
         if self.kind == "pending_album":
             return (
                 f"holds a liked track ({self.intent_key}) that is still waiting for an album; "
@@ -196,6 +209,12 @@ def build_prune_report(
     its album) *and* the release that track resolved to has no files in the view. A PENDING_ALBUM
     track resolved to nothing at all, so its single is always protected.
 
+    **Unread catalogues.** A followed artist whose catalogue could not be read this run (in
+    `desired.unmapped` at a step in `CATALOGUE_UNREAD_STEPS`) contributed none of their releases,
+    so "nothing asks for it" is unknown rather than true for the studio albums and EPs the follow
+    would bring: those rows are protected (``catalogue_unread``). Their other releases - a live
+    album, a compilation - are not what a follow brings, and stay candidates.
+
     Each row also says whether its artist is followed (`followed_read` False: follows were not
     read, so ``None``), and whether a Spotify follow of that name went unmatched
     (`unmatched_follows`: casefolded names). A protected row names the song it protects by its
@@ -203,6 +222,7 @@ def build_prune_report(
     """
     report = PruneReport(created_at=now)
     songs = {track.reason.key: track for track in tracks}
+    unread = unread_catalogues(desired)
 
     protectors: dict[str, list[tuple[Resolution, bool]]] = {}
     for resolution in resolutions:
@@ -235,6 +255,9 @@ def build_prune_report(
                 continue
 
             protection = _protection(protectors.get(rg_mbid, []), songs)
+            brought = follow_may_bring(album.primary_type, album.secondary_types)
+            if protection is None and artist_mbid in unread and brought:
+                protection = Protection(kind="catalogue_unread", intent_key=unread[artist_mbid])
             row = PruneRow(
                 artist_mbid=artist_mbid,
                 artist_name=artist.name if artist is not None else desired.artists.get(artist_mbid, artist_mbid),
@@ -264,6 +287,20 @@ def build_prune_report(
             report.total_bytes += row.size_on_disk
 
     return report
+
+
+def unread_catalogues(desired: DesiredState) -> dict[str, str]:
+    """Followed artists whose catalogue could not be read this run: artist mbid -> follow's intent key."""
+    return {
+        u.artist_mbid: u.intent_key
+        for u in desired.unmapped
+        if isinstance(u, ArtistResolution) and u.artist_mbid and u.step in CATALOGUE_UNREAD_STEPS
+    }
+
+
+def follow_may_bring(primary_type: PrimaryType | None, secondary_types: frozenset[SecondaryType]) -> bool:
+    """A studio album or EP, or one whose type Lidarr does not know: what a follow may bring."""
+    return not secondary_types and primary_type in (PrimaryType.ALBUM, PrimaryType.EP, None)
 
 
 def _protection(claims: list[tuple[Resolution, bool]], songs: Mapping[str, TrackIntent]) -> Protection | None:
