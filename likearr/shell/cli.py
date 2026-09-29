@@ -33,6 +33,7 @@ from likearr.shell.diff_io import DiffFileError
 from likearr.shell.output import emit
 from likearr.shell.promote_save import DEFAULT_PLAN_PATH, PromoteSaveError, promote_save_command
 from likearr.shell.run import DEFAULT_DIFF_PATH, run_command, scheduled_run_without_state
+from likearr.shell.run_types import ExistingChoice
 
 __all__ = ["build_parser", "main"]
 
@@ -112,6 +113,23 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     run.add_argument("--force", action="store_true", help="apply a stale diff anyway (rarely what you want)")
+    run.add_argument(
+        "--claim-existing",
+        action="store_true",
+        help="on a first apply: let likearr manage the albums you already monitor that match what you like",
+    )
+    run.add_argument(
+        "--unmonitor-rest",
+        action="store_true",
+        help="on a first apply: unmonitor the albums you already monitor that match nothing you like",
+    )
+    run.add_argument(
+        "--keep",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help="with --unmonitor-rest: release group MBIDs to leave monitored, one per line",
+    )
 
     auth = subparsers.add_parser("auth", help="authorize likearr against your Spotify account")
     auth.add_argument("--manual", action="store_true", help="print the URL and paste the redirect back by hand")
@@ -133,7 +151,14 @@ def build_parser() -> argparse.ArgumentParser:
     setup.add_argument("--json", action="store_true", help="one line of JSON (the web UI's Lidarr setup panel)")
 
     adopt = subparsers.add_parser("adopt", help="take responsibility for monitoring that predates likearr")
-    adopt.add_argument("--keep", type=Path, default=None, metavar="FILE", help="keep-list: one mbid per line")
+    adopt.add_argument(
+        "--unmonitor-rest",
+        action="store_true",
+        help="also unmonitor every monitored album no source wants and the keep-list doesn't list",
+    )
+    adopt.add_argument(
+        "--keep", type=Path, default=None, metavar="FILE", help="with --unmonitor-rest: keep-list, one mbid per line"
+    )
     adopt.add_argument(
         "--out", type=Path, default=Path("adopt.json"), help="where to write the plan (default: adopt.json)"
     )
@@ -319,7 +344,14 @@ def _dispatch(args: argparse.Namespace) -> int:
             return setup_commands.setup_profiles_command(ctx, do_apply=args.apply, as_json=args.json)
         if args.command == "adopt":
             apply_path = None if args.apply is None else Path(args.apply or args.out)
-            return commands.adopt_command(ctx, keep_file=args.keep, apply_path=apply_path, out=args.out, now=now)
+            return commands.adopt_command(
+                ctx,
+                keep_file=args.keep,
+                apply_path=apply_path,
+                out=args.out,
+                unmonitor_rest=args.unmonitor_rest,
+                now=now,
+            )
         if args.command == "explain":
             return commands.explain_command(
                 ctx,
@@ -433,7 +465,16 @@ def _run(ctx: Context, args: argparse.Namespace, *, now: datetime) -> int:
         force=args.force,
         accept_shrink=args.accept_shrink,
         accept_health=args.accept_health,
+        existing=_existing_choice(args),
     )
+
+
+def _existing_choice(args: argparse.Namespace) -> ExistingChoice | None:
+    """`run`'s ``--claim-existing``, ``--unmonitor-rest`` and ``--keep``, or ``None`` when none is given."""
+    if not (args.claim_existing or args.unmonitor_rest or args.keep is not None):
+        return None
+    keep = frozenset(commands.read_keep_file(args.keep))
+    return ExistingChoice(claim=args.claim_existing, unmonitor_rest=args.unmonitor_rest, keep=keep)
 
 
 if __name__ == "__main__":  # pragma: no cover

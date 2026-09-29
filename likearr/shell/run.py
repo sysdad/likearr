@@ -38,6 +38,7 @@ from likearr.adapters.health import publish_all
 from likearr.adapters.http import redact
 from likearr.adapters.lock import LockHeld, run_lock
 from likearr.config import Config
+from likearr.core.adopt import AdoptPlan, adopt_digest, plan_adoption
 from likearr.core.desire import CATALOGUE_TOO_LARGE_STEP
 from likearr.core.diff import best_reason_key, is_catalogue_gap, is_recent_catalogue_gap
 from likearr.core.health import (
@@ -66,10 +67,12 @@ from likearr.models import (
 )
 from likearr.ports import HealthSink, LidarrError, QuotaExceeded, SourceError
 from likearr.shell import last_run
+from likearr.shell.adopt_io import ExistingAlbums, existing_to_dict
 from likearr.shell.apply import apply
 from likearr.shell.context import Context
 from likearr.shell.diff_io import DiffFileError, write_diff
-from likearr.shell.plan import plan, tagged_without_state
+from likearr.shell.output import emit
+from likearr.shell.plan import plan, tagged_without_state, view_of_everything
 from likearr.shell.run_report import (
     CONDITION_TEXT,
     NAMES_SHOWN,
@@ -84,6 +87,7 @@ from likearr.shell.run_types import (
     ApplyResult,
     ApplyStopped,
     ConfigStaleError,
+    ExistingChoice,
     PlanResult,
     changes_made,
     planned_changes,
@@ -120,6 +124,7 @@ def run_command(
     force: bool = False,
     accept_shrink: bool = False,
     accept_health: bool = False,
+    existing: ExistingChoice | None = None,
 ) -> int:
     """`likearr run`: plan (and optionally apply), under the run lock, always publishing health.
 
@@ -138,6 +143,9 @@ def run_command(
             The mirror image of ``accept_shrink``: it needs an apply (only an apply writes the
             baseline) and is refused with ``scheduled``, because acceptance is a human act and a
             cron line carrying it would silence the signal for good.
+        existing: on a hand apply of a reviewed file, what to do with its "Albums you already
+            monitor" (``--claim-existing``, ``--unmonitor-rest``, ``--keep``). A first check before
+            any apply lists them; see `_existing_albums`.
 
     Returns:
         A `likearr.models` ``EXIT_*`` code. Never raises for an expected failure.
@@ -162,6 +170,15 @@ def run_command(
         # is the defect this whole mechanism exists to remove.
         why = "--scheduled" if scheduled else "a dry run"
         log.error("--accept-health is for a hand-run apply and cannot be combined with %s", why)
+        return EXIT_ERROR
+
+    if existing is not None and (scheduled or apply_path is None):
+        # A choice made while reviewing a plan: an unattended run, or a plan-and-apply in one go,
+        # has no reviewed file to carry it.
+        log.error("--claim-existing, --unmonitor-rest and --keep are for applying a reviewed diff file by hand")
+        return EXIT_ERROR
+    if existing is not None and existing.keep and not existing.unmonitor_rest:
+        log.error("--keep only applies with --unmonitor-rest; without it, nothing already monitored is unmonitored")
         return EXIT_ERROR
 
     if scheduled and (held := _held(ctx.config, first_applied=lambda: ctx.state.first_apply_at() is not None)):
@@ -207,6 +224,7 @@ def run_command(
                 force=force,
                 accept_shrink=accept_shrink,
                 accept_health=accept_health,
+                existing=existing,
             )
     except LockHeld as exc:
         if scheduled:
@@ -443,12 +461,16 @@ def _run_locked(
     force: bool,
     accept_shrink: bool,
     accept_health: bool,
+    existing: ExistingChoice | None,
 ) -> int:
     if not do_apply:
         result = plan(ctx, now=now, scheduled=scheduled, accept_shrink=accept_shrink)
-        write_diff(result.diff, out)
+        found = None if scheduled else _existing_albums(ctx, result, now=now)
+        write_diff(result.diff, out, existing_albums=existing_to_dict(found) if found is not None else None)
         _, delta, verdict = _assess(ctx, result, None)
         print_plan(result, out, delta)
+        if found is not None:
+            _print_existing(found.adoption)
         exit_code = _exit_code_of(verdict.status)
         _publish(
             ctx,
@@ -459,7 +481,9 @@ def _run_locked(
         return exit_code
 
     try:
-        exit_code, applied, fresh, diff = apply(ctx, apply_path, now=now, scheduled=scheduled, force=force)
+        exit_code, applied, fresh, diff = apply(
+            ctx, apply_path, now=now, scheduled=scheduled, force=force, existing=existing
+        )
     except ConfigStaleError as exc:
         log.error("%s", exc)
         # A usage outcome, not a fault: nothing was planned or changed, and the remedy is a
@@ -520,6 +544,44 @@ def _run_locked(
     )
     _record_for_explain(ctx, fresh, now=now, executed=diff, applied=applied)
     return exit_code
+
+
+def _existing_albums(ctx: Context, result: PlanResult, *, now: datetime) -> ExistingAlbums | None:
+    """Before the first apply, the albums Lidarr already monitors that likearr does not own: which
+    match what the sources want and which do not, with the holds unmonitoring the rest would make.
+    ``None`` after the first apply, or when there are none. Those the diff already claims
+    (`[rules] manage_monitored`) are left out: the diff owns them either way."""
+    if ctx.state.first_apply_at() is not None:
+        return None
+    owned = {**ctx.state.owned_releases(), **{c.key: c for c in result.diff.claim}}
+    view = view_of_everything(ctx)
+    adoption = plan_adoption(
+        result.desired,
+        view,
+        owned,
+        set(),
+        now=now,
+        unmonitor_rest=True,
+        snapshot=result.snapshot,
+        lookup_failed=result.resolve_result.provisional,
+    )
+    if not (adoption.claim or adoption.unmonitor or adoption.held):
+        return None
+    keys = [*(r.key for r in adoption.claim), *(u.key for u in adoption.unmonitor), *(h.key for h in adoption.held)]
+    artists = {k.artist_mbid: a.name for k in keys if (a := view.artists.get(k.artist_mbid)) is not None and a.name}
+    titles = {r.key.rg_mbid: album.title for r in adoption.claim if (album := view.album(r.key)) is not None}
+    return ExistingAlbums(
+        adoption=adoption, lidarr_digest=adopt_digest(view, adoption, owned), artists=artists, titles=titles
+    )
+
+
+def _print_existing(adoption: AdoptPlan) -> None:
+    rest = len(adoption.unmonitor) + len(adoption.held)
+    emit(
+        f"  albums you already monitor: {len(adoption.claim)} match what you like, {rest} don't. "
+        "Nothing changes for them unless you choose to, in Review changes or with "
+        "`run --apply` and --claim-existing / --unmonitor-rest"
+    )
 
 
 def _record_for_explain(

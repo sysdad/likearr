@@ -6,6 +6,7 @@
   <div class="banner tone-warn"><div class="text"><p class="title">This check is {{ state.name }}.</p><p>{{ state.why }}</p></div></div>
   {% with replan_shrink = review.accept_shrink %}{% include "_replan.html" %}{% endwith %}
 {% endif %}
+{% if review.existing %}{% include "_existing_albums.html" %}{% endif %}
 {% include "_plan_counts.html" %}
 {% include "_plan_apply_action.html" %}
 {% for context in sections if context.total %}

@@ -70,9 +70,9 @@ class PlanState:
         return self.name == "reviewable"
 
 
-_CHANGE_COUNTS = ("monitored", "unmonitored", "added", "new_items_none")
-"""What an apply's health record says it changed, artists set to "Monitor New Albums: None"
-included: an apply that did only that moved Lidarr from under the plan too. Ratchets and
+_CHANGE_COUNTS = ("monitored", "unmonitored", "added", "new_items_none", "claimed")
+"""What an apply's health record says it changed, artists set to "Monitor New Albums: None" and
+albums likearr started managing included: an apply that did only that moved Lidarr from under the plan too. Ratchets and
 re-monitored artists are not in the record; an apply that did only those (rare: they come with
 monitors) leaves the plan reviewable, and `apply`'s digest check still refuses it if Lidarr moved."""
 
@@ -363,6 +363,7 @@ SECTIONS: dict[str, Section] = {
     for s in (
         Section("add_artists", "Artists to add", "Added to Lidarr, with the metadata profile each will get."),
         Section("monitor", "Releases to monitor", ""),
+        Section("claim", "Albums to start managing", "Already monitored. If you unlike one later, it's unmonitored."),
         Section("unmonitor", "Releases to unmonitor", "No longer backed by anything on Spotify."),
         Section("ratchets", "Profiles to widen", "Artists moved to a profile that shows more release types."),
         Section(
@@ -433,6 +434,15 @@ def section_rows(
                 row["_href:Wanted because"] = link
             rows.append(row)
         return rows
+    if name == "claim":
+        return [
+            {
+                **_release_cell(c.key.rg_mbid, release_titles or {}),
+                "Artist": _artist(c.key.artist_mbid, artist_names),
+                "Wanted because": describe_reasons(c.reasons, playlist_names),
+            }
+            for c in diff.claim
+        ]
     if name == "unmonitor":
         titles = {m.key.rg_mbid: m.title for m in diff.monitor}
         rows = []

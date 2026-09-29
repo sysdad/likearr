@@ -232,6 +232,9 @@ class RulesConfig:
     deny_releases: tuple[str, ...] = ()
     """Release group MBIDs the resolver must never choose. Validated and lowercased in
     `parse_config`, so the resolver may trust their shape."""
+    manage_monitored: bool = False
+    """Every run claims each wanted album Lidarr already monitors and likearr does not own yet, so
+    unliking it later unmonitors it. Off: such an album stays the user's own."""
 
     @property
     def exclusions(self) -> ExclusionRules:
@@ -485,6 +488,7 @@ KNOWN_KEYS: dict[str, frozenset[str]] = {
             "allow_remix_releases",
             "keep_remix_only_tracks",
             "deny_releases",
+            "manage_monitored",
         }
     ),
     "guards": frozenset(
@@ -1044,6 +1048,7 @@ def parse_config(raw: dict, *, base_dir: Path | None = None) -> Config:
         allow_remix_releases=_bool(ru, "allow_remix_releases", True, name="rules"),
         keep_remix_only_tracks=_bool(ru, "keep_remix_only_tracks", True, name="rules"),
         deny_releases=_deny_releases(ru),
+        manage_monitored=_bool(ru, "manage_monitored", False, name="rules"),
     )
     gu = _checked(raw, "guards", "guards")
     guards = GuardsConfig(

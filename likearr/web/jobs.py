@@ -705,8 +705,9 @@ class JobRunner:
 
     def job_file(self, job_id: str, name: str, *, must_exist: bool = True) -> Path | None:
         """A file in a job's own directory, if the id is valid (and, by default, the file exists).
-        `name` is always one of the server's own fixed names, never request data."""
-        if not valid_job_id(job_id) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*\.json", name):
+        `name` is always one of the server's own fixed names, never request data: a ``.json``
+        file, or the kept release groups of a first apply (``existing-keep.txt``)."""
+        if not valid_job_id(job_id) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*\.json|existing-keep\.txt", name):
             return None
         path = self._root / job_id / name
         if not (self._root / job_id).is_dir():

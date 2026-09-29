@@ -1524,3 +1524,14 @@ def test_known_keys_match_the_dataclass_fields() -> None:
     # Every other top-level field of `Config` is a section of the same name.
     assert (names(Config) - {"state_db", "lock_file"}) | {"state"} == KNOWN_SECTIONS
     assert set(KNOWN_KEYS) == KNOWN_SECTIONS | {"health.mqtt", "health.webhook"}
+
+
+def test_manage_monitored_is_off_when_the_key_is_missing(tmp_path: Path) -> None:
+    """A config.toml written before the key existed loads unchanged, with it off."""
+    assert parse_config(_raw(rules={"allow_remix_releases": True}), base_dir=tmp_path).rules.manage_monitored is False
+    assert parse_config(_raw(rules={"manage_monitored": True}), base_dir=tmp_path).rules.manage_monitored is True
+
+
+def test_manage_monitored_must_be_a_boolean(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match="manage_monitored"):
+        parse_config(_raw(rules={"manage_monitored": "yes"}), base_dir=tmp_path)

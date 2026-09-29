@@ -10,7 +10,7 @@ import logging
 import re
 import sqlite3
 import tomllib
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -212,6 +212,7 @@ def _settings_context(
         "config_error": "",
         "schedule": config.schedule,
         "cleanup": config.prune,
+        "manage_monitored": config.rules.manage_monitored,
         "first_applied": _first_applied(config),
         "paused_at_local": config.schedule.paused_at.astimezone(web.tz) if config.schedule.paused_at else None,
         "schedule_preview": cfg.preview_schedule(config.schedule.cron, config.schedule.timezone, now=web.now()),
@@ -407,6 +408,17 @@ async def settings_resume(request: Request) -> Response:
 async def settings_cleanup(request: Request) -> Response:
     """Turn Clean up on or off: `[prune] enabled`, through the same backed-up write as every
     other save, with no confirm - see `cfg.plan_cleanup`."""
+    return await _toggle(request, cfg.plan_cleanup, "Clean up")
+
+
+async def settings_manage_monitored(request: Request) -> Response:
+    """Turn "Also manage albums you monitor later" on or off: `[rules] manage_monitored`, the same
+    way - see `cfg.plan_manage_monitored`."""
+    return await _toggle(request, cfg.plan_manage_monitored, "Managing albums you monitor later")
+
+
+async def _toggle(request: Request, plan: Callable[..., cfg.SaveCheck], what: str) -> Response:
+    """Save one on/off setting from its own small form: the posted ``enabled`` is ``1`` for on."""
     web = _web(request)
     posted = await _posted(request)
     now = web.now()
@@ -420,7 +432,7 @@ async def settings_cleanup(request: Request) -> Response:
         return web.render(request, "settings.html", _settings_context(web, text, config, errors=changed), 409)
 
     enabled = posted.get("enabled", [""])[0] == "1"
-    check = cfg.plan_cleanup(text.decode("utf-8"), enabled, base_dir=web.config_path.parent)
+    check = plan(text.decode("utf-8"), enabled, base_dir=web.config_path.parent)
     if check.errors:
         context = _settings_context(web, text, config, errors=check.errors)
         return web.render(request, "settings.html", context, 400)
@@ -434,8 +446,8 @@ async def settings_cleanup(request: Request) -> Response:
         changed = {"": "config.toml changed while saving. Nothing was saved; these are the values now."}
         return web.render(request, "settings.html", _settings_context(web, text, config, errors=changed), 409)
     word = "on" if enabled else "off"
-    log.info("Clean up turned %s from the web UI (backup %s)", word, backup.name)
-    request.session["flash"] = f"Clean up is {word}. The previous file is {backup.name}."
+    log.info("%s turned %s from the web UI (backup %s)", what, word, backup.name)
+    request.session["flash"] = f"{what} is {word}. The previous file is {backup.name}."
     return RedirectResponse("/settings", status_code=303)  # the flash is at the top
 
 
@@ -1136,6 +1148,7 @@ ROUTES: list[Route] = [
     Route("/settings/pause", settings_pause, methods=["POST"]),
     Route("/settings/resume", settings_resume, methods=["POST"]),
     Route("/settings/cleanup", settings_cleanup, methods=["POST"]),
+    Route("/settings/manage-monitored", settings_manage_monitored, methods=["POST"]),
     Route("/settings/schedule", settings_schedule, methods=["POST"]),
     Route("/settings/schedule/preview", settings_schedule_preview, methods=["GET"]),
     Route("/settings/playlists", playlists_refresh, methods=["POST"]),

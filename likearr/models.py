@@ -801,6 +801,9 @@ class Diff:
     `[guards]` changed since - a release denied after the plan was reviewed, say. ``None`` for a
     diff written before it was recorded, which `apply` treats as stale: it cannot vouch for the
     configuration it was planned under."""
+    claim: list[OwnedRelease] = field(default_factory=list)
+    """Wanted releases Lidarr already monitors that likearr does not own yet, to own from now on
+    (`[rules] manage_monitored`). State only, no Lidarr call."""
 
     @property
     def is_empty(self) -> bool:

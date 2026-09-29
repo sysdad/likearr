@@ -3476,3 +3476,15 @@ def test_status_and_settings_say_to_re_authorize_for_collaborative_playlists_onl
     assert ("To also sync playlists you collaborate on, re-authorize" in status) is noted
     assert ("Re-authorize to also sync playlists you collaborate on" in settings) is noted
     assert "All good." in status
+
+
+def test_last_change_says_how_many_albums_already_monitored_are_now_managed(client: TestClient, data_dir: Path) -> None:
+    with SqliteState(data_dir / "state.sqlite") as state:
+        state.record_run(
+            _record(ts=int(NOW.timestamp()) - 60, counts={"monitored": 1, "unmonitored": 2, "claimed": 5}), None
+        )
+    _login(client)
+
+    card = _card(client.get("/").text, "last-change")
+
+    assert "Monitored 1 release, unmonitored 2, added 0 artists. 5 albums you already monitored now managed." in card

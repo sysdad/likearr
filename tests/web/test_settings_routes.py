@@ -2504,3 +2504,38 @@ def test_the_service_previews_lidarr_at_start_only_while_the_library_is_unset(
         assert bool(jobs) is started
         if jobs:
             _wait_until(lambda: all(m.state != "running" for m in _jobs_of(data_dir, "lidarr-setup-preview")))
+
+
+def test_the_manage_monitored_switch_is_off_by_default_and_round_trips(client: TestClient, data_dir: Path) -> None:
+    from likearr.config import load_config
+
+    config = data_dir / "config.toml"
+    _login(client)
+    advanced = _advanced(client.get("/settings").text)
+    assert "Also manage albums you monitor later: off." in advanced
+    assert advanced.index("<legend>Clean up</legend>") < advanced.index("<legend>Albums you monitor yourself</legend>")
+
+    on = client.post(
+        "/settings/manage-monitored", data={"file_hash": _file_hash(client), "enabled": "1"}, follow_redirects=False
+    )
+
+    assert on.status_code == 303 and on.headers["location"] == "/settings"
+    assert load_config(config).rules.manage_monitored is True
+    assert len(sorted(data_dir.glob("config.toml.bak-*"))) == 1
+    assert "Also manage albums you monitor later: on." in _advanced(client.get("/settings").text)
+
+    off = client.post(
+        "/settings/manage-monitored", data={"file_hash": _file_hash(client), "enabled": "0"}, follow_redirects=False
+    )
+
+    assert off.status_code == 303
+    assert load_config(config).rules.manage_monitored is False
+
+
+def test_the_manage_monitored_switch_refuses_a_stale_page(client: TestClient, data_dir: Path) -> None:
+    config = data_dir / "config.toml"
+    before = config.read_text()
+    _login(client)
+    response = client.post("/settings/manage-monitored", data={"file_hash": "stale", "enabled": "1"})
+    assert response.status_code == 409
+    assert config.read_text() == before

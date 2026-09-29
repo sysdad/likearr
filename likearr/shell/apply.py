@@ -18,6 +18,7 @@ from typing import Any, cast
 
 from likearr.adapters.http import redact
 from likearr.adapters.lidarr import BATCH_SIZE
+from likearr.core.adopt import AdoptPlan, adopt_digest, choose
 from likearr.core.diff import config_changes, is_stale, lidarr_digest, manual_reasons
 from likearr.models import (
     EXIT_GUARDED,
@@ -44,14 +45,16 @@ from likearr.ports import (
     LidarrMetadataError,
     MetadataError,
 )
+from likearr.shell.adopt_io import read_existing
 from likearr.shell.context import Context
 from likearr.shell.diff_io import DiffFileError, read_diff
-from likearr.shell.plan import _format_refresh_duration, plan
+from likearr.shell.plan import _format_refresh_duration, plan, view_of_everything
 from likearr.shell.run_report import _widening_on_new_items, _widening_warning
 from likearr.shell.run_types import (
     ApplyResult,
     ApplyStopped,
     ConfigStaleError,
+    ExistingChoice,
     PlanResult,
     _WriteWatch,
     planned_changes,
@@ -72,6 +75,7 @@ def apply(
     scheduled: bool,
     force: bool = False,
     monotonic: Callable[[], float] = time.monotonic,
+    existing: ExistingChoice | None = None,
 ) -> tuple[int, ApplyResult, PlanResult, Diff]:
     """Execute a diff against Lidarr.
 
@@ -83,6 +87,9 @@ def apply(
         monotonic: the clock the re-plan's resolve-progress line and the add-loop's per-artist
             refresh timing are measured against. Injected so a test never has to
             sleep for real; defaults to the wall clock.
+        existing: what to do with the diff file's "Albums you already monitor" (its
+            ``existing_albums``): claim the matches, unmonitor the rest, or both. Carried out
+            after the diff, and refused as stale, like the diff, when those albums have moved.
 
     Returns:
         ``(exit_code, what was applied, the fresh plan, the diff that was executed)``.
@@ -108,6 +115,8 @@ def apply(
                 f"the diff at {diff_path} was made by resolver version {saved.resolver_version}, "
                 f"but this likearr is version {RESOLVER_VERSION}; re-plan before applying"
             )
+        if existing is not None and read_existing(diff_path) is None:
+            raise DiffFileError(f"the diff at {diff_path} lists no albums you already monitor to act on")
         config_reason = _config_stale_reason(saved, ctx, diff_path)
         if config_reason:
             if not force:
@@ -136,6 +145,21 @@ def apply(
                 return EXIT_STALE, ApplyResult(), fresh, diff
             log.warning("--force: applying a stale diff from %s anyway", diff_path)
 
+    chosen: AdoptPlan | None = None
+    everything: LidarrView | None = None
+    if existing is not None and diff_path is not None:
+        block = read_existing(diff_path)
+        assert block is not None  # checked before planning
+        everything = view_of_everything(ctx)
+        if adopt_digest(everything, block.adoption, ctx.state.owned_releases()) != block.lidarr_digest:
+            # Never forced: these are albums likearr does not own, and the choice was made for the
+            # library as it was.
+            log.error("the albums you already monitor changed since %s was planned; nothing was changed", diff_path)
+            return EXIT_STALE, ApplyResult(), fresh, diff
+        chosen = choose(
+            block.adoption, claim=existing.claim, unmonitor_rest=existing.unmonitor_rest, keep=existing.keep
+        )
+
     guarded = diff.guarded
     result = ApplyResult(lidarr_metadata_ok=fresh.lidarr_metadata_ok)
     watched = replace(ctx, lidarr=cast("Any", _WriteWatch(ctx.lidarr, result)))
@@ -146,11 +170,14 @@ def apply(
     # or dropped by a logger's own level filtering.
     sys.stderr.write(PHASE_MARKER_APPLY + "\n")
     sys.stderr.flush()
+    planned = planned_changes(diff, allow_unmonitors=not guarded) + (len(chosen.unmonitor) if chosen else 0)
     try:
         _execute(watched, diff, fresh, now=now, allow_unmonitors=not guarded, result=result, monotonic=monotonic)
+        if chosen is not None and everything is not None:
+            _adopt_existing(watched, chosen, everything, result)
     except Exception as exc:
         # Each phase commits as it goes: `result` holds exactly what reached Lidarr before this.
-        raise ApplyStopped(result, planned_changes(diff, allow_unmonitors=not guarded), exc) from exc
+        raise ApplyStopped(result, planned, exc) from exc
 
     source_baseline, followed_baseline = _next_baselines(ctx, diff, fresh)
     with ctx.state.transaction():
@@ -470,6 +497,10 @@ def _execute(
             for key, reasons in diff.update_reasons:
                 ctx.state.update_reasons(key, reasons)
 
+    # (f2) ------------------------------------------------------------- claims
+    if diff.claim:
+        result.claimed += _claim(ctx, diff.claim, view)
+
     # (g) -------------------------------------------------------------- unmonitor
     if not allow_unmonitors:
         if diff.unmonitor:
@@ -617,6 +648,39 @@ def _settle_failed_batch(
         len(batch),
     )
     return len(now_monitored)
+
+
+def _claim(ctx: Context, claims: Sequence[OwnedRelease], view: LidarrView) -> int:
+    """Own releases Lidarr already monitors, with the album id Lidarr has now. One that is no longer
+    monitored, or that likearr came to own since the plan, is left alone. No Lidarr call."""
+    owned = ctx.state.owned_releases()
+    records = [
+        replace(record, lidarr_album_id=album.id)
+        for record in claims
+        if record.key not in owned and (album := view.album(record.key)) is not None and album.monitored
+    ]
+    if records:
+        with ctx.state.transaction():
+            ctx.state.record_monitored(records)
+    return len(records)
+
+
+def _adopt_existing(ctx: Context, chosen: AdoptPlan, view: LidarrView, result: ApplyResult) -> None:
+    """A first apply's choice for the albums already monitored: claim the matches, then unmonitor
+    what was chosen for it. An unmonitored album was never likearr's, so it is not recorded as owned
+    or let go of; held and kept albums are not in `chosen.unmonitor` at all."""
+    result.claimed += _claim(ctx, chosen.claim, view)
+    pairs = [(album.id, item.key) for item in chosen.unmonitor if (album := view.album(item.key)) is not None]
+    for start in range(0, len(pairs), BATCH_SIZE):
+        batch = pairs[start : start + BATCH_SIZE]
+        try:
+            ctx.lidarr.set_albums_monitored([album_id for album_id, _ in batch], False)
+        except Exception:
+            # Lidarr can apply a batch and still answer with an error: count what it did.
+            albums, _error = _read_back(ctx, [key for _, key in batch], view.artists)
+            result.unmonitored += sum(1 for _, key in batch if key in albums and not albums[key].monitored)
+            raise
+        result.unmonitored += len(batch)
 
 
 def _unmonitor(

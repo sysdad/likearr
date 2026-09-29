@@ -21,14 +21,18 @@ from starlette.routing import Route
 
 from likearr.adapters.state_sqlite import LastPlan, SqliteState
 from likearr.config import Config, ConfigError, is_mbid
+from likearr.core.adopt import choose
 from likearr.core.cron import next_fire
 from likearr.core.explain import deniable, deny_note, release_label
+from likearr.fsio import write_atomic
 from likearr.models import Diff, HealthRecord, ResolutionStatus
-from likearr.shell.diff_io import diff_summary
+from likearr.shell.adopt_io import ExistingAlbums, read_existing
+from likearr.shell.diff_io import DiffFileError, diff_summary
 from likearr.shell.last_run import facts_path
+from likearr.shell.run_types import ExistingChoice
 from likearr.web import settings as cfg
 from likearr.web.context import AfterCallback, _Web, _web
-from likearr.web.helpers import _form_pairs, _read_config, _read_plan
+from likearr.web.helpers import _first_applied, _form_pairs, _read_config, _read_plan
 from likearr.web.jobs import JobMeta, JobRefused, JobState
 from likearr.web.plans import (
     FILES_COUNTING,
@@ -37,6 +41,7 @@ from likearr.web.plans import (
     PlanState,
     Whereabouts,
     applied_since,
+    describe_reasons,
     on_disk_labels,
     plan_state,
     plan_token_of_file,
@@ -384,8 +389,100 @@ _CHANGE_KEYS = (
     "monitor_artists",
     "set_new_items_none",
     "refresh_artists",
+    "claim",
 )
-"""The `diff_summary` counts that are changes to Lidarr."""
+"""The `diff_summary` counts that are changes: to Lidarr, and the albums likearr starts managing."""
+
+
+# ---------------------------------------------------------------- albums you already monitor
+
+EXISTING_KEEP_FILE = "existing-keep.txt"
+"""In the plan's job directory: the release groups a reviewer chose to keep, for `run --keep`."""
+
+_MAX_FORM_FIELDS = 20_000
+"""A confirm or apply form carries one field per album kept from the unmonitor."""
+
+
+def _existing(config: Config, web: _Web, job_id: str) -> ExistingAlbums | None:
+    """A check's "Albums you already monitor": only before the first apply, and only when the
+    check found some."""
+    path = web.runner.diff_path(job_id)
+    if path is None or _first_applied(config):
+        return None
+    try:
+        return read_existing(path)
+    except DiffFileError:
+        log.warning("plan %s: existing_albums does not read", job_id, exc_info=True)
+        return None
+
+
+def _existing_context(existing: ExistingAlbums, playlist_names: dict[str, str]) -> dict[str, Any]:
+    """The review section's rows: the matches, and the rest (what the unmonitor option lists, with
+    its held rows saying why they are held)."""
+    adoption, artists = existing.adoption, existing.artists
+
+    def row(rg: str, artist_mbid: str, title: str, **extra: str) -> dict[str, str]:
+        return {"rg": rg, "Album": title, "Artist": artists.get(artist_mbid, artist_mbid), **extra}
+
+    def order(r: dict[str, str]) -> tuple[str, str]:
+        return r["Artist"].casefold(), r["Album"].casefold()
+
+    claim = [
+        row(
+            r.key.rg_mbid,
+            r.key.artist_mbid,
+            existing.titles.get(r.key.rg_mbid, r.key.rg_mbid),
+            why=describe_reasons(r.reasons, playlist_names),
+        )
+        for r in adoption.claim
+    ]
+    rest = [row(u.key.rg_mbid, u.key.artist_mbid, u.title, held="") for u in adoption.unmonitor]
+    rest += [row(h.key.rg_mbid, h.key.artist_mbid, h.title, held=h.reason) for h in adoption.held]
+    return {"claim": sorted(claim, key=order), "rest": sorted(rest, key=order), "held": len(adoption.held)}
+
+
+def _existing_choice(form: Any, existing: ExistingAlbums) -> ExistingChoice:
+    """The reviewer's choice from a posted form, keeping only release groups the unmonitor lists."""
+    unmonitor_rest = form.get("unmonitor_rest") == "1"
+    listed = {u.key.rg_mbid for u in existing.adoption.unmonitor}
+    keep = frozenset(str(v) for v in form.getlist("keep") if str(v) in listed) if unmonitor_rest else frozenset()
+    return ExistingChoice(claim=form.get("claim") == "1", unmonitor_rest=unmonitor_rest, keep=keep)
+
+
+def _choice_context(existing: ExistingAlbums, choice: ExistingChoice) -> dict[str, Any]:
+    """What the confirm page repeats: the counts the choice comes to, and the fields that carry it."""
+    chosen = choose(existing.adoption, claim=choice.claim, unmonitor_rest=choice.unmonitor_rest, keep=choice.keep)
+    return {
+        "claim": len(chosen.claim),
+        "unmonitor": len(chosen.unmonitor),
+        "held": len(chosen.held),
+        "kept": len(choice.keep),
+        "unmonitor_rest": choice.unmonitor_rest,
+        "fields": [
+            *([("claim", "1")] if choice.claim else []),
+            *([("unmonitor_rest", "1")] if choice.unmonitor_rest else []),
+            *(("keep", rg) for rg in sorted(choice.keep)),
+        ],
+    }
+
+
+def _existing_flags(choice: ExistingChoice, keep_path: str) -> list[str]:
+    """`run --apply`'s flags for the choice, `keep_path` naming the file of kept release groups."""
+    return [
+        *(["--claim-existing"] if choice.claim else []),
+        *(["--unmonitor-rest"] if choice.unmonitor_rest else []),
+        *(["--keep", keep_path] if choice.keep else []),
+    ]
+
+
+def _existing_args(web: _Web, job_id: str, choice: ExistingChoice) -> list[str]:
+    """`_existing_flags`, writing the kept release groups to the plan's own directory for ``--keep``."""
+    path = web.runner.job_file(job_id, EXISTING_KEEP_FILE, must_exist=False)
+    if path is None:
+        raise OSError("the plan's directory is gone")
+    if choice.keep:
+        write_atomic(path, "".join(f"{rg}\n" for rg in sorted(choice.keep)), mode=0o600)
+    return _existing_flags(choice, str(path))
 
 
 def _review_context(web: _Web, config: Config, meta: JobMeta, diff: Diff, state: PlanState) -> dict[str, Any]:
@@ -393,7 +490,9 @@ def _review_context(web: _Web, config: Config, meta: JobMeta, diff: Diff, state:
     check's own job page, so there is no click-through between the two."""
     names = _names(web, config, diff, meta.id)
     summary = diff_summary(diff)
+    existing = _existing(config, web, meta.id) if state.reviewable else None
     return {
+        "existing": _existing_context(existing, names.playlists) if existing is not None else None,
         "meta": meta,
         "state": state,
         "summary": summary,
@@ -431,15 +530,29 @@ def _plan_state_now(web: _Web, config: Config, meta: JobMeta, diff: Diff) -> Pla
     )
 
 
-def _apply_context(web: _Web, meta: JobMeta, diff: Diff, state: PlanState, error: str = "") -> dict[str, Any]:
+def _apply_context(
+    web: _Web,
+    meta: JobMeta,
+    diff: Diff,
+    state: PlanState,
+    error: str = "",
+    *,
+    existing: ExistingAlbums | None = None,
+    choice: ExistingChoice | None = None,
+) -> dict[str, Any]:
     path = web.runner.diff_path(meta.id)
+    choice = choice or ExistingChoice(claim=True)
+    chosen = _choice_context(existing, choice) if existing is not None else None
+    flags = "".join(f" {f}" for f in _existing_flags(choice, EXISTING_KEEP_FILE)) if existing is not None else ""
     return {
         "meta": meta,
         "state": state,
         "summary": diff_summary(diff),
-        "changes": sum(diff_summary(diff)[k] for k in _CHANGE_KEYS),
+        "changes": sum(diff_summary(diff)[k] for k in _CHANGE_KEYS)
+        + (chosen["claim"] + chosen["unmonitor"] if chosen else 0),
+        "existing": chosen,
         "guards": [g.message for g in diff.guards if g.blocked_unmonitors > 0],
-        "command": f"likearr run --apply {path}",
+        "command": f"likearr run --apply {path}{flags}",
         "accept_shrink": diff.accept_shrink,
         "error": error,
         "config_error": "",
@@ -458,11 +571,33 @@ def plan_apply_page(request: Request) -> Response:
     except ConfigError as exc:
         return web.render(request, "plan_apply.html", {"config_error": str(exc)}, 409)
     state = _plan_state_now(web, config, meta, diff)
-    context = _apply_context(web, meta, diff, state)
+    existing = _existing(config, web, meta.id) if state.reviewable else None
+    context = _apply_context(web, meta, diff, state, existing=existing)
     # From a name collision's "Accept as known": the box ticked and the reason spelled out.
     # Still a submit away: nothing is applied, and nothing accepted, without the button.
     context["accept_preset"] = request.query_params.get("accept_health") == "1" and bool(diff.name_collisions)
     return web.render(request, "plan_apply.html", context)
+
+
+async def plan_confirm(request: Request) -> Response:
+    """The confirm step, from the review's "Albums you already monitor": the same page as
+    `plan_apply_page`, carrying what was chosen there. Nothing is applied here."""
+    web = _web(request)
+    form = await request.form(max_files=0, max_fields=_MAX_FORM_FIELDS)
+    found = _plan_or_none(web, request.path_params["job_id"])
+    if found is None:
+        return web.render(request, "missing.html", {}, status_code=404)
+    meta, diff = found
+    try:
+        config = web.config()
+    except ConfigError as exc:
+        return web.render(request, "plan_apply.html", {"config_error": str(exc)}, 409)
+    state = _plan_state_now(web, config, meta, diff)
+    existing = _existing(config, web, meta.id) if state.reviewable else None
+    choice = _existing_choice(form, existing) if existing is not None else None
+    return web.render(
+        request, "plan_apply.html", _apply_context(web, meta, diff, state, existing=existing, choice=choice)
+    )
 
 
 async def plan_apply(request: Request) -> Response:
@@ -474,7 +609,7 @@ async def plan_apply(request: Request) -> Response:
     settings, and exits stale (3) if the world moved.
     """
     web = _web(request)
-    form = await request.form(max_files=0, max_fields=8)
+    form = await request.form(max_files=0, max_fields=_MAX_FORM_FIELDS)
     job_id = request.path_params["job_id"]
     found = _plan_or_none(web, job_id)
     if found is None:
@@ -485,6 +620,8 @@ async def plan_apply(request: Request) -> Response:
     except ConfigError as exc:
         return web.render(request, "plan_apply.html", {"config_error": str(exc)}, 409)
     state = _plan_state_now(web, config, meta, diff)
+    existing = _existing(config, web, job_id) if state.reviewable else None
+    choice = _existing_choice(form, existing) if existing is not None else None
     if not state.reviewable:
         return web.render(request, "plan_apply.html", _apply_context(web, meta, diff, state), 409)
     path = web.runner.diff_path(job_id)
@@ -495,8 +632,15 @@ async def plan_apply(request: Request) -> Response:
         on_disk = ""
     if not (isinstance(given, str) and meta.plan_token and given == meta.plan_token == on_disk):
         error = "These changes were edited on disk since you reviewed them, so nothing was applied. Check again."
-        return web.render(request, "plan_apply.html", _apply_context(web, meta, diff, state, error), 409)
+        context = _apply_context(web, meta, diff, state, error, existing=existing, choice=choice)
+        return web.render(request, "plan_apply.html", context, 409)
     args = ["run", "--apply", str(path), *(["--accept-health"] if form.get("accept_health") == "on" else [])]
+    if existing is not None and choice is not None:
+        try:
+            args += _existing_args(web, job_id, choice)
+        except OSError as exc:
+            context = _apply_context(web, meta, diff, state, str(exc), existing=existing, choice=choice)
+            return web.render(request, "plan_apply.html", context, 409)
     try:
         apply_job = web.runner.start(
             "apply",
@@ -507,7 +651,8 @@ async def plan_apply(request: Request) -> Response:
             plan_id=job_id,
         )
     except JobRefused as exc:
-        return web.render(request, "plan_apply.html", _apply_context(web, meta, diff, state, str(exc)), 409)
+        context = _apply_context(web, meta, diff, state, str(exc), existing=existing, choice=choice)
+        return web.render(request, "plan_apply.html", context, 409)
     log.info("apply of plan %s started as job %s", job_id, apply_job.id)
     return RedirectResponse(f"/jobs/{apply_job.id}", status_code=303)
 
@@ -594,6 +739,7 @@ ROUTES: list[Route] = [
     Route("/plan/{job_id}/section/{name}", plan_section, methods=["GET"]),
     Route("/plan/{job_id}/apply", plan_apply_page, methods=["GET"]),
     Route("/plan/{job_id}/apply", plan_apply, methods=["POST"]),
+    Route("/plan/{job_id}/confirm", plan_confirm, methods=["POST"]),
     Route("/plan/{job_id}/deny", plan_deny, methods=["POST"]),
 ]
 """In `create_app`'s order: Starlette matches the first route that fits."""

@@ -40,6 +40,7 @@ from likearr.config import GuardsConfig
 from likearr.core.normalize import normalize_name
 from likearr.core.resolver import is_excluded
 from likearr.models import (
+    RESOLVER_VERSION,
     AddArtist,
     ArtistResolution,
     Diff,
@@ -260,6 +261,7 @@ def build_diff(
     max_refreshes: int = 10,
     last_gap_refreshes: Mapping[str, datetime] | None = None,
     gap_refresh_interval_hours: float = 24.0,
+    manage_monitored: bool = False,
 ) -> Diff:
     """Build the plan of record for one run.
 
@@ -291,6 +293,7 @@ def build_diff(
     """
     add_artists: list[AddArtist] = []
     monitor: list[MonitorRelease] = []
+    claim: list[OwnedRelease] = []
     unmonitor: list[UnmonitorRelease] = []
     ratchets: list[ProfileRatchet] = []
     set_new_items_none: list[str] = []
@@ -359,6 +362,17 @@ def build_diff(
                         title=release.release_group.title,
                         reasons=frozenset(release.reasons),
                         step=_best_step(release.steps),
+                    )
+                )
+            elif manage_monitored and key not in owned and release.reasons:
+                claim.append(
+                    OwnedRelease(
+                        key=key,
+                        reasons=frozenset(release.reasons),
+                        step=_best_step(release.steps),
+                        resolver_version=RESOLVER_VERSION,
+                        monitored_at=now,
+                        lidarr_album_id=album.id,
                     )
                 )
             continue
@@ -505,6 +519,8 @@ def build_diff(
     # - the artists of `owned`: releases likearr owns, adopted and keep-as-manual ones included.
     # - the artists of `monitor`: releases likearr claims this run. Set in the same run as the
     #   claim, so the plan after the apply is empty rather than holding this write.
+    # - the artists of `claim`: already-monitored releases likearr owns from this run on
+    #   (`manage_monitored`), for the same reason.
     # - the artists of `ratchets`: apply (d) refreshes an artist right after widening its profile,
     #   and left on "all", Lidarr would monitor every release type the new profile shows. Apply (c)
     #   runs before (d) for exactly this reason.
@@ -514,6 +530,7 @@ def build_diff(
         set(owned_artists)
         | {k.artist_mbid for k in owned}
         | {m.key.artist_mbid for m in monitor}
+        | {c.key.artist_mbid for c in claim}
         | {r.artist_mbid for r in ratchets}
         | set(monitor_artists)
     )
@@ -674,6 +691,7 @@ def build_diff(
         monitor_artists=monitor_artists,
         refresh_artists=refresh_artists,
         accept_shrink=accept_shrink,
+        claim=claim,
     )
 
 

@@ -297,6 +297,7 @@ CODECS = [
             "update_reasons": "stored positionally by asdict; the Status page omits it",
             "pending": "no display reader needs it (diff_from_run_dict)",
             "unmapped": "no `_kind` discriminator in the asdict shape, so it is not decoded (diff_from_run_dict)",
+            "claim": "no display reader needs it; the health record counts it (diff_from_run_dict)",
         },
     ),
     Codec(

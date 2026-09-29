@@ -85,12 +85,12 @@ def test_adopt_plans_only_and_writes_a_plan_file(
     keep.write_text("# a note\nrg-9\n")
 
     with make_context(tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink) as ctx:
-        code = commands.adopt_command(ctx, keep_file=keep, out=tmp_path / "adopt.json", now=NOW)
+        code = commands.adopt_command(ctx, unmonitor_rest=True, keep_file=keep, out=tmp_path / "adopt.json", now=NOW)
         assert ctx.state.owned_releases() == {}
 
     payload = json.loads((tmp_path / "adopt.json").read_text())
     assert code == EXIT_OK
-    assert payload["summary"] == {"claim": 2, "keep": 1, "unmonitor": 0}
+    assert payload["summary"] == {"claim": 2, "keep": 1, "unmonitor": 0, "held": 0, "left": 0}
     assert payload["source_digest"] and payload["lidarr_digest"]
     assert lidarr.writes() == []
     out = capsys.readouterr().out
@@ -109,7 +109,7 @@ def test_adopt_plan_says_the_next_run_sets_monitor_new_albums_to_none_on_the_art
     keep = tmp_path / "keep.txt"
     keep.write_text("rg-9\n")
     with ctx:
-        code = commands.adopt_command(ctx, keep_file=keep, out=tmp_path / "adopt.json", now=NOW)
+        code = commands.adopt_command(ctx, unmonitor_rest=True, keep_file=keep, out=tmp_path / "adopt.json", now=NOW)
 
     lines = capsys.readouterr().out.splitlines()
     at = lines.index("1 to claim, 1 to keep, 0 to unmonitor")
@@ -136,7 +136,7 @@ def test_adopt_plan_leaves_out_artists_already_on_none_and_names_twenty_at_most(
         )
     keep.write_text("".join(f"artist:artist-k{i:02d}\n" for i in range(23)))
     with make_context(tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink) as ctx:
-        commands.adopt_command(ctx, keep_file=keep, out=tmp_path / "adopt.json", now=NOW)
+        commands.adopt_command(ctx, unmonitor_rest=True, keep_file=keep, out=tmp_path / "adopt.json", now=NOW)
 
     line = next(x for x in capsys.readouterr().out.splitlines() if "Monitor New Albums" in x)
     shown = ", ".join(f"Kept {i:02d}" for i in range(1, 21))
@@ -151,7 +151,7 @@ def test_adopt_plan_says_nothing_about_monitor_new_albums_when_every_artist_is_o
 ) -> None:
     ctx, _lidarr, _source, _lookup = _adopt_world(tmp_path, sink=sink)
     with ctx:
-        commands.adopt_command(ctx, out=tmp_path / "adopt.json", now=NOW)
+        commands.adopt_command(ctx, unmonitor_rest=True, out=tmp_path / "adopt.json", now=NOW)
 
     assert "Monitor New Albums" not in capsys.readouterr().out
 
@@ -162,7 +162,7 @@ def test_adopt_apply_alone_is_not_the_first_reviewed_apply(tmp_path: Path, sink:
     ctx, _lidarr, _source, _lookup = _adopt_world(tmp_path, sink=sink, first_applied=False)
     plan_path = tmp_path / "adopt.json"
     with ctx:
-        commands.adopt_command(ctx, out=plan_path, now=NOW)
+        commands.adopt_command(ctx, unmonitor_rest=True, out=plan_path, now=NOW)
         assert commands.adopt_command(ctx, apply_path=plan_path, now=NOW) == EXIT_OK
         owned = ctx.state.owned_releases()
         first = ctx.state.first_apply_at()
@@ -175,7 +175,7 @@ def test_adopt_apply_executes_the_reviewed_plan(tmp_path: Path, sink: CapturingS
     ctx, lidarr, _source, _lookup = _adopt_world(tmp_path, sink=sink)
     plan_path = tmp_path / "adopt.json"
     with ctx:
-        commands.adopt_command(ctx, out=plan_path, now=NOW)
+        commands.adopt_command(ctx, unmonitor_rest=True, out=plan_path, now=NOW)
         code = commands.adopt_command(ctx, apply_path=plan_path, now=NOW)
         owned = ctx.state.owned_releases()
 
@@ -192,7 +192,7 @@ def test_adopt_apply_keeps_what_the_plan_kept(tmp_path: Path, sink: CapturingSin
     keep.write_text("artist:artist-9\n")
     plan_path = tmp_path / "adopt.json"
     with ctx:
-        commands.adopt_command(ctx, keep_file=keep, out=plan_path, now=NOW)
+        commands.adopt_command(ctx, unmonitor_rest=True, keep_file=keep, out=plan_path, now=NOW)
         commands.adopt_command(ctx, apply_path=plan_path, now=NOW)
         record = ctx.state.owned_releases()[ReleaseKey("artist-9", "rg-9")]
 
@@ -213,7 +213,7 @@ def test_adopt_keeps_a_keep_listed_release_a_source_also_wants_through_a_later_u
     keep.write_text("rg-1\n")
     plan_path = tmp_path / "adopt.json"
     with ctx:
-        commands.adopt_command(ctx, keep_file=keep, out=plan_path, now=NOW)
+        commands.adopt_command(ctx, unmonitor_rest=True, keep_file=keep, out=plan_path, now=NOW)
         assert "claim+keep" in capsys.readouterr().out
         commands.adopt_command(ctx, apply_path=plan_path, now=NOW)
         record = ctx.state.owned_releases()[ReleaseKey("artist-1", "rg-1")]
@@ -236,7 +236,7 @@ def test_adopt_apply_is_exactly_the_plan_and_nothing_more(tmp_path: Path, sink: 
     plan_path = tmp_path / "adopt.json"
     late = rg("rg-7", "Monitored By Hand Later", artist_mbid="artist-9", artist_name="A Stranger")
     with ctx:
-        commands.adopt_command(ctx, keep_file=keep, out=plan_path, now=NOW)
+        commands.adopt_command(ctx, unmonitor_rest=True, keep_file=keep, out=plan_path, now=NOW)
         lidarr.albums["artist-9"]["rg-7"] = lidarr_album(late, id=902, artist_id=9, monitored=True)
         code = commands.adopt_command(ctx, apply_path=plan_path, now=NOW)
 
@@ -251,7 +251,7 @@ def test_adopt_apply_refuses_a_plan_when_lidarr_moved(
     ctx, lidarr, _source, _lookup = _adopt_world(tmp_path, sink=sink)
     plan_path = tmp_path / "adopt.json"
     with ctx:
-        commands.adopt_command(ctx, out=plan_path, now=NOW)
+        commands.adopt_command(ctx, unmonitor_rest=True, out=plan_path, now=NOW)
         lidarr.albums["artist-9"]["rg-9"] = replace(lidarr.albums["artist-9"]["rg-9"], monitored=False)
         writes_before = list(lidarr.writes())
         code = commands.adopt_command(ctx, apply_path=plan_path, now=NOW)
@@ -267,7 +267,7 @@ def test_adopt_apply_refuses_a_plan_when_the_sources_moved(tmp_path: Path, sink:
     ctx, lidarr, source, _lookup = _adopt_world(tmp_path, sink=sink)
     plan_path = tmp_path / "adopt.json"
     with ctx:
-        commands.adopt_command(ctx, out=plan_path, now=NOW)
+        commands.adopt_command(ctx, unmonitor_rest=True, out=plan_path, now=NOW)
         source.snapshot = snapshot(
             artists=[
                 artist_intent("Test Artist", spotify_id="sp-a1"),
@@ -284,7 +284,7 @@ def test_adopt_apply_refuses_a_plan_whose_album_became_owned(tmp_path: Path, sin
     ctx, lidarr, _source, _lookup = _adopt_world(tmp_path, sink=sink)
     plan_path = tmp_path / "adopt.json"
     with ctx:
-        commands.adopt_command(ctx, out=plan_path, now=NOW)
+        commands.adopt_command(ctx, unmonitor_rest=True, out=plan_path, now=NOW)
         _key, record = owned(ALBUM, reason(ReasonKind.MANUAL, "hand"), album_id=101)
         ctx.state.record_monitored([record])
         code = commands.adopt_command(ctx, apply_path=plan_path, now=NOW)
@@ -311,7 +311,7 @@ def test_adopt_apply_takes_the_run_lock(tmp_path: Path, sink: CapturingSink) -> 
     ctx, lidarr, _source, _lookup = _adopt_world(tmp_path, sink=sink)
     plan_path = tmp_path / "adopt.json"
     with ctx:
-        commands.adopt_command(ctx, out=plan_path, now=NOW)
+        commands.adopt_command(ctx, unmonitor_rest=True, out=plan_path, now=NOW)
         with run_lock(ctx.lock_path), pytest.raises(LockHeld):
             commands.adopt_command(ctx, apply_path=plan_path, now=NOW)
         assert lidarr.album("artist-9", "rg-9").monitored is True  # type: ignore[union-attr]
@@ -320,7 +320,7 @@ def test_adopt_apply_takes_the_run_lock(tmp_path: Path, sink: CapturingSink) -> 
 def test_adopt_planning_takes_the_run_lock_too(tmp_path: Path, sink: CapturingSink) -> None:
     ctx, _lidarr, _source, _lookup = _adopt_world(tmp_path, sink=sink)
     with ctx, run_lock(ctx.lock_path), pytest.raises(LockHeld):
-        commands.adopt_command(ctx, out=tmp_path / "adopt.json", now=NOW)
+        commands.adopt_command(ctx, unmonitor_rest=True, out=tmp_path / "adopt.json", now=NOW)
 
 
 def test_adopt_refuses_a_keep_file_at_apply(
@@ -331,7 +331,7 @@ def test_adopt_refuses_a_keep_file_at_apply(
     keep.write_text("rg-9\n")
     plan_path = tmp_path / "adopt.json"
     with ctx:
-        commands.adopt_command(ctx, out=plan_path, now=NOW)
+        commands.adopt_command(ctx, unmonitor_rest=True, out=plan_path, now=NOW)
         code = commands.adopt_command(ctx, keep_file=keep, apply_path=plan_path, now=NOW)
 
     assert code == EXIT_ERROR
@@ -402,7 +402,7 @@ def test_adopt_holds_back_the_albums_of_an_artist_whose_catalogue_was_not_read(
     ctx, lidarr = _unread_world(tmp_path, sink=sink, error=error)
     plan_path = tmp_path / "adopt.json"
     with ctx:
-        code = commands.adopt_command(ctx, out=plan_path, now=NOW)
+        code = commands.adopt_command(ctx, unmonitor_rest=True, out=plan_path, now=NOW)
         out = capsys.readouterr().out
         payload = json.loads(plan_path.read_text())
         applied = commands.adopt_command(ctx, apply_path=plan_path, now=NOW)
@@ -410,7 +410,7 @@ def test_adopt_holds_back_the_albums_of_an_artist_whose_catalogue_was_not_read(
 
     assert code == EXIT_OK
     assert payload["unmonitor"] == []
-    assert payload["summary"] == {"claim": 1, "keep": 0, "unmonitor": 0}, "the summary keeps its shape"
+    assert payload["summary"] == {"claim": 1, "keep": 0, "unmonitor": 0, "held": 3, "left": 0}
     assert [(h["key"]["rg_mbid"], h["title"]) for h in payload["held"]] == [
         ("rg-h1", "By Hand 1"),
         ("rg-h2", "By Hand 2"),
@@ -434,7 +434,7 @@ def test_adopt_warns_loudly_at_the_top_when_musicbrainz_failed(
     """A degraded resolve (`mb_ok` false) can leave out more than a catalogue; the warning leads."""
     ctx, _lidarr = _unread_world(tmp_path, sink=sink, error=MetadataError("musicbrainz answered 503"))
     with ctx:
-        commands.adopt_command(ctx, out=tmp_path / "adopt.json", now=NOW)
+        commands.adopt_command(ctx, unmonitor_rest=True, out=tmp_path / "adopt.json", now=NOW)
 
     lines = capsys.readouterr().out.splitlines()
     assert lines[0].startswith("WARNING"), lines[:3]
@@ -448,7 +448,7 @@ def test_adopt_does_not_warn_when_the_resolve_was_healthy(
     """A catalogue too large to browse is permanent, not an outage: its albums are held, quietly."""
     ctx, _lidarr = _unread_world(tmp_path, sink=sink, error=CatalogueTooLarge("more than 3000 release groups"))
     with ctx:
-        commands.adopt_command(ctx, out=tmp_path / "adopt.json", now=NOW)
+        commands.adopt_command(ctx, unmonitor_rest=True, out=tmp_path / "adopt.json", now=NOW)
 
     assert "WARNING" not in capsys.readouterr().out
 
@@ -519,7 +519,7 @@ def test_adopt_holds_back_an_album_whose_own_source_lookup_failed(
     ctx, lidarr = _failed_lookup_world(tmp_path, sink=sink)
     plan_path = tmp_path / "adopt.json"
     with ctx:
-        code = commands.adopt_command(ctx, out=plan_path, now=NOW)
+        code = commands.adopt_command(ctx, unmonitor_rest=True, out=plan_path, now=NOW)
         out = capsys.readouterr().out
         payload = json.loads(plan_path.read_text())
         applied = commands.adopt_command(ctx, apply_path=plan_path, now=NOW)
@@ -553,7 +553,7 @@ def test_an_adopt_plan_file_reads_back_why_an_album_was_held(tmp_path: Path, sin
     ctx, _lidarr = _failed_lookup_world(tmp_path, sink=sink)
     plan_path = tmp_path / "adopt.json"
     with ctx:
-        commands.adopt_command(ctx, out=plan_path, now=NOW)
+        commands.adopt_command(ctx, unmonitor_rest=True, out=plan_path, now=NOW)
 
     held = read_adopt_plan(plan_path).adoption.held
     assert [h.key.rg_mbid for h in held] == ["rg-l", "rg-s"]

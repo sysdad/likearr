@@ -1,7 +1,11 @@
 {# The plan's one action: Apply. Included twice by _plan_body.html (once right under the summary
    cards, once at the bottom, after every section) so it's reachable without scrolling past a long
    plan - both from this one partial, so they can never disagree. Needs `state`, `review`, `meta`. #}
-{% if state.reviewable and review.changes %}
+{% if state.reviewable and review.existing %}
+<div class="actions">
+  <button type="submit" class="primary" form="existing">Apply these changes…</button>
+</div>
+{% elif state.reviewable and review.changes %}
 <div class="actions">
   <a class="button primary" href="/plan/{{ meta.id }}/apply">Apply these changes…</a>
 </div>

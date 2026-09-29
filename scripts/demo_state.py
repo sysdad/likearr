@@ -13,6 +13,10 @@ job store - that makes the service look like a healthy library a few days in: St
 with coverage and a run history, a check waiting on "Review changes" with artists to add, releases
 to monitor and two to unmonitor, answers on Look up, and a few entries on "Not added".
 
+`--first-review` writes a new install instead: a library monitored by hand in Lidarr, Spotify
+connected, and one check waiting on "Review changes" with its "Albums you already monitor"
+section (albums that match, albums that don't, and one held after a failed lookup).
+
 **How.** Nothing here is hand-written into the database. The real shell runs (`run_command`: the
 first hand check and apply, a day and a half of scheduled applies, and the pending check) against
 the test suite's in-memory fakes: `FakeSource` for Spotify, `FakeLidarr` for Lidarr and
@@ -72,6 +76,7 @@ from likearr.models import (  # noqa: E402
     TrackIntent,
 )
 from likearr.playlist_names import names_path, write_names  # noqa: E402
+from likearr.ports import MetadataError  # noqa: E402
 from likearr.shell import run_report  # noqa: E402
 from likearr.shell.diff_io import read_diff  # noqa: E402
 from likearr.shell.output import emit_lines  # noqa: E402
@@ -80,9 +85,9 @@ from likearr.web.jobs import JobMeta, JobState, new_job_id  # noqa: E402
 from likearr.web.plans import plan_token_of_file  # noqa: E402
 from tests._network_guard import install as install_network_guard  # noqa: E402
 from tests.shell.conftest import CapturingSink, FakeLidarr, FakeSource, make_context  # noqa: E402
-from tests.unit.fakes import FakeLookup, load_corpus  # noqa: E402
+from tests.unit.fakes import FakeLookup, lidarr_album, lidarr_artist, load_corpus  # noqa: E402
 
-__all__ = ["DemoInfo", "build_demo", "main"]
+__all__ = ["DemoInfo", "build_demo", "build_first_review", "main"]
 
 # --------------------------------------------------------------------------- the library
 
@@ -643,12 +648,131 @@ def build_demo(out_dir: Path, *, now: datetime | None = None) -> DemoInfo:
     )
 
 
+# --------------------------------------------------------------------------- a first review
+
+HAND_MONITORED = {
+    "The Beatles": ["Abbey Road", "Revolver", "Help!"],
+    "Adele": ["19", "21"],
+    "John Mayer": ["Continuum", "Heavier Things"],
+    "Mark Ronson": ["Version", "Uptown Special"],
+}
+"""A library monitored by hand before likearr: some of it matches what Spotify likes, some doesn't."""
+
+HELP = "Help!"
+HELP_MBID = "8ad6f7b3-0d2a-4d6d-9d3e-6a1c7b3e0a11"
+"""A made-up id for an album only the demo Lidarr holds. The liked song on it fails its
+MusicBrainz lookup, so unmonitoring the rest would hold it back."""
+
+
+class _FailingLookup(FakeLookup):
+    """The demo MusicBrainz, failing on one album: a lookup that failed this run."""
+
+    def search_release_group_candidates(self, artist: str, title: str) -> Sequence[ReleaseGroup]:
+        if title == HELP:
+            raise MetadataError(f"MusicBrainz did not answer for {artist!r} / {title!r}")
+        return super().search_release_group_candidates(artist, title)
+
+
+def _hand_monitored(lidarr: FakeLidarr, groups: dict[str, ReleaseGroup]) -> None:
+    """Put `HAND_MONITORED` into the demo Lidarr: artists added by hand, their albums monitored."""
+    album_id = 7000
+    for artist_id, (name, titles) in enumerate(sorted(HAND_MONITORED.items()), start=700):
+        mbid = ARTISTS[name]
+        lidarr.artists[mbid] = lidarr_artist(mbid, id=artist_id, name=name, monitor_new_items="all")
+        for title in titles:
+            album_id += 1
+            if title == HELP:
+                rg = replace(groups[RELEASES["Revolver"]], mbid=HELP_MBID, title=HELP)
+            else:
+                rg = groups[RELEASES[title]]
+            lidarr.albums.setdefault(mbid, {})[rg.mbid] = lidarr_album(
+                rg, id=album_id, artist_id=artist_id, monitored=True, files=10
+            )
+
+
+def build_first_review(out_dir: Path, *, now: datetime | None = None) -> DemoInfo:
+    """A new install over a library monitored by hand: Spotify connected, one check waiting on
+    Review changes, nothing applied yet. The check's "Albums you already monitor" has albums that
+    match what Spotify likes, albums that don't, and one held back after a failed lookup."""
+    now = (now or datetime.now(UTC)).astimezone(UTC)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    config_path = out_dir / "config.toml"
+    if (out_dir / "state.sqlite").exists() or config_path.exists():
+        raise SystemExit(f"{out_dir} already holds a likearr data directory; give an empty one")
+
+    cron, _ = _schedule(now)
+    config_path.write_text(_config_text(cron), encoding="utf-8")
+    config = load_config(config_path)
+    _write_token(out_dir / "spotify-token.json", now - timedelta(hours=1))
+    write_names(names_path(config_path), {PLAYLIST_ID: PLAYLIST_NAME}, fetched_at=now - timedelta(hours=1))
+
+    groups = _release_groups()
+    lookup = _FailingLookup().add(*groups.values())
+    lookup.barcodes[AWESOME_MIX_BARCODE] = RELEASES[AWESOME_MIX]
+    for artist, titles in FOLLOWED_CATALOGUES.items():
+        lookup.catalogues[ARTISTS[artist]] = [RELEASES[t] for t in titles]
+    for isrc, title in ISRCS.values():
+        lookup.isrcs[isrc] = [RELEASES[title]]
+    lidarr = _lidarr(groups)
+    _hand_monitored(lidarr, groups)
+    source = FakeSource()
+    clock = _Clock()
+    ctx = make_context(
+        out_dir,
+        config=config,
+        source=source,
+        lidarr=lidarr,
+        lookup=lookup,
+        sinks=[CapturingSink(), StdoutSink()],
+        first_applied=False,
+    )
+    checked = now - timedelta(minutes=12)
+    plan_id = new_job_id(checked - timedelta(seconds=35))
+    plan_diff = out_dir / "ui" / "jobs" / plan_id / "diff.json"
+    try:
+        with mock.patch.object(run_report, "time", clock):
+            clock.at = checked.timestamp()
+            source.snapshot = _snapshot(FIRST, at=checked, groups=groups)
+            with _capture(clock) as captured:
+                code = run_command(ctx, now=checked, out=plan_diff)
+            if code != 0:
+                raise SystemExit(f"demo check exited {code}:\n{captured.log}{captured.out}")
+        _write_job(
+            out_dir / "ui" / "jobs",
+            kind="plan",
+            label="check",
+            args=["run", "--out", "{job_dir}/diff.json"],
+            started=checked - timedelta(seconds=35),
+            finished=checked + timedelta(seconds=2),
+            captured=captured,
+            config_path=config_path,
+            job_id=plan_id,
+        )
+    finally:
+        ctx.close()
+        ctx.state.close()
+    diff = read_diff(plan_diff)
+    titles = {mbid: title for title, mbid in RELEASES.items()}
+    return DemoInfo(
+        out_dir=out_dir,
+        plan_id=plan_id,
+        added_artists=tuple(sorted(a.name for a in diff.add_artists)),
+        monitored=tuple(sorted(titles.get(m.key.rg_mbid, m.title) for m in diff.monitor)),
+        unmonitored=(),
+    )
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Write a demo data directory for the README screenshots.")
     parser.add_argument("out_dir", type=Path, help="an empty directory to write the demo data directory into")
+    parser.add_argument(
+        "--first-review",
+        action="store_true",
+        help="a new install over a library monitored by hand, its first check waiting on Review changes",
+    )
     args = parser.parse_args(argv)
     install_network_guard()
-    info = build_demo(args.out_dir)
+    info = build_first_review(args.out_dir) if args.first_review else build_demo(args.out_dir)
     config = info.out_dir.resolve() / "config.toml"
     emit_lines(
         [

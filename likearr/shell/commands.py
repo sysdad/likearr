@@ -36,6 +36,7 @@ from likearr.shell.context import Context
 from likearr.shell.diff_io import DiffFileError, read_diff
 from likearr.shell.last_run import explain_from_last_run
 from likearr.shell.output import emit
+from likearr.shell.plan import view_of_everything
 from likearr.shell.run import NAMES_SHOWN, plan
 from likearr.shell.setup_commands import _quota_check
 
@@ -331,18 +332,6 @@ def lidarr_files_command(ctx: Context, *, plan_file: Path, out: Path | None = No
     return EXIT_OK
 
 
-def _view_of_everything(ctx: Context) -> LidarrView:
-    """Every artist's albums, loaded one artist at a time.
-
-    `adopt` and `prune-report` are the two commands whose subject is precisely what likearr does
-    *not* know about, so the planning view - which loads albums only for artists some source or
-    ownership record named - is blind to exactly the rows they exist to find. This is still one
-    ``?artistId=`` request per artist and never an unfiltered ``GET /album``.
-    """
-    artists = ctx.lidarr.load_view(None).artists
-    return ctx.lidarr.load_view(sorted(artists))
-
-
 def read_keep_file(path: Path | None) -> set[str]:
     """Read a keep-list: one release group MBID or ``artist:<mbid>`` per line, ``#`` comments."""
     if path is None:
@@ -361,6 +350,7 @@ def adopt_command(
     keep_file: Path | None = None,
     apply_path: Path | None = None,
     out: Path = Path("adopt.json"),
+    unmonitor_rest: bool = False,
     now: datetime | None = None,
 ) -> int:
     """`likearr adopt`: take responsibility for monitoring that predates likearr.
@@ -369,15 +359,19 @@ def adopt_command(
     plans: it writes `out` and changes nothing. With `apply_path` it executes exactly that plan,
     and refuses (exit 3) one whose world has moved. Both hold the run lock.
 
-    Three outcomes per monitored release Lidarr has and likearr does not own: **claim** (a source
-    wants it anyway - recorded as owned with its real reasons, plus `manual` when it is on the
-    keep-list too, Lidarr untouched), **keep** (on
-    the keep-list - recorded as `manual`, which the tool can never unmonitor) and **unmonitor**
-    (nobody asked for it). Unmonitored releases are deliberately NOT recorded as owned: they were
-    never likearr's, and recording them would claim something it did not do.
+    By default it only **claims** each monitored release Lidarr has, likearr does not own and a
+    source wants: recorded as owned with its real reasons, Lidarr untouched. Everything else is
+    left as it is and listed as such.
 
-    The keep list is part of the plan and is not read again at apply time. That is the safety
-    property: a bare re-run cannot unmonitor a manual monitor because the keep file went missing.
+    With `unmonitor_rest` (``--unmonitor-rest``) the rest is also sorted: **keep** (on the
+    keep-list - recorded as `manual`, which the tool can never unmonitor, and a claim on it gets
+    `manual` too), **held** (whether a source wants it is unknown this run) and **unmonitor**
+    (nobody asked for it). Unmonitored releases are NOT recorded as owned: they were never
+    likearr's, and recording them would claim something it did not do.
+
+    The mode and the keep list are part of the plan and are not read again at apply time. That is
+    the safety property: a bare re-run cannot unmonitor a manual monitor because the keep file
+    went missing.
 
     Returns:
         0 ok, 1 refused or failed, 3 the plan is stale.
@@ -387,16 +381,19 @@ def adopt_command(
         DiffFileError: the plan file is missing or is not an adopt plan.
     """
     now = now or datetime.now(UTC)
-    if apply_path is not None and keep_file is not None:
-        emit("refused: --keep applies when planning; the reviewed plan already carries its keep list")
+    if apply_path is not None and (keep_file is not None or unmonitor_rest):
+        emit("refused: --keep and --unmonitor-rest apply when planning; the reviewed plan already carries them")
+        return EXIT_ERROR
+    if keep_file is not None and not unmonitor_rest:
+        emit("refused: --keep only applies with --unmonitor-rest; without it, adopt unmonitors nothing")
         return EXIT_ERROR
     with run_lock(ctx.lock_path):
         if apply_path is None:
-            return _adopt_plan(ctx, keep_file=keep_file, out=out, now=now)
+            return _adopt_plan(ctx, keep_file=keep_file, out=out, now=now, unmonitor_rest=unmonitor_rest)
         return _adopt_apply(ctx, apply_path, now=now)
 
 
-def _adopt_plan(ctx: Context, *, keep_file: Path | None, out: Path, now: datetime) -> int:
+def _adopt_plan(ctx: Context, *, keep_file: Path | None, out: Path, now: datetime, unmonitor_rest: bool) -> int:
     try:
         result = plan(ctx, now=now, scheduled=False)
     except (SourceError, LidarrError) as exc:
@@ -405,10 +402,19 @@ def _adopt_plan(ctx: Context, *, keep_file: Path | None, out: Path, now: datetim
 
     keep = read_keep_file(keep_file)
     owned = ctx.state.owned_releases()
-    view = _view_of_everything(ctx)
-    adoption = plan_adoption(result.desired, view, owned, keep, now=now, snapshot=result.snapshot)
+    view = view_of_everything(ctx)
+    adoption = plan_adoption(
+        result.desired,
+        view,
+        owned,
+        keep,
+        now=now,
+        unmonitor_rest=unmonitor_rest,
+        snapshot=result.snapshot,
+        lookup_failed=result.resolve_result.provisional,
+    )
 
-    if not result.mb_ok:
+    if not result.mb_ok and unmonitor_rest:
         # First, before the table: a degraded resolve can leave out more than the albums held
         # below (a failed item that cannot be tied to a Lidarr album by name looks unwanted), and
         # the reader must know before reading a single row.
@@ -423,6 +429,7 @@ def _adopt_plan(ctx: Context, *, keep_file: Path | None, out: Path, now: datetim
         *(("keep", r.key) for r in adoption.keep_as_manual),
         *(("unmonitor", u.key) for u in adoption.unmonitor),
         *(("held", h.key) for h in adoption.held),
+        *(("leave", r.key) for r in adoption.left),
     ]
     for label, key in rows:
         album = view.album(key)
@@ -445,10 +452,16 @@ def _adopt_plan(ctx: Context, *, keep_file: Path | None, out: Path, now: datetim
         out,
     )
     emit("")
-    emit(
-        f"{len(adoption.claim)} to claim, {len(adoption.keep_as_manual)} to keep, "
-        f"{len(adoption.unmonitor)} to unmonitor"
-    )
+    if unmonitor_rest:
+        emit(
+            f"{len(adoption.claim)} to claim, {len(adoption.keep_as_manual)} to keep, "
+            f"{len(adoption.unmonitor)} to unmonitor"
+        )
+    else:
+        emit(
+            f"{len(adoption.claim)} to claim, {len(adoption.left)} left as they are "
+            "(add --unmonitor-rest to unmonitor what no source wants)"
+        )
     if adoption.held:
         emit(
             f"{len(adoption.held)} held back, neither claimed nor unmonitored, because MusicBrainz could not "
@@ -495,7 +508,7 @@ def _adopt_apply(ctx: Context, plan_path: Path, *, now: datetime) -> int:
         )
     try:
         fresh = plan(ctx, now=now, scheduled=False)
-        view = _view_of_everything(ctx)
+        view = view_of_everything(ctx)
     except (SourceError, LidarrError) as exc:
         emit(f"FAIL  {exc}")
         return EXIT_ERROR

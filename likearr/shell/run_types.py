@@ -51,6 +51,16 @@ class PlanResult:
         return not (self.spotify_schema_ok and self.mb_ok and self.lidarr_metadata_ok)
 
 
+@dataclass(frozen=True, slots=True)
+class ExistingChoice:
+    """What a reviewer chose for a first check's "Albums you already monitor" (`diff.json`'s
+    ``existing_albums``): claim the matches, unmonitor the rest, and leave `keep` monitored."""
+
+    claim: bool = False
+    unmonitor_rest: bool = False
+    keep: frozenset[str] = frozenset()
+
+
 @dataclass(slots=True)
 class ApplyResult:
     """What `apply` actually did, as opposed to what the diff proposed."""
@@ -82,6 +92,9 @@ class ApplyResult:
     """``artist_mbid/rg_mbid`` pairs Lidarr still has no album for; retried next run."""
     already_monitored: list[str] = field(default_factory=list)
     """Releases that were already monitored when likearr looked, so ownership was NOT claimed."""
+    claimed: int = 0
+    """Releases already monitored in Lidarr that likearr now owns: the diff's `claim`, and the
+    matches a first apply chose to manage. No Lidarr call."""
     lidarr_metadata_ok: bool = True
     lidarr_written: bool = False
     """Set before any call to Lidarr that is not a known read (`_WriteWatch`): tags and profiles

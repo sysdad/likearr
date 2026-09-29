@@ -143,8 +143,8 @@ To restore:
 4. `docker compose up -d`, then run Doctor.
 
 Without a backup of the state database, likearr treats every release as not its own, so it never
-unmonitors anything it monitored before. Don't run `adopt` to rebuild it: `adopt` unmonitors every
-release no Spotify source wants, including ones you monitored by hand.
+unmonitors anything it monitored before. Don't use `adopt --unmonitor-rest` to rebuild it: it
+unmonitors every release no Spotify source wants, including ones you monitored by hand.
 
 ## Rolling back an upgrade
 
