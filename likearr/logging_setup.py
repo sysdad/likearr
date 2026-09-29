@@ -3,51 +3,53 @@
 `setup_logging` wires a single stderr handler with ISO-8601 timestamps, quiets `httpx`/`httpcore`
 so request lines (which include full URLs with query strings, e.g. `apikey=...`) never surface at
 INFO, and installs a filter that redacts credential-looking values wherever they appear in a log
-message.
+message or its traceback.
 """
 
 from __future__ import annotations
 
 import logging
-import re
 import sys
 from datetime import UTC, datetime
 
-# Each pattern's own match spans the whole thing to redact: the "prefix" (key/header name plus
-# separator, captured in group 1, kept in the output) followed - uncaptured - by everything that
-# makes up the secret value. `Authorization` additionally swallows an optional scheme word
-# ("Bearer ", "Basic ", ...) so the actual token isn't left exposed one word after it: a plain
-# `\S+` after the separator would only consume "Bearer" and stop at the space before the token.
-_REDACT_PATTERNS = [
-    re.compile(r"(?i)(X-Api-Key[\"']?\s*[:=]\s*[\"']?)[^\s\"',&]+"),
-    re.compile(r"(?i)(Authorization[\"']?\s*[:=]\s*[\"']?)(?:(?:Bearer|Basic|Token|ApiKey)\s+)?[^\s\"',&]+"),
-    re.compile(r"(?i)(apikey=)[^\s&'\"]+"),
-    re.compile(r"(?i)(access_token[\"']?\s*[:=]\s*[\"']?)[^\s\"',&]+"),
-    re.compile(r"(?i)(refresh_token[\"']?\s*[:=]\s*[\"']?)[^\s\"',&]+"),
-    # Spotify's authorization ``code`` query parameter: it is a one-time secret good for a token
-    # exchange, so an OAuth callback URL (``/spotify/callback``, and uvicorn's own
-    # access log line for it) must never carry it in the clear. Matched only as a query parameter
-    # (preceded by ``?`` or ``&``), not the many unrelated things named "code" elsewhere.
-    re.compile(r"(?i)([?&]code=)[^\s&'\"]+"),
-]
+from likearr.adapters.http import redact
+
+_FORMATTER = logging.Formatter()
+"""Renders a record's traceback when no handler has yet, so it can be redacted before one does."""
+
+
+def _unformattable(record: logging.LogRecord) -> str:
+    """A malformed call's message - arguments that don't fit the format, or an object whose str()
+    raises - as the format alone, so the line is logged rather than raising. The arguments' values
+    are left out: nothing labels them, so no pattern could tell a secret among them."""
+    try:
+        return f"{record.msg} (log arguments did not fit the format)"
+    except Exception:
+        return "(a log message that could not be rendered)"
 
 
 class RedactingFilter(logging.Filter):
-    """Replaces credential-looking values in a log message with `<redacted>`.
-
-    Substitution always replaces the *entire* match (prefix and secret alike) with
-    `group(1) + "<redacted>"` - never just a captured sub-group - so nothing between "the label"
-    and "the end of the match" can survive uncaught.
-    """
+    """Replaces credential-looking values in a log message and its traceback with `REDACTED`,
+    using the same patterns as every adapter's error text (`likearr.adapters.http.redact`)."""
 
     def filter(self, record: logging.LogRecord) -> bool:
-        original = record.getMessage()
-        redacted = original
-        for pattern in _REDACT_PATTERNS:
-            redacted = pattern.sub(lambda m: m.group(1) + "<redacted>", redacted)
-        if redacted != original:
-            record.msg = redacted
+        try:
+            original: str | None = record.getMessage()
+        except Exception:
+            original = None
+        message = redact(_unformattable(record) if original is None else original)
+        if message != original:
+            record.msg = message
             record.args = ()
+        if record.exc_info and not record.exc_text:
+            try:
+                record.exc_text = _FORMATTER.formatException(record.exc_info)
+            except Exception:
+                record.exc_text = "(a traceback that could not be rendered)"
+        if record.exc_text:
+            record.exc_text = redact(record.exc_text)
+        if record.stack_info:
+            record.stack_info = redact(record.stack_info)
         return True
 
 

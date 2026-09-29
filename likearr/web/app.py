@@ -6,9 +6,12 @@ round trip). This module wires them to URLs.
 
 Two rules hold for every route:
 
-- **No GET changes anything.** Every mutation - login, logout, a settings save, starting or
-  cancelling a job, even fetching the playlist list - is a POST, and every POST passes the
-  cross-origin check before it reaches a route.
+- **No GET changes anything but a Clean up draft.** Every mutation - login, logout, a settings
+  save, starting or cancelling a job, even fetching the playlist list - is a POST, and every POST
+  passes the cross-origin check before it reaches a route. The one exception: a Clean up review's
+  page, rows and downloads bring the review's draft up to date with other reviews' exports, which
+  writes the draft and removes its exported files when that changed a choice
+  (`routes/cleanup.py`, `_prune_draft_locked`).
 - **The server reads; the children work.** It opens the state database per request, read-only
   in practice, and never builds a `Context`: that would construct HTTP clients and a
   `SpotifyAuth` that reads the token file, and no page needs either. Anything that talks to
@@ -63,6 +66,7 @@ from likearr.web.auth import (
     SecureCookieMiddleware,
     SecurityHeadersMiddleware,
     password_matches,
+    signed_in,
 )
 from likearr.web.context import (
     _HERE,
@@ -1148,22 +1152,24 @@ async def explain_start(request: Request) -> Response:
 
 
 def _not_found(request: Request, exc: Exception) -> Response:
-    """`exception_handlers[404]`: Starlette's own answer to a path no route matches at all
-    is a bare `text/plain` "Not Found" - no nav, no viewport tag. `AuthGateMiddleware` sits closer
-    to the browser than the router and has already sent a logged-out visitor to `/login` for any
-    path outside `_OPEN_PATHS`, so a request that reaches here is always a logged-in one; a
-    fragment endpoint that returns its own 404 (a missing job, a missing run) never raises, so this
-    only ever answers a URL with no route at all. The same `missing.html` those handlers already
-    use, styled and with the nav."""
+    """`exception_handlers[404]`: a URL with no route, or a missing file under `/static/`.
+
+    Signed in, the styled `missing.html` with the nav. Otherwise a bare `text/plain` 404: a
+    logged-out request only reaches here through an open path (a missing `/static/` file), and gets
+    no nav, running-job pill or version. A fragment endpoint that answers its own 404 (a missing
+    job, a missing run) never raises, so it never comes here."""
     web = _web(request)
+    if not signed_in(request.session, web.generation):
+        return PlainTextResponse("Not Found", status_code=404)
     return web.render(request, "missing.html", {"what": "page"}, status_code=404)
 
 
 def _unwritable(request: Request, exc: Exception) -> Response:
     """`exception_handlers[OSError]`: a file likearr could not write - a data directory the
     service can't write, a read-only mount, a single-file bind mount of `config.toml` - answered
-    with what to fix rather than a bare "Internal Server Error". Only a POST writes (no GET changes
-    anything), so any other request, and any other `OSError`, is raised on to the usual 500."""
+    with what to fix rather than a bare "Internal Server Error". Only for a POST: any other request
+    (a Clean up GET that writes its draft included), and any other `OSError`, is raised on to the
+    usual 500."""
     message = unwritable_message(exc) if isinstance(exc, OSError) and request.method == "POST" else None
     if message is None:
         raise exc

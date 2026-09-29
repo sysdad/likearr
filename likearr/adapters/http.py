@@ -59,7 +59,7 @@ _AUTH_HEADER_RE = re.compile(r"""(?i)\b(authorization|proxy-authorization)(["']?
 
 _SECRET_KEY_RE = re.compile(
     r"""(?ix)
-    \b(
+    (?<![a-z0-9])(
         x-api-key | api[-_]?key | access[-_]token | refresh[-_]token
       | client[-_]secret | code[-_]verifier | code[-_]challenge | id[-_]token | token
     )\b
