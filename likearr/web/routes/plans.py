@@ -41,6 +41,7 @@ from likearr.web.plans import (
     PlanState,
     Whereabouts,
     applied_since,
+    apply_ended,
     describe_reasons,
     on_disk_labels,
     plan_state,
@@ -64,10 +65,6 @@ PLAN_HISTORY_ROWS = 200
 _SHRINK_GUARDS = frozenset({"source-shrink", "artist-shrink"})
 
 
-def _plan_jobs(web: _Web) -> list[JobMeta]:
-    return [m for m in web.runner.jobs() if m.kind == "plan"]
-
-
 def _records(config: Config) -> list[HealthRecord]:
     """The health records - no diffs parsed - or nothing when there is no state database yet
     (never create one). Enough to tell whether an apply has landed since a plan."""
@@ -88,7 +85,8 @@ def _plan_page_context(web: _Web, config: Config, error: str = "") -> dict[str, 
     now = web.now()
     last = _last_plan(config)
     shrinks = [g.message for g in last.guards if g.code in _SHRINK_GUARDS] if last is not None else []
-    jobs = _plan_jobs(web)
+    every_job = web.runner.jobs()
+    jobs = [m for m in every_job if m.kind == "plan"]
     schedule = config.schedule.cron
     fire = next_fire(schedule, now, web.tz) if config.schedule.enabled else None
     records = _records(config)
@@ -105,6 +103,7 @@ def _plan_page_context(web: _Web, config: Config, error: str = "") -> dict[str, 
                 applied_since=_applied(records, meta),
                 now=now,
                 resolver_version=resolver,
+                apply_ended=apply_ended(every_job, meta.id, web.runner.began_applying),
             )
             if readable
             else PlanState(str(meta.state))
@@ -368,14 +367,7 @@ def plan_review(request: Request) -> Response:
         config = web.config()
     except ConfigError as exc:
         return web.render(request, "plan_review.html", {"config_error": str(exc)}, 409)
-    state = plan_state(
-        meta,
-        diff.config_fingerprint,
-        config.plan_fingerprint,
-        applied_since=_applied(_records(config), meta),
-        now=web.now(),
-        resolver_version=diff.resolver_version,
-    )
+    state = _plan_state_now(web, config, meta, diff)
     return web.render(
         request, "plan_review.html", {"review": _review_context(web, config, meta, diff, state), "config_error": ""}
     )
@@ -392,6 +384,12 @@ _CHANGE_KEYS = (
     "claim",
 )
 """The `diff_summary` counts that are changes: to Lidarr, and the albums likearr starts managing."""
+
+
+def _changes(diff: Diff, summary: dict[str, int]) -> int:
+    """The changes applying `diff` makes. A guarded plan's apply leaves its unmonitors out
+    (`planned_changes(diff, allow_unmonitors=not guarded)`), so they are not counted."""
+    return sum(summary[k] for k in _CHANGE_KEYS if not (k == "unmonitor" and diff.guarded))
 
 
 # ---------------------------------------------------------------- albums you already monitor
@@ -496,7 +494,8 @@ def _review_context(web: _Web, config: Config, meta: JobMeta, diff: Diff, state:
         "meta": meta,
         "state": state,
         "summary": summary,
-        "changes": sum(summary[k] for k in _CHANGE_KEYS),
+        "changes": _changes(diff, summary),
+        "guarded": diff.guarded and bool(diff.unmonitor),
         "replaced": replaced_count(diff, names.where),
         "accept_shrink": diff.accept_shrink,
         "sections": [_section_context(diff, name, names, meta.id, "", 1) for name in SECTIONS],
@@ -527,6 +526,7 @@ def _plan_state_now(web: _Web, config: Config, meta: JobMeta, diff: Diff) -> Pla
         applied_since=_applied(_records(config), meta),
         now=web.now(),
         resolver_version=diff.resolver_version,
+        apply_ended=apply_ended(web.runner.jobs(), meta.id, web.runner.began_applying),
     )
 
 
@@ -544,12 +544,13 @@ def _apply_context(
     choice = choice or ExistingChoice(claim=True)
     chosen = _choice_context(existing, choice) if existing is not None else None
     flags = "".join(f" {f}" for f in _existing_flags(choice, EXISTING_KEEP_FILE)) if existing is not None else ""
+    summary = diff_summary(diff)
     return {
         "meta": meta,
         "state": state,
-        "summary": diff_summary(diff),
-        "changes": sum(diff_summary(diff)[k] for k in _CHANGE_KEYS)
-        + (chosen["claim"] + chosen["unmonitor"] if chosen else 0),
+        "summary": summary,
+        "changes": _changes(diff, summary) + (chosen["claim"] + chosen["unmonitor"] if chosen else 0),
+        "guarded": diff.guarded and bool(diff.unmonitor),
         "existing": chosen,
         "guards": [g.message for g in diff.guards if g.blocked_unmonitors > 0],
         "command": f"likearr run --apply {path}{flags}",

@@ -1811,6 +1811,38 @@ def test_a_successful_exchange_writes_the_token_0600_and_updates_authorized_at(
     assert "at-new" not in flash and "rt-new" not in flash  # tokens never rendered
 
 
+def test_a_token_that_cannot_be_saved_names_the_folder_instead_of_failing(
+    client: TestClient, data_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import errno
+
+    from likearr.web import spotify_connect
+
+    def refuse(*_args: object, **_kwargs: object) -> bool:
+        raise PermissionError(errno.EACCES, "Permission denied", "/data/.spotify-token.json.ab12.tmp")
+
+    monkeypatch.setenv("LIKEARR_SPOTIFY_CLIENT_ID", SPOTIFY_CLIENT_ID)
+    monkeypatch.setattr(spotify_connect, "save", refuse)
+    _login(client)
+    page = _connect_start(client)
+    state = re.search(r"state=([^&\"]+)", page)
+    assert state is not None
+    url = f"http://127.0.0.1:8765/callback?code=some-code&state={state[1]}"
+
+    with respx.mock:
+        respx.get(ME_URL).mock(return_value=httpx.Response(200, json=ME))
+        respx.post(TOKEN_URL).mock(
+            return_value=httpx.Response(
+                200, json={"access_token": "at-new", "refresh_token": "rt-new", "expires_in": 3600, "scope": ""}
+            )
+        )
+        response = client.post("/settings/spotify/finish", data={"redirect_url": url}, follow_redirects=False)
+
+    assert response.status_code == 303
+    flash = client.get("/settings").text
+    assert "The Spotify token wasn&#39;t saved, so nothing changed. likearr can&#39;t write to /data." in flash
+
+
 def test_a_failed_exchange_leaves_the_old_token_untouched(
     client: TestClient, data_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

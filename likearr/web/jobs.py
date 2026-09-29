@@ -315,6 +315,8 @@ class JobRunner:
         """Set exactly when neither a running nor an adopted job holds the one job slot - so
         `submit_scheduled`'s queue wakes the moment it may retry, rather than polling."""
         self._slot_free.set()
+        self._queued = 0
+        """`submit_scheduled` calls not yet started or recorded skipped."""
 
     # ---------------------------------------------------------------- lifecycle
 
@@ -577,7 +579,9 @@ class JobRunner:
             return not running.watcher.is_alive()
         return True
 
-    def submit_scheduled(self, kind: str, args: Sequence[str], *, label: str = "") -> None:
+    def submit_scheduled(
+        self, kind: str, args: Sequence[str], *, label: str = "", unless_pending: bool = False
+    ) -> bool:
         """Start `kind` now, or queue behind whatever is running, from a background thread.
 
         For the scheduler's own fire and for "Run now" (`likearr.web.schedule`): neither may block
@@ -588,10 +592,43 @@ class JobRunner:
         a host cron line, say - is not queued: that is the collision the lock has
         always existed to catch, and it is recorded `skipped` at once, exactly as a scheduled run
         that lost the lock race has always reported itself (`RunStatus.SKIPPED` in `shell.run`).
+
+        With `unless_pending`, nothing is submitted while a scheduled job runs or waits in the
+        queue (`scheduled_pending`); returns whether it was submitted.
         """
-        threading.Thread(
-            target=self._run_queued, args=(kind, list(args), label), name=f"queue-{kind}", daemon=True
-        ).start()
+        with self._mutex:
+            if unless_pending and self._scheduled_pending_locked():
+                return False
+            self._queued += 1
+        try:
+            threading.Thread(
+                target=self._run_queued_counted, args=(kind, list(args), label), name=f"queue-{kind}", daemon=True
+            ).start()
+        except BaseException:
+            with self._mutex:
+                self._queued -= 1
+            raise
+        return True
+
+    def scheduled_pending(self) -> bool:
+        """Whether a scheduled job is running, or a scheduled submission waits in the queue."""
+        with self._mutex:
+            return self._scheduled_pending_locked()
+
+    def _scheduled_pending_locked(self) -> bool:
+        running = self._running.meta if self._running is not None else None
+        return (
+            self._queued > 0
+            or (running is not None and running.kind == SCHEDULED_KIND)
+            or any(m.kind == SCHEDULED_KIND for m in self._adopted.values())
+        )
+
+    def _run_queued_counted(self, kind: str, args: list[str], label: str) -> None:
+        try:
+            self._run_queued(kind, args, label)
+        finally:
+            with self._mutex:
+                self._queued -= 1
 
     def _run_queued(self, kind: str, args: list[str], label: str) -> None:
         if self._draining:
@@ -723,6 +760,27 @@ class JobRunner:
         """
         text = self._read_text(job_id, "log.txt", tail=True)
         return redact("\n".join(text.splitlines()[-lines:]), literals=_env_secrets())
+
+    def log_markers(self, job_id: str, markers: Sequence[str]) -> frozenset[str]:
+        """Which of `markers` appear anywhere in the job's `log.txt`: the whole file, not the tail
+        `log_tail` shows, so a long log still answers."""
+        if not valid_job_id(job_id):
+            return frozenset()
+        try:
+            data = (self._root / job_id / "log.txt").read_bytes()
+        except OSError:
+            return frozenset()
+        return frozenset(m for m in markers if m.encode() in data)
+
+    def began_applying(self, job_id: str) -> bool:
+        """Whether the job printed `PHASE_MARKER_APPLY`, so it may have changed Lidarr. An
+        unreadable log answers yes."""
+        if not valid_job_id(job_id):
+            return False
+        try:
+            return PHASE_MARKER_APPLY.encode() in (self._root / job_id / "log.txt").read_bytes()
+        except OSError:
+            return True
 
     def output(self, job_id: str) -> str:
         """The child's stdout, verbatim: it is parsed (`playlists --json`) as well as shown."""

@@ -23,7 +23,7 @@ import logging
 import os
 import re
 import secrets
-from collections.abc import AsyncIterator, Mapping, Sequence
+from collections.abc import AsyncIterator, Container, Mapping, Sequence
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
@@ -72,7 +72,7 @@ from likearr.web.context import (
     _web,
     oom_note,
 )
-from likearr.web.helpers import _first_applied, _read_plan
+from likearr.web.helpers import _first_applied, _read_plan, unwritable_message
 from likearr.web.jobs import JobMeta, JobRefused, JobState, last_json_object
 from likearr.web.plans import (
     run_change_sections,
@@ -96,6 +96,7 @@ from likearr.web.status import (
     pending_changes,
     reauth_banner_note,
     reauth_view,
+    stale_after,
 )
 
 __all__ = ["WebSettings", "create_app"]
@@ -382,7 +383,9 @@ def status(request: Request) -> Response:
     # The time comes from SqliteState, never from the job store: the job store only keeps the
     # newest KEEP_JOBS (20), so an old fire's job directory can be pruned while its time is still
     # the most recent one recorded. The job (when it still exists) adds the result and a link.
-    last_fire_job = next((m for m in jobs if m.kind == SCHEDULED_KIND), None)
+    last_fire_job = _fire_job(jobs, last_fire_at)
+    scheduled_pending = web.runner.scheduled_pending()
+    last_fire_waiting = last_fire_at is not None and last_fire_job is None and scheduled_pending
     last_fire_reason = ""
     if last_fire_job is not None and last_fire_job.state is JobState.SKIPPED:
         last_fire_reason = web.runner.log_tail(last_fire_job.id, lines=1).strip()
@@ -392,7 +395,13 @@ def status(request: Request) -> Response:
         {
             "view": view,
             "collision_actions": _collision_actions(web, config, view.collisions, last) if view.collisions else {},
-            "glance": health_glance(published, now=now, tz=web.tz, collisions_shown=bool(view.collisions)),
+            "glance": health_glance(
+                published,
+                now=now,
+                tz=web.tz,
+                collisions_shown=bool(view.collisions),
+                stale=stale_after(schedule, web.tz, now),
+            ),
             "checklist": checklist,
             "coverage": coverage(last) if last is not None else None,
             "reauth": reauth,
@@ -411,6 +420,8 @@ def status(request: Request) -> Response:
             "paused_reason": config.schedule.paused_reason,
             "last_fire_at": last_fire_at.astimezone(web.tz) if last_fire_at else None,
             "last_fire_job": last_fire_job,
+            "last_fire_waiting": last_fire_waiting,
+            "scheduled_pending": scheduled_pending,
             "last_fire_failed": last_fire_job is not None and last_fire_job.state is JobState.FAILED,
             "last_fire_ago": ago(now, last_fire_at) if last_fire_at else "",
             "last_change": last_change(view),
@@ -428,6 +439,19 @@ def status(request: Request) -> Response:
             "config_error": "",
         },
     )
+
+
+def _fire_job(jobs: Sequence[JobMeta], fire_at: datetime | None) -> JobMeta | None:
+    """The scheduled job of the fire recorded at `fire_at`: the newest scheduled job started (or
+    recorded skipped) at or after it. Compared in whole seconds, since a job's times are stored to
+    the second and the fire's to the microsecond. ``None`` while that fire still waits in the queue,
+    or once its job has been pruned. With no fire recorded, the newest scheduled job."""
+    newest = next((m for m in jobs if m.kind == SCHEDULED_KIND), None)
+    if newest is None or fire_at is None:
+        return newest
+    if not newest.started_at or datetime.fromisoformat(newest.started_at) < fire_at.replace(microsecond=0):
+        return None
+    return newest
 
 
 async def run_now(request: Request) -> Response:
@@ -457,9 +481,12 @@ async def run_now(request: Request) -> Response:
             "Scheduled runs start after your first reviewed apply - review changes and apply them first."
         )
         return RedirectResponse("/", status_code=303)
-    await anyio.to_thread.run_sync(
-        lambda: fire_now(web.runner, web.config_path, now=web.now, label="Scheduled run (Run now)")
+    fired = await anyio.to_thread.run_sync(
+        lambda: fire_now(web.runner, web.config_path, now=web.now, label="Scheduled run (Run now)", unless_pending=True)
     )
+    if not fired:
+        request.session["flash"] = "A scheduled run is already running or waiting, so no second one was started."
+        return RedirectResponse("/", status_code=303)
     request.session["flash"] = "Scheduled run started - or queued behind whatever is running now."
     return RedirectResponse("/", status_code=303)
 
@@ -621,13 +648,20 @@ def _elapsed(meta: JobMeta, now: datetime) -> str:
     return f"{seconds // 60} min {seconds % 60:02d} s" if seconds >= 60 else f"{seconds} s"
 
 
-def _phase(log_text: str) -> str:
-    """Coarse progress from the log markers the CLI already writes."""
-    if PHASE_MARKER_APPLY in log_text:
+_SOURCES_READ = "sources read:"
+
+_PHASE_MARKERS = (PHASE_MARKER_APPLY, PROGRESS_MARKER_POST_RESOLVE, _SOURCES_READ)
+"""The log markers the CLI already writes, furthest first."""
+
+
+def _phase(found: Container[str]) -> str:
+    """Coarse progress from the furthest of `_PHASE_MARKERS` in `found`: the markers found in the
+    whole log (`JobRunner.log_markers`), or a log text itself."""
+    if PHASE_MARKER_APPLY in found:
         return "Applying changes to Lidarr"
-    if PROGRESS_MARKER_POST_RESOLVE in log_text:
+    if PROGRESS_MARKER_POST_RESOLVE in found:
         return "Reading Lidarr and building the plan"
-    if "sources read:" in log_text:
+    if _SOURCES_READ in found:
         return "Spotify read; resolving against MusicBrainz and reading Lidarr"
     return "Reading Spotify"
 
@@ -861,7 +895,15 @@ _STATE_TEXT_REASON_SHOWN = {
 page never says "the log below says why" above a reason it is already showing."""
 
 
-def _state_text(meta: JobMeta, failure_reason: str) -> str:
+_INTERRUPTED_PARTWAY = (
+    "Interrupted: likearr stopped or restarted while this was changing Lidarr, so Lidarr may be partly changed. "
+    "Check again to finish."
+)
+
+
+def _state_text(web: _Web, meta: JobMeta, failure_reason: str) -> str:
+    if meta.state is JobState.INTERRUPTED and meta.kind in _RUN_LINKED_KINDS and web.runner.began_applying(meta.id):
+        return _INTERRUPTED_PARTWAY
     if failure_reason:
         return _STATE_TEXT_REASON_SHOWN.get(meta.state, _STATE_TEXT[meta.state])
     return _STATE_TEXT[meta.state]
@@ -888,13 +930,13 @@ def _job_context(web: _Web, meta: JobMeta) -> dict[str, Any]:
         "replan_accept_shrink": stale and _plan_accepted_shrinks(web, meta.plan_id),
         "meta": meta,
         "state_text": oom_note(meta)
-        or (_ADOPTED_TEXT if meta.adopted and not meta.finished else _state_text(meta, failure_reason)),
+        or (_ADOPTED_TEXT if meta.adopted and not meta.finished else _state_text(web, meta, failure_reason)),
         "failure_reason": failure_reason,
         "remedy_text": remedy_text,
         "remedy_label": remedy_label,
         "remedy_url": remedy_url,
         "elapsed": _elapsed(meta, web.now()),
-        "phase": _phase(tail) if meta.state is JobState.RUNNING else "",
+        "phase": _phase(web.runner.log_markers(meta.id, _PHASE_MARKERS)) if meta.state is JobState.RUNNING else "",
         "progress": _progress_line(tail) if meta.state is JobState.RUNNING else "",
         "tail": tail,
         "output": output,
@@ -1117,6 +1159,20 @@ def _not_found(request: Request, exc: Exception) -> Response:
     return web.render(request, "missing.html", {"what": "page"}, status_code=404)
 
 
+def _unwritable(request: Request, exc: Exception) -> Response:
+    """`exception_handlers[OSError]`: a file likearr could not write - a data directory the
+    service can't write, a read-only mount, a single-file bind mount of `config.toml` - answered
+    with what to fix rather than a bare "Internal Server Error". Only a POST writes (no GET changes
+    anything), so any other request, and any other `OSError`, is raised on to the usual 500."""
+    message = unwritable_message(exc) if isinstance(exc, OSError) and request.method == "POST" else None
+    if message is None:
+        raise exc
+    log.error("could not write a file: %s", exc)
+    if request.headers.get("hx-request"):
+        return PlainTextResponse(message, status_code=403)
+    return _web(request).render(request, "unwritable.html", {"message": message}, status_code=403)
+
+
 # ---------------------------------------------------------------- the app
 
 
@@ -1204,7 +1260,12 @@ def create_app(settings: WebSettings) -> ASGIApp:
         Route("/jobs/{job_id}/cancel", job_cancel, methods=["POST"]),
         Mount("/static", StaticFiles(directory=str(_HERE / "static")), name="static"),
     ]
-    app = Starlette(routes=routes, middleware=middleware, lifespan=lifespan, exception_handlers={404: _not_found})
+    app = Starlette(
+        routes=routes,
+        middleware=middleware,
+        lifespan=lifespan,
+        exception_handlers={404: _not_found, OSError: _unwritable},
+    )
     app.state.web = web
     # Outside Starlette itself: its ServerErrorMiddleware always wraps user middleware, so headers
     # added inside it would be missing from exactly the responses nobody planned, the 500s.

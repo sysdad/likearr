@@ -7,9 +7,12 @@ time, so `context` can import this module.
 
 from __future__ import annotations
 
+import errno
 import logging
+import os
 import tomllib
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from likearr.adapters.state_sqlite import SqliteState
@@ -112,3 +115,26 @@ def _read_plan(web: _Web, job_id: str) -> Diff | None:
     except DiffFileError:
         log.warning("plan %s: diff.json does not read", job_id, exc_info=True)
         return None
+
+
+_UNWRITABLE_ERRNOS = frozenset({errno.EACCES, errno.EPERM, errno.EROFS, errno.EBUSY})
+
+
+def unwritable_message(exc: OSError) -> str | None:
+    """What to tell someone when likearr could not write a file, naming the directory and the fix;
+    ``None`` for any other `OSError`. A single-file bind mount of a file likearr replaces (the
+    rename answers EBUSY) is named as that."""
+    if exc.errno not in _UNWRITABLE_ERRNOS:
+        return None
+    target = exc.filename2 or exc.filename
+    path = Path(os.fsdecode(target)) if isinstance(target, str | bytes) and target else None
+    if exc.errno == errno.EBUSY:
+        name = path.name if path is not None else "a file"
+        return (
+            f"likearr can't replace {name}: it is mounted into the container as a single file. "
+            "Mount the directory that holds it instead, then restart likearr."
+        )
+    where = str(path.parent) if path is not None else "its data directory"
+    if exc.errno == errno.EROFS:
+        return f"likearr can't save to {where}: it is read-only. Mount it read-write, then restart likearr."
+    return f"likearr can't write to {where}. Give the user likearr runs as write access to it, then try again."

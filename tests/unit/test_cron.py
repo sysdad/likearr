@@ -150,3 +150,14 @@ def test_the_default_schedule_survives_the_spring_forward_gap() -> None:
 
     assert fire is not None
     assert fire.astimezone(UTC) > after.astimezone(UTC)
+
+
+def test_longest_gap_spans_the_longest_month_and_none_for_a_line_that_never_fires() -> None:
+    from datetime import timedelta
+
+    from likearr.core.cron import longest_gap
+
+    around = datetime(2026, 9, 23, tzinfo=UTC)
+    assert longest_gap("0 3 1 * *", UTC_ZONE, around) == timedelta(days=31)
+    assert longest_gap("0,30 * * * *", UTC_ZONE, around) == timedelta(minutes=30)
+    assert longest_gap("0 0 30 2 *", UTC_ZONE, around) is None

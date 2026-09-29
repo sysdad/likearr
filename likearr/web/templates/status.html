@@ -73,12 +73,13 @@
         {%- elif fire == "running" %} running now
         {%- elif fire == "skipped" %} skipped {{ last_fire_ago }}{% if last_fire_reason %} - {{ last_fire_reason | short_message }}{% endif %}
         {%- elif fire %} {{ fire }} {{ last_fire_ago }}
+        {%- elif last_fire_waiting %} waiting for the running job
         {%- else %} {{ last_fire_ago }}{% endif %}
         {%- if last_fire_job %} · <a href="/jobs/{{ last_fire_job.id }}">details</a>{% endif %}</span>
       {% endif %}
       {% if not schedule_paused %}
-      <form method="post" action="/run-now">
-        <button type="submit"{% if not first_applied %} disabled aria-describedby="first-apply-note"{% endif %}>Run and apply now</button>
+      <form method="post" action="/run-now" data-submit-once>
+        <button type="submit"{% if not first_applied %} disabled aria-describedby="first-apply-note"{% elif scheduled_pending %} disabled title="A scheduled run is already running or waiting"{% endif %}>Run and apply now</button>
       </form>
       {% endif %}
     </div>

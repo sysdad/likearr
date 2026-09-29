@@ -6,7 +6,8 @@ never carries the plan; it names a job. What this module decides:
 - **Lifecycle.** A finished plan is *reviewable* until the world it was planned against moves on.
   It is *superseded* when an apply has landed since (any apply - a cron run's included), or when
   `[rules]`/`[guards]` no longer match the configuration it recorded (the same comparison `apply`
-  makes, so a settings save supersedes it). It *expires* after `EXPIRE_AFTER`
+  makes, so a settings save supersedes it), or when an apply of it was refused as stale or cut off
+  by a restart. It *expires* after `EXPIRE_AFTER`
   unreviewed. Both are computed when read, from facts that already exist, rather than stored: no
   hook to forget, and a hand edit of `config.toml` supersedes exactly like a browser save. The
   digest check in `apply` stays the real backstop; this just says so before the last step.
@@ -19,7 +20,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -39,6 +40,7 @@ __all__ = [
     "PlanState",
     "Section",
     "applied_since",
+    "apply_ended",
     "describe_reasons",
     "describe_step",
     "plan_state",
@@ -131,6 +133,7 @@ def plan_state(
     applied_since: bool,
     now: datetime,
     resolver_version: int | None = None,
+    apply_ended: str = "",
 ) -> PlanState:
     """Where a plan job stands now.
 
@@ -140,9 +143,13 @@ def plan_state(
         applied_since: an apply has been recorded since the plan finished.
         resolver_version: the one the plan was made with; ``None`` when not known. An older one is
             superseded, as `apply` refuses it.
+        apply_ended: why an apply of this plan ended without applying it (`apply_ended`); it is
+            then superseded.
     """
     if meta.state not in _REVIEWABLE_JOBS or not meta.finished_at:
         return PlanState(str(meta.state))
+    if apply_ended:
+        return PlanState("superseded", apply_ended)
     if applied_since:
         return PlanState("superseded", "Changes were applied since this plan was made, so Lidarr has moved on from it.")
     if resolver_version is not None and resolver_version != RESOLVER_VERSION:
@@ -155,6 +162,25 @@ def plan_state(
     if now - datetime.fromisoformat(meta.finished_at) > EXPIRE_AFTER:
         return PlanState("expired", "This plan is more than a week old.")
     return PlanState("reviewable")
+
+
+APPLY_REFUSED = "Applying it was refused: Spotify, Lidarr or your settings changed since this check."
+APPLY_CUT_OFF = "likearr stopped while applying it, before anything changed in Lidarr."
+APPLY_CUT_OFF_PARTWAY = "likearr stopped while applying it, so Lidarr may be partly changed. Check again to finish."
+
+
+def apply_ended(jobs: Sequence[JobMeta], plan_id: str, began_applying: Callable[[str], bool]) -> str:
+    """Why the newest apply of `plan_id` ended without applying it, or ``""``: refused as stale,
+    or cut off by a restart. Cut off, it may have changed Lidarr part-way only if its log shows the
+    apply phase began (`began_applying`)."""
+    newest = next((m for m in jobs if m.kind == "apply" and m.plan_id == plan_id), None)
+    if newest is None:
+        return ""
+    if newest.state is JobState.STALE:
+        return APPLY_REFUSED
+    if newest.state is JobState.INTERRUPTED:
+        return APPLY_CUT_OFF_PARTWAY if began_applying(newest.id) else APPLY_CUT_OFF
+    return ""
 
 
 # ---------------------------------------------------------------- plain language

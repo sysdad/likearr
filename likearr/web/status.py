@@ -25,6 +25,7 @@ from zoneinfo import ZoneInfo
 
 from likearr.adapters.state_sqlite import RunRow
 from likearr.config import is_mbid
+from likearr.core.cron import CronError, longest_gap
 from likearr.core.explain import resolution_outcome
 from likearr.models import EXIT_BUSY, HealthRecord, NameCollision, RunStatus, SourceKind
 from likearr.playlist_names import playlist_url
@@ -51,6 +52,7 @@ __all__ = [
     "reauth_banner_note",
     "reauth_view",
     "source_counts",
+    "stale_after",
 ]
 
 _APPLIED = frozenset({RunStatus.OK, RunStatus.GUARDED, RunStatus.DEGRADED})
@@ -536,9 +538,25 @@ def build_status(
 # ---------------------------------------------------------------- at a glance
 
 STALE_AFTER = timedelta(hours=13)
-"""No run reaching Home Assistant for this long needs attention. Mirrors the example
-``binary_sensor.likearr_stale``, which fails closed at 13 hours (docs/install.md, "MQTT");
-fixed rather than derived from `[schedule] cron`, so the page and the sensor always agree."""
+"""The shortest time without a run that needs attention, whatever the schedule: the example
+``binary_sensor.likearr_stale``'s 13 hours (docs/install.md, "MQTT"), which suits the default
+six-hourly schedule. A sparser schedule waits longer (`stale_after`)."""
+
+STALE_SLACK = timedelta(hours=2)
+"""Added to the schedule's longest gap: a fire can queue for up to an hour behind another job
+(`jobs.QUEUE_WAIT_S`), and the run itself takes a while."""
+
+
+def stale_after(cron: str, tz: ZoneInfo, now: datetime) -> timedelta:
+    """How long without a run needs attention under `cron`: its longest gap between fires plus
+    `STALE_SLACK`, never under `STALE_AFTER`. A line that can't be read, or fires fewer than
+    twice in the window `longest_gap` looks at, keeps `STALE_AFTER`."""
+    try:
+        gap = longest_gap(cron, tz, now)
+    except CronError:
+        return STALE_AFTER
+    return max(STALE_AFTER, gap + STALE_SLACK) if gap is not None else STALE_AFTER
+
 
 _HA_AMBER = frozenset({RunStatus.ERROR, RunStatus.STALE, RunStatus.GUARDED, RunStatus.DEGRADED})
 """The statuses the Home Assistant problem flag in docs/install.md lights on."""
@@ -657,11 +675,17 @@ class HealthGlance:
 
 
 def health_glance(
-    published: RunRow | None, *, now: datetime, tz: ZoneInfo, collisions_shown: bool = True
+    published: RunRow | None,
+    *,
+    now: datetime,
+    tz: ZoneInfo,
+    collisions_shown: bool = True,
+    stale: timedelta = STALE_AFTER,
 ) -> HealthGlance:
     """What Home Assistant's problem flag and stale sensor say, in words, from `published`: the
     newest run the sinks were sent (`SqliteState.last_published_run`), however far back. A new
-    name collision links to the collision cards only when the page shows them (`collisions_shown`)."""
+    name collision links to the collision cards only when the page shows them (`collisions_shown`).
+    No run for longer than `stale` (`stale_after` of the schedule) is a problem."""
     if published is None:
         # Fails closed, mirroring Home Assistant's dead-man's switch: no record at all is a problem.
         return HealthGlance(False, None, [("No run has finished yet.", "")])
@@ -690,7 +714,7 @@ def health_glance(
         notes.append(f"scheduled runs are paused ({run.headline.removeprefix('Paused: ')})")
     if record.status in _HA_AMBER and not problems:
         problems.append((record.message or f"The last run's status is {record.status}.", RUN_PAGE))
-    if now - run.when > STALE_AFTER:
+    if now - run.when > stale:
         problems.append(
             (f"No run for {ago(now, run.when).removesuffix(' ago')}: check the scheduler (Settings → Schedule).", "")
         )

@@ -830,3 +830,101 @@ def test_a_server_that_does_not_count_shows_no_column_and_starts_no_job(
 
     assert _jobs_of(data_dir, "files") == []
     assert "On disk" not in page
+
+
+# ---------------------------------------------------------------- guarded plans, ended applies
+
+
+def _only_unmonitors(planned_diff: Path, *, guarded: bool) -> None:
+    """Strip the planned diff down to its unmonitors, with or without the guard that holds them."""
+    from likearr.shell.diff_io import read_diff, write_diff
+
+    diff = read_diff(planned_diff)
+    diff.add_artists.clear()
+    diff.monitor.clear()
+    diff.ratchets.clear()
+    diff.set_new_items_none.clear()
+    diff.monitor_artists.clear()
+    diff.refresh_artists.clear()
+    diff.claim.clear()
+    if not guarded:
+        diff.guards.clear()
+    assert diff.unmonitor
+    write_diff(diff, planned_diff)
+
+
+def test_a_guarded_plan_of_only_unmonitors_says_the_apply_changes_nothing(
+    client: TestClient, planned_diff: Path
+) -> None:
+    _only_unmonitors(planned_diff, guarded=True)
+    _login(client)
+    plan_id = _start_plan(client)
+
+    review = client.get(f"/plan/{plan_id}").text
+    confirm = client.get(f"/plan/{plan_id}/apply").text
+
+    for page in (review, confirm):
+        assert "A guard held this plan's unmonitors back, so this apply leaves them monitored." in page
+    assert "Apply these changes…" not in review and "Apply anyway…" in review
+    assert "Apply these changes</button>" not in confirm and "Apply anyway</button>" in confirm
+
+
+def test_an_unguarded_plan_of_only_unmonitors_offers_to_apply_them(client: TestClient, planned_diff: Path) -> None:
+    _only_unmonitors(planned_diff, guarded=False)
+    _login(client)
+    plan_id = _start_plan(client)
+
+    review = client.get(f"/plan/{plan_id}").text
+
+    assert 'id="guarded-note"' not in review
+    assert "Apply these changes…" in review
+
+
+def _ended_apply(data_dir: Path, plan_id: str, state: str, log: str = "") -> str:
+    """An apply job of `plan_id` that ended in `state`, a minute before `NOW`."""
+    job_id = "2026-09-23T17-59-00Z-a9a9a9"
+    job_dir = data_dir / "ui" / "jobs" / job_id
+    job_dir.mkdir(parents=True)
+    stamp = (NOW - timedelta(minutes=1)).isoformat()
+    meta = {
+        "id": job_id,
+        "kind": "apply",
+        "argv": ["likearr", "run", "--apply"],
+        "label": "apply of the check",
+        "started_at": stamp,
+        "finished_at": stamp,
+        "exit_code": 3 if state == "stale" else None,
+        "state": state,
+        "drain": True,
+        "plan_id": plan_id,
+    }
+    (job_dir / "meta.json").write_text(json.dumps(meta))
+    (job_dir / "log.txt").write_text(log)
+    return job_id
+
+
+@pytest.mark.parametrize(
+    ("state", "log", "why"),
+    [
+        ("stale", "", "Applying it was refused"),
+        ("interrupted", "planning\n", "before anything changed in Lidarr"),
+        ("interrupted", "likearr-phase: apply\n", "Lidarr may be partly changed"),
+    ],
+)
+def test_a_plan_whose_apply_was_refused_or_cut_off_no_longer_offers_apply(
+    client: TestClient, data_dir: Path, planned_diff: Path, state: str, log: str, why: str
+) -> None:
+    _login(client)
+    plan_id = _start_plan(client)
+    _ended_apply(data_dir, plan_id, state, log)
+
+    review = client.get(f"/plan/{plan_id}").text
+    confirm = client.get(f"/plan/{plan_id}/apply")
+    applied = client.post(f"/plan/{plan_id}/apply", data={"plan_token": "x"}, follow_redirects=False)
+
+    assert "This check is superseded." in review and why in review
+    assert f'href="/plan/{plan_id}/apply"' not in review
+    assert why in confirm.text and 'name="plan_token"' not in confirm.text
+    assert applied.status_code == 409
+    if "partly changed" not in why:
+        assert "partly changed" not in review
