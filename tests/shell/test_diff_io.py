@@ -137,3 +137,20 @@ def test_a_diff_with_no_extras_decodes_too(state: SqliteState) -> None:
 def test_not_a_json_object_is_refused() -> None:
     with pytest.raises(DiffFileError):
         diff_from_run_dict([])  # type: ignore[arg-type]
+
+
+def test_disown_round_trips_through_the_plan_file_and_an_older_file_loads_it_empty() -> None:
+    from likearr.shell.diff_io import diff_from_dict, diff_to_dict
+
+    key = ReleaseKey("a5", "rg5")
+    raw = diff_to_dict(_diff(pending=[], unmapped=[], disown=[key]))
+    assert raw["summary"]["disown"] == 1
+    assert diff_from_dict(raw).disown == [key]
+
+    del raw["disown"]
+    assert diff_from_dict(raw).disown == []
+
+
+def test_disown_decodes_from_a_stored_run(state: SqliteState) -> None:
+    key = ReleaseKey("a5", "rg5")
+    assert diff_from_run_dict(_stored_diff_dict(state, _diff(disown=[key]))).disown == [key]

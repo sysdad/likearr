@@ -643,6 +643,12 @@ class LidarrView:
     def album(self, key: ReleaseKey) -> LidarrAlbum | None:
         return self.albums.get(key.artist_mbid, {}).get(key.rg_mbid)
 
+    def lacks_album(self, key: ReleaseKey) -> bool:
+        """The artist is in Lidarr and its albums were read, and this release group is not among
+        them. A missing artist, or one whose albums were not loaded, says nothing about the album."""
+        albums = self.albums.get(key.artist_mbid)
+        return albums is not None and key.artist_mbid in self.artists and key.rg_mbid not in albums
+
 
 # ---------------------------------------------------------------- state (what likearr owns)
 
@@ -804,6 +810,9 @@ class Diff:
     claim: list[OwnedRelease] = field(default_factory=list)
     """Wanted releases Lidarr already monitors that likearr does not own yet, to own from now on
     (`[rules] manage_monitored`). State only, no Lidarr call."""
+    disown: list[ReleaseKey] = field(default_factory=list)
+    """Owned, non-manual releases no longer wanted that Lidarr already shows unmonitored, or no
+    longer has at all, to stop owning. State only, no Lidarr call."""
 
     @property
     def is_empty(self) -> bool:

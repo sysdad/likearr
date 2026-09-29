@@ -637,6 +637,36 @@ def test_a_check_with_nothing_to_change_says_so(client: TestClient, data_dir: Pa
 
     assert "Nothing to change." in page
     assert "Nothing in:" not in page  # the zero counts already say it
+    assert "Stops tracking" not in page
+
+
+def test_a_check_that_only_stops_tracking_albums_says_so_as_a_count(
+    client: TestClient, data_dir: Path, planned_diff: Path
+) -> None:
+    from likearr.models import ReleaseKey
+    from likearr.shell.diff_io import read_diff, write_diff
+
+    diff = read_diff(planned_diff)
+    for part in (
+        diff.add_artists,
+        diff.monitor,
+        diff.unmonitor,
+        diff.ratchets,
+        diff.monitor_artists,
+        diff.set_new_items_none,
+        diff.refresh_artists,
+    ):
+        part.clear()
+    diff.guards.clear()
+    diff.disown = [ReleaseKey("a1", "rg-0"), ReleaseKey("a1", "rg-1")]
+    write_diff(diff, planned_diff)
+    _login(client)
+    job_id = _start_plan(client)
+
+    page = client.get(f"/jobs/{job_id}").text
+
+    assert "Nothing to change." in page
+    assert "Stops tracking 2 albums already unmonitored or gone in Lidarr." in page
 
 
 def _only_monitor_new_albums(data_dir: Path, planned_diff: Path) -> None:
