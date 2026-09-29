@@ -14,31 +14,11 @@ import pytest
 
 from likearr.adapters.http import build_client
 from likearr.config import LidarrConfig, MusicBrainzConfig, SpotifyConfig
+from tests.clock import FakeClock
 
 FAKE_API_KEY = "fake-api-key-0000"
 LIDARR_URL = "http://lidarr.test:8686"
 MB_URL = "https://musicbrainz.test/ws/2"
-
-
-class FakeClock:
-    """Monotonic clock whose ``sleep`` advances time, so nothing ever actually waits."""
-
-    def __init__(self, start: float = 1000.0) -> None:
-        self.now = start
-        self.slept: list[float] = []
-
-    def monotonic(self) -> float:
-        return self.now
-
-    def time(self) -> float:
-        return self.now
-
-    def sleep(self, seconds: float) -> None:
-        self.slept.append(seconds)
-        self.now += seconds
-
-    def advance(self, seconds: float) -> None:
-        self.now += seconds
 
 
 @pytest.fixture

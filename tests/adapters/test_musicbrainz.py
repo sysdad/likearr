@@ -20,8 +20,9 @@ from likearr.adapters.musicbrainz import (
 from likearr.config import MusicBrainzConfig
 from likearr.models import PrimaryType, SecondaryType
 from likearr.ports import CatalogueTooLarge, MetadataError, MetadataLookup
+from tests.clock import FakeClock
 
-from .conftest import MB_URL, FakeClock
+from .conftest import MB_URL
 
 RG_MBID = "00000000-0000-4000-8000-000000000001"
 RG2_MBID = "00000000-0000-4000-8000-000000000002"

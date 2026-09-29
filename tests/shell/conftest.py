@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field, replace
-from datetime import UTC, date, datetime
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -59,9 +59,7 @@ from likearr.ports import (
     SourceError,
 )
 from likearr.shell.context import Context
-from tests.unit.fakes import FakeLookup, snapshot
-
-NOW = datetime(2026, 9, 18, 12, 0, tzinfo=UTC)
+from tests.unit.fakes import NOW, FakeLookup, snapshot
 
 LEAN_ID = 10
 FULL_ID = 20

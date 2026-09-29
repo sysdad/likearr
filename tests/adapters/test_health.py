@@ -53,10 +53,10 @@ def test_stdout_sink_prints_one_json_line(capsys: pytest.CaptureFixture[str]) ->
 
 def test_stdout_sink_swallows_errors(capsys: pytest.CaptureFixture[str]) -> None:
     record = _record()
-    with patch("sys.stdout.write", side_effect=OSError("broken pipe")):
+    with patch("sys.stdout.write", side_effect=OSError("broken pipe")) as write:
         StdoutSink().publish(record)  # must not raise
 
-    assert True
+    assert write.called
 
 
 # ---------------------------------------------------------------- WebhookSink
@@ -87,10 +87,10 @@ def test_webhook_sink_swallows_failure() -> None:
     config = WebhookSinkConfig(url=HOOK, timeout_s=5.0)
 
     with respx.mock:
-        respx.post(HOOK).mock(side_effect=httpx.ConnectError("boom"))
+        route = respx.post(HOOK).mock(side_effect=httpx.ConnectError("boom"))
         WebhookSink(config).publish(record)  # must not raise
 
-    assert True
+    assert route.called
 
 
 # ---------------------------------------------------------------- webhook as a notification
@@ -289,10 +289,10 @@ def test_mqtt_sink_swallows_connection_error() -> None:
     record = _record()
     config = MqttSinkConfig(host="mqtt.invalid", topic="t")
 
-    with patch("likearr.adapters.health.mqtt.Client", side_effect=OSError("no broker")):
+    with patch("likearr.adapters.health.mqtt.Client", side_effect=OSError("no broker")) as client:
         MqttSink(config).publish(record)  # must not raise
 
-    assert True
+    assert client.called
 
 
 # ---------------------------------------------------------------- build_sinks / publish_all

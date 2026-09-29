@@ -29,7 +29,6 @@ from __future__ import annotations
 import os
 import time
 from collections.abc import Iterator, Sequence
-from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -51,7 +50,7 @@ from likearr.ports import LidarrArtistExists, LidarrError
 from likearr.shell.context import Context
 from likearr.shell.run import ApplyStopped, apply, plan
 from tests.shell.conftest import CapturingSink, FakeSource
-from tests.unit.fakes import FakeLookup, artist_intent, load_corpus, snapshot
+from tests.unit.fakes import NOW, FakeLookup, artist_intent, load_corpus, snapshot
 
 # The suite-wide pytest timeout is 60s (pyproject.toml), but the fixture above allows Lidarr's
 # own metadata refresh up to `refresh_timeout_s=300.0`. A cold container hitting a slow
@@ -79,7 +78,6 @@ if not ROOT_FOLDER:  # pragma: no cover - the skip is the point
     )
 
 TEST_ARTIST_NAME = "Radiohead"
-NOW = datetime(2026, 9, 18, 12, 0, tzinfo=UTC)
 
 
 # --------------------------------------------------------------------------- fixtures

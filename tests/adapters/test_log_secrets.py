@@ -21,8 +21,9 @@ from likearr.adapters.spotify import API_BASE, SpotifyAuth, authorized_request
 from likearr.config import LidarrConfig, SpotifyConfig
 from likearr.logging_setup import setup_logging
 from likearr.ports import LidarrError, SourceError
+from tests.clock import FakeClock
 
-from .conftest import FAKE_API_KEY, LIDARR_URL, FakeClock
+from .conftest import FAKE_API_KEY, LIDARR_URL
 
 TOKEN_URL = "https://accounts.spotify.com/api/token"
 OLD_ACCESS = "fake-access-OLD-0123456789abcdef"

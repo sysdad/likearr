@@ -30,8 +30,7 @@ from likearr.adapters.spotify_library import (
 )
 from likearr.config import SpotifyConfig
 from likearr.ports import QuotaExceeded, SchemaError, SearchBudgetExceeded, SourceError
-
-from .conftest import FakeClock
+from tests.clock import FakeClock
 
 API = "https://api.spotify.com/v1"
 

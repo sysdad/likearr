@@ -3,8 +3,12 @@ being active, so this is the one place that proves it actually blocks something.
 
 from __future__ import annotations
 
+import _socket
+import shutil
+import socket
 import subprocess
 import sys
+import tempfile
 
 import httpx
 import pytest
@@ -54,3 +58,55 @@ def test_the_integration_marker_disables_the_guard_for_the_test() -> None:
     # `tests/conftest.py`'s per-test fixture wraps `integration`-marked tests in `disabled()`
     # automatically, precisely so a real Lidarr call (`LIKEARR_TEST_LIDARR_URL`) is not refused.
     assert guard._enabled is False
+
+
+def test_a_bytes_host_is_checked_like_a_str_host() -> None:
+    assert guard._is_loopback(b"localhost")
+    assert guard._is_loopback(b"127.0.0.1")
+    assert not guard._is_loopback(b"example.com")
+    with pytest.raises(guard.NetworkDisabledError):
+        socket.getaddrinfo(b"example.com", 443)
+
+
+def test_an_allow_listed_name_is_answered_without_a_real_lookup(monkeypatch: pytest.MonkeyPatch) -> None:
+    # `testserver` resolves nowhere; the guard must answer it itself, so the real resolver is
+    # swapped for one that fails the test if it is ever reached.
+    def real_lookup_is_forbidden(*args: object, **kwargs: object) -> None:
+        raise AssertionError("the real resolver was reached")
+
+    monkeypatch.setattr(_socket, "getaddrinfo", real_lookup_is_forbidden)
+    answer = socket.getaddrinfo("testserver", 80, socket.AF_INET, socket.SOCK_STREAM)
+    assert answer == [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("127.0.0.1", 80))]
+    assert socket.getaddrinfo(b"testserver", 80, type=socket.SOCK_STREAM)[0][4] == ("127.0.0.1", 80)
+
+
+def test_connect_ex_is_refused_for_a_non_loopback_address() -> None:
+    with (
+        socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock,
+        pytest.raises(guard.NetworkDisabledError, match="network disabled in tests"),
+    ):
+        sock.connect_ex(("example.com", 443))
+
+
+def test_connect_ex_reaches_a_loopback_listener() -> None:
+    with socket.socket() as server:
+        server.bind(("127.0.0.1", 0))
+        server.listen(1)
+        with socket.socket() as client:
+            assert client.connect_ex(server.getsockname()) == 0
+
+
+def test_an_af_unix_connect_is_let_through() -> None:
+    # A short directory: sun_path is limited to ~104 bytes and `tmp_path` can exceed that.
+    directory = tempfile.mkdtemp(prefix="lk")
+    try:
+        path = f"{directory}/s"
+        with socket.socket(socket.AF_UNIX) as server:
+            server.bind(path)
+            server.listen(2)
+            with socket.socket(socket.AF_UNIX) as client:
+                client.connect(path)
+            with socket.socket(socket.AF_UNIX) as client:
+                assert client.connect_ex(path) == 0
+    finally:
+        shutil.rmtree(directory, ignore_errors=True)

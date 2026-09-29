@@ -14,8 +14,7 @@ from likearr.adapters.spotify import ALL_SCOPES, SpotifyAuth, SpotifySource
 from likearr.config import SpotifyConfig
 from likearr.models import ReasonKind, SourceKind
 from likearr.ports import SchemaError, SourceError, SourcePort
-
-from .conftest import FakeClock
+from tests.clock import FakeClock
 
 API = "https://api.spotify.com/v1"
 TOKEN_URL = "https://accounts.spotify.com/api/token"

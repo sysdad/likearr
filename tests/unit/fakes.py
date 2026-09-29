@@ -11,9 +11,10 @@ import json
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
+from functools import lru_cache
 from pathlib import Path
 
-from likearr.core.normalize import credits_match, normalize_name, normalize_title, strip_release_qualifiers
+from likearr.core import normalize as _normalize
 from likearr.models import (
     AlbumIntent,
     ArtistIntent,
@@ -37,6 +38,12 @@ from likearr.models import (
 from likearr.ports import MetadataError
 
 CORPUS_PATH = Path(__file__).resolve().parents[1] / "fixtures" / "mb" / "corpus.json"
+
+# The fake re-normalises every stored name on every search; the normalisers are pure, so memoise them.
+credits_match = lru_cache(maxsize=None)(_normalize.credits_match)
+normalize_name = lru_cache(maxsize=None)(_normalize.normalize_name)
+normalize_title = lru_cache(maxsize=None)(_normalize.normalize_title)
+strip_release_qualifiers = lru_cache(maxsize=None)(_normalize.strip_release_qualifiers)
 
 NOW = datetime(2026, 9, 18, 12, 0, tzinfo=UTC)
 """A fixed clock for every test. The core never reads the real one."""

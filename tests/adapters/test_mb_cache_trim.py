@@ -36,8 +36,9 @@ from likearr.adapters.musicbrainz import (
     _project,
 )
 from likearr.config import MusicBrainzConfig
+from tests.clock import FakeClock
 
-from .conftest import MB_URL, FakeClock
+from .conftest import MB_URL
 
 ISRC = "XX0000000001"
 OTHER_ISRC = "XX9999999999"

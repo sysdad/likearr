@@ -11,7 +11,6 @@ import html
 import importlib.util
 import sys
 from collections.abc import Iterator
-from datetime import UTC, datetime
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -21,10 +20,10 @@ from starlette.testclient import TestClient
 
 from likearr.web.app import WebSettings, create_app
 from likearr.web.auth import LoginLimiter
+from tests.web.app_support import NOW
 
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "demo_state.py"
 PASSWORD = "demo password for the screenshot test"
-NOW = datetime(2026, 9, 25, 14, 37, tzinfo=UTC)
 
 
 def _script() -> ModuleType:
