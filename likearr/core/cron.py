@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-__all__ = ["CronError", "CronExpr", "min_interval_minutes", "next_fire", "next_fire_from", "parse_cron"]
+__all__ = ["CronError", "CronExpr", "longest_gap", "min_interval_minutes", "next_fire", "next_fire_from", "parse_cron"]
 
 _MONTHS = {
     name: i
@@ -157,6 +157,37 @@ def next_fire_from(expr: CronExpr, after: datetime, tz: ZoneInfo) -> datetime | 
                         return candidate
         day += timedelta(days=1)
     return None
+
+
+_GAP_WINDOW_DAYS = 2 * 366
+"""How far either side of the reference `longest_gap` looks: two years each way covers every
+weekly, monthly and yearly line, and a weekday-and-date one such as Friday the 13th."""
+
+
+def longest_gap(text: str, tz: ZoneInfo, around: datetime) -> timedelta | None:
+    """The longest time between two consecutive fires of `text` within two years either side of
+    `around`, in `tz`; ``None`` when it fires fewer than twice in that window.
+
+    Only each firing day's first and last fire are built: the gaps inside a day are the same every
+    day, so they come from the hour:minute pairs alone.
+    """
+    expr = parse_cron(text)
+    times = sorted(h * 60 + m for h in expr.hours for m in expr.minutes)
+    within_day = max((b - a for a, b in itertools.pairwise(times)), default=0)
+    longest = timedelta(minutes=within_day)
+    first_day = around.astimezone(tz).date() - timedelta(days=_GAP_WINDOW_DAYS)
+    previous_last: datetime | None = None
+    fires = 0
+    for offset in range(2 * _GAP_WINDOW_DAYS + 1):
+        day = first_day + timedelta(days=offset)
+        if not expr.matches_day(day):
+            continue
+        fires += len(times)
+        first = datetime(day.year, day.month, day.day, times[0] // 60, times[0] % 60, tzinfo=tz)
+        if previous_last is not None:
+            longest = max(longest, first.astimezone(UTC) - previous_last.astimezone(UTC))
+        previous_last = datetime(day.year, day.month, day.day, times[-1] // 60, times[-1] % 60, tzinfo=tz)
+    return longest if fires >= 2 else None
 
 
 def min_interval_minutes(text: str) -> float:

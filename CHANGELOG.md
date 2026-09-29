@@ -38,6 +38,19 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
 - **`prune-report` refuses when the Spotify read was incomplete**, and `prune-stage --apply`
   refuses too, rather than listing albums you still want.
 - **A Clean up review that trashes nothing skips the move preview** and its commands.
+- **Status's "No run for" problem follows your schedule**: a daily or weekly schedule no longer
+  shows "Needs attention" between healthy runs. It still waits at least 13 hours.
+- **A plan whose guards held unmonitors back says the apply leaves them monitored**, and no longer
+  counts those unmonitors as changes.
+- **A folder likearr can't write, or a `config.toml` mounted as a single file**, now gets a page
+  naming the folder and the fix instead of "Internal Server Error".
+- **A plan whose apply was refused as stale, or cut off by a restart, can't be applied again.**
+  One cut off after it began changing Lidarr says Lidarr may be partly changed.
+- **Automatic runs' "Last:" line says "waiting for the running job"** while a fire is queued,
+  instead of showing the previous run's result.
+- **The job page's phase line reads the whole log**, so a long apply no longer shows "Reading
+  Spotify".
+- **Pressing "Run and apply now" twice starts one run.**
 
 ## [0.5.2]
 

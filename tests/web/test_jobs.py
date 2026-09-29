@@ -1120,3 +1120,53 @@ def test_last_json_object_strict_returns_none_for_empty_output() -> None:
     from likearr.web.jobs import last_json_object
 
     assert last_json_object("", lambda d: True, strict=True) is None
+
+
+# ---------------------------------------------------------------- a scheduled run pending
+
+
+def _wait_for(predicate: Any) -> None:
+    for _ in range(500):
+        if predicate():
+            return
+        time.sleep(0.02)
+    raise AssertionError("timed out")
+
+
+def test_submit_scheduled_unless_pending_refuses_while_one_waits_in_the_queue(runner: JobRunner) -> None:
+    first = runner.start("explain", ["sleep", "0.5"])
+    assert runner.submit_scheduled("scheduled", ["ok"], label="Scheduled run", unless_pending=True)
+    assert runner.scheduled_pending()
+
+    assert not runner.submit_scheduled("scheduled", ["ok"], label="Scheduled run", unless_pending=True)
+
+    _finish(runner, first.id)
+    _wait_for(lambda: not runner.scheduled_pending())
+    scheduled = [m for m in runner.jobs() if m.kind == "scheduled"]
+    assert len(scheduled) == 1, "the second press queued a second run"
+
+
+def test_scheduled_pending_is_true_while_a_scheduled_job_runs(runner: JobRunner) -> None:
+    assert not runner.scheduled_pending()
+    runner.submit_scheduled("scheduled", ["sleep", "0.3"], label="Scheduled run")
+    _wait_for(lambda: runner.current() is not None)
+    meta = runner.current()
+    assert meta is not None
+    assert runner.scheduled_pending()
+    assert not runner.submit_scheduled("scheduled", ["ok"], unless_pending=True)
+    _finish(runner, meta.id)
+    _wait_for(lambda: not runner.scheduled_pending())
+
+
+def test_log_markers_reads_the_whole_log_not_the_tail(runner: JobRunner, tmp_path: Path) -> None:
+    meta = runner.start("plan", ["ok"])
+    _finish(runner, meta.id)
+    log_path = tmp_path / "ui" / "jobs" / meta.id / "log.txt"
+    log_path.write_text("sources read: 3\n" + "noise\n" * 500 + "the end\n")
+
+    assert "sources read:" not in runner.log_tail(meta.id)
+    assert runner.log_markers(meta.id, ["sources read:", PHASE_MARKER_APPLY]) == frozenset({"sources read:"})
+    assert not runner.began_applying(meta.id)
+    log_path.write_text(PHASE_MARKER_APPLY + "\n" + "noise\n" * 500)
+    assert runner.began_applying(meta.id)
+    assert runner.log_markers("../nope", ["sources read:"]) == frozenset()

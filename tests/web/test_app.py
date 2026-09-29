@@ -3488,3 +3488,199 @@ def test_last_change_says_how_many_albums_already_monitored_are_now_managed(clie
     card = _card(client.get("/").text, "last-change")
 
     assert "Monitored 1 release, unmonitored 2, added 0 artists. 5 albums you already monitored now managed." in card
+
+
+# ---------------------------------------------------------------- a fire waiting in the queue
+
+
+def test_a_fire_waiting_in_the_queue_is_not_paired_with_the_previous_job(
+    client: TestClient, data_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    old_job = _scheduled_fire(data_dir, "done")
+    with SqliteState(data_dir / "state.sqlite") as db:
+        db.record_scheduled_fire(NOW - timedelta(minutes=2))
+    monkeypatch.setattr(_web_of(client).runner, "scheduled_pending", lambda: True)
+    _login(client)
+
+    card = _card(client.get("/").text, "automatic-runs")
+
+    assert "Last: waiting for the running job" in card
+    assert f"/jobs/{old_job}" not in card
+    assert "disabled" in _run_now_button(card)
+
+
+def test_a_fire_is_matched_to_its_job_at_whole_second_precision(client: TestClient, data_dir: Path) -> None:
+    job_id = _scheduled_fire(data_dir, "done")
+    with SqliteState(data_dir / "state.sqlite") as db:
+        db.record_scheduled_fire(NOW - timedelta(hours=1) + timedelta(microseconds=900_000))
+    _login(client)
+
+    card = _card(client.get("/").text, "automatic-runs")
+
+    assert "Last: finished" in card
+    assert f'<a href="/jobs/{job_id}">details</a>' in card
+
+
+def test_a_fire_whose_job_is_gone_shows_only_its_time(client: TestClient, data_dir: Path) -> None:
+    old_job = _scheduled_fire(data_dir, "failed")
+    with SqliteState(data_dir / "state.sqlite") as db:
+        db.record_scheduled_fire(NOW - timedelta(minutes=30))
+    _login(client)
+
+    card = _card(client.get("/").text, "automatic-runs")
+
+    assert "Last: 30 min ago" in card
+    assert f"/jobs/{old_job}" not in card and "tone-warn" not in card
+
+
+# ---------------------------------------------------------------- Run and apply now, twice
+
+
+def test_run_now_refuses_while_a_scheduled_run_is_running_or_queued(
+    client: TestClient, data_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(_web_of(client).runner, "scheduled_pending", lambda: True)
+    _login(client)
+
+    response = client.post("/run-now", follow_redirects=False)
+
+    assert response.status_code == 303
+    page = client.get("/").text
+    assert "A scheduled run is already running or waiting, so no second one was started." in page
+    jobs_dir = data_dir / "ui" / "jobs"
+    assert not (jobs_dir.is_dir() and list(jobs_dir.iterdir()))
+    with SqliteState(data_dir / "state.sqlite") as state:
+        assert state.last_scheduled_fire() is None
+
+
+def test_the_run_now_form_disables_itself_on_submit(client: TestClient) -> None:
+    _login(client)
+
+    page = client.get("/").text
+
+    assert '<form method="post" action="/run-now" data-submit-once>' in page
+    assert '<script src="/static/forms.js" defer></script>' in page
+    assert "data-submit-once" in client.get("/static/forms.js").text
+
+
+# ---------------------------------------------------------------- the job page's phase
+
+
+def _job_dir(data_dir: Path, kind: str, state: str, log: str) -> str:
+    job_id = "2026-09-23T17-30-00Z-b0b0b0"
+    job_dir = data_dir / "ui" / "jobs" / job_id
+    job_dir.mkdir(parents=True)
+    meta = {
+        "id": job_id,
+        "kind": kind,
+        "argv": ["likearr", "run", "--apply"],
+        "label": kind,
+        "started_at": (NOW - timedelta(minutes=30)).isoformat(),
+        "finished_at": None if state == "running" else NOW.isoformat(),
+        "exit_code": None,
+        "state": state,
+        "drain": True,
+    }
+    (job_dir / "meta.json").write_text(json.dumps(meta))
+    (job_dir / "log.txt").write_text(log)
+    (job_dir / "out.txt").write_text("")
+    return job_id
+
+
+def test_the_phase_line_reads_the_whole_log(client: TestClient, data_dir: Path) -> None:
+    log = "x INFO likearr.shell.run: sources read: saved_albums=1\nlikearr-phase: apply\n"
+    log += "".join(f"x INFO likearr.shell.run: added artist {i}\n" for i in range(300))
+    job_id = _job_dir(data_dir, "apply", "running", log)
+    _login(client)
+
+    page = client.get(f"/jobs/{job_id}").text
+
+    assert "Applying changes to Lidarr" in page
+    assert "Reading Spotify" not in page
+
+
+# ---------------------------------------------------------------- an apply cut off part-way
+
+
+def test_an_apply_cut_off_after_it_began_says_lidarr_may_be_partly_changed(client: TestClient, data_dir: Path) -> None:
+    job_id = _job_dir(data_dir, "apply", "interrupted", "likearr-phase: apply\n" + "noise\n" * 300)
+    _login(client)
+
+    assert "Lidarr may be partly changed" in client.get(f"/jobs/{job_id}").text
+
+
+def test_an_apply_cut_off_while_planning_says_only_interrupted(client: TestClient, data_dir: Path) -> None:
+    job_id = _job_dir(data_dir, "apply", "interrupted", "planning\n")
+    _login(client)
+
+    page = client.get(f"/jobs/{job_id}").text
+
+    assert "Interrupted: likearr stopped or restarted while this was running." in page
+    assert "partly changed" not in page
+
+
+# ---------------------------------------------------------------- a folder likearr can't write
+
+
+def _refuse_write(monkeypatch: pytest.MonkeyPatch, exc: OSError) -> None:
+    from likearr.web import settings as cfg
+
+    def refuse(*_args: object, **_kwargs: object) -> Path:
+        raise exc
+
+    monkeypatch.setattr(cfg, "write_config", refuse)
+
+
+def _pause(client: TestClient, **headers: str) -> Any:
+    return client.post(
+        "/settings/pause",
+        data={"file_hash": _file_hash(client), "reason": "away"},
+        headers=headers,
+        follow_redirects=False,
+    )
+
+
+def test_an_unwritable_data_folder_gets_a_page_naming_it_and_the_fix(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import errno
+
+    _login(client)
+    _refuse_write(monkeypatch, PermissionError(errno.EACCES, "Permission denied", "/data/.config.toml.ab12.tmp"))
+
+    response = _pause(client)
+
+    assert response.status_code == 403
+    assert "Nothing was saved" in response.text
+    assert "likearr can&#39;t write to /data. Give the user likearr runs as write access to it" in response.text
+    assert "Internal Server Error" not in response.text
+
+
+def test_a_single_file_mount_of_config_toml_is_named_as_that(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import errno
+
+    _login(client)
+    busy = OSError(errno.EBUSY, "Device or resource busy", "/data/.config.toml.ab12.tmp", None, "/data/config.toml")
+    _refuse_write(monkeypatch, busy)
+
+    response = _pause(client, **{"HX-Request": "true"})
+
+    assert response.status_code == 403
+    assert response.headers["content-type"].startswith("text/plain")
+    assert "can't replace config.toml: it is mounted into the container as a single file" in response.text
+
+
+def test_a_read_only_mount_is_named_and_other_os_errors_stay_server_errors(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import errno
+
+    _login(client)
+    _refuse_write(monkeypatch, OSError(errno.EROFS, "Read-only file system", "/data/config.toml"))
+    assert "likearr can&#39;t save to /data: it is read-only." in _pause(client).text
+
+    _refuse_write(monkeypatch, OSError(errno.EIO, "I/O error", "/data/config.toml"))
+    with pytest.raises(OSError, match="I/O error"):
+        _pause(client)

@@ -20,6 +20,9 @@ docker compose up -d
 If you built the image with other `LIKEARR_UID` / `LIKEARR_GID` values, use those. Check
 `docker compose logs likearr` for the path it couldn't write.
 
+A "Nothing was saved" page names the folder it couldn't write; the fix is the same. If it says
+`config.toml` is mounted as a single file, mount the folder that holds it instead.
+
 ## The service won't start
 
 `docker compose logs likearr` names the problem. The common ones:

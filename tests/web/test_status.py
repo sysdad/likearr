@@ -429,7 +429,7 @@ def test_a_stale_refusal_is_not_the_plan_the_cards_come_from() -> None:
 
 # ---------------------------------------------------------------- at a glance (PR B)
 
-from likearr.web.status import STALE_AFTER, coverage, health_glance  # noqa: E402
+from likearr.web.status import STALE_AFTER, coverage, health_glance, stale_after  # noqa: E402
 
 
 def test_health_is_all_good_when_the_last_published_run_was() -> None:
@@ -483,6 +483,35 @@ def test_no_run_for_longer_than_home_assistants_stale_sensor_needs_attention() -
     assert health_glance(_row(ts=fine), now=NOW, tz=NY).healthy
     glance = health_glance(_row(ts=late), now=NOW, tz=NY)
     assert any("No run for 14 h" in text for text, _ in glance.problems)
+
+
+@pytest.mark.parametrize(
+    ("cron", "expected"),
+    [
+        ("20 */6 * * *", STALE_AFTER),  # the default: 6 h + slack is under the floor
+        ("0 3 * * *", timedelta(hours=26)),  # daily
+        ("0 3 * * 1-5", timedelta(hours=74)),  # weekdays: Friday to Monday
+        ("0 3 * * 0", timedelta(days=7, hours=2)),  # weekly
+        ("0 0 30 2 *", STALE_AFTER),  # never fires
+        ("not a cron line", STALE_AFTER),
+    ],
+)
+def test_the_stale_threshold_is_the_schedules_longest_gap_plus_slack(cron: str, expected: timedelta) -> None:
+    assert stale_after(cron, ZoneInfo("UTC"), NOW) == expected
+
+
+def test_the_stale_threshold_allows_for_the_hour_a_clock_change_adds() -> None:
+    assert stale_after("0 3 * * *", NY, NOW) == timedelta(hours=27)
+
+
+def test_a_daily_schedule_is_healthy_a_day_after_its_last_run() -> None:
+    day_ago = int((NOW - timedelta(hours=23)).timestamp())
+    stale = stale_after("0 3 * * *", NY, NOW)
+
+    assert not health_glance(_row(ts=day_ago), now=NOW, tz=NY).healthy  # the fixed 13 h
+    assert health_glance(_row(ts=day_ago), now=NOW, tz=NY, stale=stale).healthy
+    two_days = int((NOW - timedelta(hours=28)).timestamp())
+    assert not health_glance(_row(ts=two_days), now=NOW, tz=NY, stale=stale).healthy
 
 
 def test_a_paused_published_run_is_healthy_not_amber() -> None:

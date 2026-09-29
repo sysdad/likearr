@@ -110,20 +110,37 @@ def assert_single_worker(workers: int, *, reload: bool) -> None:
 
 
 def fire_now(
-    runner: JobRunner, config_path: Path, *, now: Callable[[], datetime], label: str = "Scheduled run"
-) -> None:
+    runner: JobRunner,
+    config_path: Path,
+    *,
+    now: Callable[[], datetime],
+    label: str = "Scheduled run",
+    unless_pending: bool = False,
+) -> bool:
     """Record a fire and submit it - shared by the scheduler loop and the Status page's Run now
     button, so a manual kick updates the missed-fire bookkeeping and goes through the same lock
-    and the same queue (`JobRunner.submit_scheduled`) as a real one. Returns at once."""
+    and the same queue (`JobRunner.submit_scheduled`) as a real one. Returns at once.
+
+    With `unless_pending` (Run now), nothing is submitted or recorded while a scheduled job runs
+    or waits in the queue; the submit is tried first, so a refused one records no fire. Returns
+    whether it fired."""
+    if unless_pending and runner.scheduled_pending():
+        return False
     ts = now()
+    if unless_pending and not runner.submit_scheduled(
+        SCHEDULED_KIND, scheduled_argv(), label=label, unless_pending=True
+    ):
+        return False
     try:
         config = load_config(config_path)
         with SqliteState(config.state_db) as state:
             state.record_scheduled_fire(ts)
     except (ConfigError, OSError):
         log.exception("schedule: could not record the fire time; a future missed-fire check may be wrong")
-    runner.submit_scheduled(SCHEDULED_KIND, scheduled_argv(), label=label)
+    if not unless_pending:
+        runner.submit_scheduled(SCHEDULED_KIND, scheduled_argv(), label=label)
     log.info("schedule: fired at %s (%s)", ts.isoformat(), label)
+    return True
 
 
 @dataclass(slots=True)

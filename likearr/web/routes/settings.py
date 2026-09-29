@@ -47,7 +47,15 @@ from likearr.web import lidarr_setup, spotify_connect
 from likearr.web import settings as cfg
 from likearr.web.auth import content_security_policy
 from likearr.web.context import POLL_STOP, AfterCallback, _Web, _web
-from likearr.web.helpers import _first_applied, _form_pairs, _parse_playlists, _playlist_jobs, _read_config, _readable
+from likearr.web.helpers import (
+    _first_applied,
+    _form_pairs,
+    _parse_playlists,
+    _playlist_jobs,
+    _read_config,
+    _readable,
+    unwritable_message,
+)
 from likearr.web.jobs import JobMeta, JobRefused, JobState
 from likearr.web.status import ReauthView, reauth_view
 
@@ -675,8 +683,9 @@ async def _finish_spotify_auth(
 
     Saves the new token when it belongs to the recorded Spotify account, or none is recorded yet.
     Another account's token is held instead, and returned for the caller to ask the user
-    about (`spotify_switch` saves it). Otherwise returns a message to show; never raises, and never
-    includes the code, the verifier or a token in what it returns."""
+    about (`spotify_switch` saves it). Otherwise returns a message to show, including when the
+    token file's folder can't be written; never includes the code, the verifier or a token in
+    what it returns."""
     pending = web.spotify_pending.consume(returned_state) if returned_state else None
     if pending is None:
         return (
@@ -713,7 +722,17 @@ async def _finish_spotify_auth(
         log.info("spotify authorization is for another account; waiting for the user to confirm the switch")
         return web.spotify_switches.hold(tokens, previous=previous, new=new, include_write=pending.include_write)
     replacing = previous.id if previous is not None else None
-    if not await anyio.to_thread.run_sync(lambda: spotify_connect.save(config.spotify, tokens, replacing=replacing)):
+    try:
+        saved = await anyio.to_thread.run_sync(
+            lambda: spotify_connect.save(config.spotify, tokens, replacing=replacing)
+        )
+    except OSError as exc:
+        message = unwritable_message(exc)
+        if message is None:
+            raise
+        log.error("spotify token could not be saved: %s", exc)
+        return f"The Spotify token wasn't saved, so nothing changed. {message}"
+    if not saved:
         return _CHANGED_MEANWHILE
     return await _connected(web, config, tokens, include_write=pending.include_write)
 
