@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import pytest
+
+from likearr.core.desire import CATALOGUE_ERROR_STEP, CATALOGUE_UNREAD_STEPS
 from likearr.core.prune import Protection, build_prune_report, split_track_key
 from likearr.models import (
+    ArtistResolution,
     PrimaryType,
     ReasonKind,
     Resolution,
@@ -321,3 +325,49 @@ def test_totals_add_up_across_several_artists() -> None:
     assert report.by_artist == {"One Artist": 1, "Two Artist": 2}
     assert report.bytes_by_artist == {"One Artist": 100, "Two Artist": 500}
     assert report.total_bytes == 600
+
+
+# --------------------------------------------------------------------------- unread catalogues
+
+
+def _unread(step: str = CATALOGUE_ERROR_STEP) -> ArtistResolution:
+    return ArtistResolution(
+        intent_key="followed:sp-1",
+        status=ResolutionStatus.UNMAPPED,
+        artist_mbid=ARTIST,
+        artist_name="Test Artist",
+        step=step,
+    )
+
+
+@pytest.mark.parametrize("step", sorted(CATALOGUE_UNREAD_STEPS))
+def test_a_followed_artist_whose_catalogue_was_not_read_keeps_their_studio_albums_and_eps(step: str) -> None:
+    studio, ep = rg("rg-1", "Record"), rg("rg-2", "Short", primary=PrimaryType.EP)
+    live = rg("rg-3", "Live Record", secondary=[SecondaryType.LIVE])
+    view = _view(lidarr_album(studio, files=10), lidarr_album(ep, files=4), lidarr_album(live, files=8))
+    desired = desired_state(followed={ARTIST}, unmapped=[_unread(step)])
+
+    report = build_prune_report(desired, view, {}, [], now=NOW)
+
+    assert [r.rg_mbid for r in report.protected] == ["rg-1", "rg-2"]
+    assert {r.protection for r in report.protected} == {Protection(kind="catalogue_unread", intent_key="followed:sp-1")}
+    assert "catalogue could not be read" in (report.protected[0].protected_reason or "")
+    assert [r.rg_mbid for r in report.candidates] == ["rg-3"], "a follow never brings a live album"
+
+
+def test_an_artist_unmapped_for_another_reason_is_not_protected() -> None:
+    view = _view(lidarr_album(rg("rg-1", "Record"), files=10))
+    desired = desired_state(followed={ARTIST}, unmapped=[_unread("artist:no-match")])
+
+    report = build_prune_report(desired, view, {}, [], now=NOW)
+
+    assert [r.rg_mbid for r in report.candidates] == ["rg-1"] and not report.protected
+
+
+def test_a_song_s_only_copy_is_named_before_an_unread_catalogue() -> None:
+    view = _view(lidarr_album(SINGLE, files=1), lidarr_album(ALBUM, files=0))
+    desired = desired_state(followed={ARTIST}, unmapped=[_unread()])
+
+    report = build_prune_report(desired, view, {}, [_resolution()], now=NOW)
+
+    assert [r.protection.kind for r in report.protected if r.protection] == ["album_not_downloaded"]

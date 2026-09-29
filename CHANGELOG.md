@@ -33,6 +33,11 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
   it: a saved album or liked song of that title and artist whose lookup failed (Lidarr's fallback
   included), or a followed artist of that name whose lookup failed. The album is listed as held
   with the reason.
+- **Clean up keeps the studio albums and EPs of a followed artist whose catalogue couldn't be
+  read** this time, instead of listing them as removable.
+- **`prune-report` refuses when the Spotify read was incomplete**, and `prune-stage --apply`
+  refuses too, rather than listing albums you still want.
+- **A Clean up review that trashes nothing skips the move preview** and its commands.
 
 ## [0.5.2]
 

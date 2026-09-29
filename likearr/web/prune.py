@@ -600,6 +600,8 @@ def decide(
         by_rg = {r.rg_mbid: r for r in artist.releases}
         if rg not in by_rg or value not in RELEASE_OVERRIDES:
             raise DecisionError("not a release of this artist, or not a choice")
+        if value == "trash" and _unread(by_rg[rg]):
+            raise DecisionError(f"{by_rg[rg].title} is kept: its artist's catalogue couldn't be read this time")
         if value == "trash" and by_rg[rg].protected:
             raise DecisionError(
                 f"{by_rg[rg].title} is always kept: it holds the only copy of {_whose_song([by_rg[rg]])}"
@@ -769,7 +771,7 @@ def _same_as_artist(release: PruneRelease, decision: str, trashed: bool) -> str:
     if decision == "save":
         return "Same as artist: keep and save on Spotify"
     if decision == "trash":  # a protected album is never trashed
-        return "Same as artist: keep (always kept)"
+        return f"Same as artist: keep ({'kept this time' if _unread(release) else 'always kept'})"
     return "Same as artist: keep"
 
 
@@ -843,23 +845,28 @@ def net_effect(artist: PruneArtist, draft: Draft) -> list[str]:
         return []
     lines: list[str] = []
     trashed = _trashed(artist, draft)
+    protected = [r for r in artist.releases if r.protected]
+    unread = [r for r in protected if _unread(r)]
     if decision == "trash" and artist.followed and trashed:
-        lines.append(
-            f"Trashes the {_albums(len(trashed))} listed here ({_kinds_in_words(trashed)}). You follow "
-            f"{artist.name} on Spotify, so their studio albums and EPs aren't listed and stay."
-        )
+        lead = f"Trashes the {_albums(len(trashed))} listed here ({_kinds_in_words(trashed)})."
+        if not unread:
+            lead += f" You follow {artist.name} on Spotify, so their studio albums and EPs aren't listed and stay."
+        lines.append(lead)
     if decision == "keep" and artist.followed:
         lines.append(
             "Keeps the listed albums on disk. Following brings in studio albums and EPs only, so likearr "
             "won't fetch more like these."
         )
-    protected = [r for r in artist.releases if r.protected]
-    if protected:
-        n = len(protected)
+    only_copies = [r for r in protected if not _unread(r)]
+    if only_copies:
+        n = len(only_copies)
         lines.append(
-            f"{_albums(n)} {'holds' if n == 1 else 'hold'} the only copy of {_whose_song(protected)} and "
+            f"{_albums(n)} {'holds' if n == 1 else 'hold'} the only copy of {_whose_song(only_copies)} and "
             f"{'is' if n == 1 else 'are'} always kept."
         )
+    if unread:
+        n = len(unread)
+        lines.append(f"{_albums(n)} {'is' if n == 1 else 'are'} kept: their catalogue couldn't be read this time.")
     own = [r for r in artist.releases if r.rg_mbid in draft.releases]
     if own:
         n = len(own)
@@ -876,8 +883,15 @@ def net_effect(artist: PruneArtist, draft: Draft) -> list[str]:
 
 _MUSICBRAINZ = "https://musicbrainz.org"
 
+_UNREAD_WHY = "You follow this artist, and their catalogue couldn't be read this time."
+"""Why a followed artist's studio album is kept when their catalogue wasn't read: one sentence."""
+
 _SOME_SONG = "a song from your liked songs or playlists"
 """Whose song a protected album holds, when the report does not say: never an id."""
+
+
+def _unread(release: PruneRelease) -> bool:
+    return release.protection is not None and release.protection.kind == "catalogue_unread"
 
 
 def _whose_song(releases: Sequence[PruneRelease]) -> str:
@@ -918,8 +932,11 @@ def kept_why(
     The song's title comes from the report, else from `songs` (the last run's snapshot, by intent
     key), else it is just "a song"; the playlist's name from `playlist_names` (the playlist-name
     cache), else "one of your playlists". A row that says nothing readable gets the generic line.
+    A studio album of a followed artist whose catalogue couldn't be read says that instead.
     """
     protection = release.protection
+    if protection is not None and protection.kind == "catalogue_unread":
+        return KeptWhy(_UNREAD_WHY)
     if protection is None or not protection.source:
         return KeptWhy(f"Only copy of {_SOME_SONG}.")
     song = protection.song or (songs or {}).get(protection.intent_key, "")

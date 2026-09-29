@@ -1081,6 +1081,44 @@ def test_nothing_to_do_on_spotify_skips_its_preview(
     assert "promote-save" not in body
 
 
+def test_an_export_that_trashes_nothing_skips_the_move_and_its_commands(
+    preview_client: TestClient, data_dir: Path, prune_report: Path, promote_plan: Path
+) -> None:
+    from tests.web.test_prune import SMALL
+
+    client = preview_client
+    _login(client)
+    job_id = _build_prune(client)
+    client.post(f"/prune/{job_id}/decide", data={"artist": SMALL, "rev": "0", "decision": "promote"})
+    client.post(f"/prune/{job_id}/export", data={"notes": ""})
+    body = _finished_previews(client, job_id)
+
+    assert [m["kind"] for m in _preview_jobs(data_dir)] == ["spotify-preview"]
+    assert "Nothing to move: this export trashes no album." in body
+    assert "prune-stage" not in body and "Check again" not in body
+    assert "Follow 1 artist, save 0 albums" in body
+    assert "Apply the plan step 2 made" in body
+
+
+def test_an_export_that_changes_nothing_starts_no_preview(
+    preview_client: TestClient, data_dir: Path, prune_report: Path
+) -> None:
+    from tests.web.test_prune import SMALL
+
+    client = preview_client
+    _login(client)
+    job_id = _build_prune(client)
+    client.post(f"/prune/{job_id}/decide", data={"artist": SMALL, "rev": "0", "decision": "keep"})
+    client.post(f"/prune/{job_id}/export", data={"notes": ""})
+    again = client.post(f"/prune/{job_id}/preview", follow_redirects=True)
+    body = client.get(f"/prune/{job_id}/finish").text
+
+    assert _preview_jobs(data_dir) == []
+    assert "didn&#39;t start" not in again.text
+    assert "Nothing to move: this export trashes no album." in body
+    assert "prune-stage" not in body and "Preview again" not in body
+
+
 def test_preview_again_while_a_preview_runs_keeps_the_running_chain(
     preview_client: TestClient, data_dir: Path, prune_report: Path, monkeypatch
 ) -> None:

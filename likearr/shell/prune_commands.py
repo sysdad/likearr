@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from likearr.adapters.lock import run_lock
-from likearr.core.prune import PruneReport, PruneRow, build_prune_report
+from likearr.core.prune import PruneReport, PruneRow, build_prune_report, follow_may_bring, unread_catalogues
 from likearr.fsio import write_atomic
 from likearr.models import EXIT_ERROR, EXIT_OK, PrimaryType, ReleaseKey, ResolutionStatus, SecondaryType
 from likearr.ports import LidarrError, LidarrMetadataError, SourceError
@@ -45,13 +45,25 @@ PRUNE_TOP_N = 20
 # ---------------------------------------------------------------------------- prune
 
 
+_SHORT_READ = (
+    "the Spotify read was incomplete (a response was missing fields, or fewer items were read than "
+    "Spotify reported), so likearr can't tell what you still want"
+)
+
+
 def prune_report_command(ctx: Context, *, out: Path = Path("prune.json"), now: datetime | None = None) -> int:
-    """`likearr prune-report`: albums with files that no source asks for. Writes nothing to Lidarr."""
+    """`likearr prune-report`: albums with files that no source asks for. Writes nothing to Lidarr.
+
+    Refuses, writing no report, when the Spotify read failed its schema check: a short read would
+    list albums a source still asks for."""
     now = now or datetime.now(UTC)
     try:
         result = plan(ctx, now=now, scheduled=False, persist=False)
     except (SourceError, LidarrError) as exc:
         emit(f"FAIL  {exc}")
+        return EXIT_ERROR
+    if not result.spotify_schema_ok:
+        emit(f"FAIL  {_SHORT_READ}; no report was written. Try again later")
         return EXIT_ERROR
 
     report = build_prune_report(
@@ -74,7 +86,7 @@ def prune_report_command(ctx: Context, *, out: Path = Path("prune.json"), now: d
 
     emit(f"likearr prune report ({out}):")
     emit(f"  {report.total_candidates:>6} candidates, {_human_bytes(report.total_bytes)}")
-    emit(f"  {len(report.protected):>6} protected (only local copy of a liked track)")
+    emit(f"  {len(report.protected):>6} protected (a liked track's only copy, or a followed artist's unread catalogue)")
     top = sorted(report.bytes_by_artist.items(), key=lambda kv: (-kv[1], kv[0]))[:PRUNE_TOP_N]
     if top:
         emit("")
@@ -521,9 +533,13 @@ def _check_manifest_fresh(ctx: Context, selected: Sequence[PruneRow], *, now: da
     A prune report is a snapshot of "nothing asks for these files". A manifest can sit for days
     while the user follows the artist or a run takes ownership of the album, and moving files out
     from under either would undo a decision made after the review. Only what changed is named.
+    A Spotify read that failed its schema check can't answer, so it refuses too.
     """
     fresh = plan(ctx, now=now, scheduled=False, persist=False)
+    if not fresh.spotify_schema_ok:
+        raise PruneStageError(f"{_SHORT_READ}; nothing was moved. Try again later")
     owned = ctx.state.owned_releases()
+    unread = unread_catalogues(fresh.desired)
     changed: list[str] = []
     for row in selected:
         key = ReleaseKey(artist_mbid=row.artist_mbid, rg_mbid=row.rg_mbid)
@@ -533,6 +549,8 @@ def _check_manifest_fresh(ctx: Context, selected: Sequence[PruneRow], *, now: da
             why = "now owned by likearr"
         elif release is not None and release.reasons:
             why = "now wanted by Spotify (" + ", ".join(sorted(r.key for r in release.reasons)) + ")"
+        elif row.artist_mbid in unread and follow_may_bring(row.primary_type, row.secondary_types):
+            why = f"its artist is followed ({unread[row.artist_mbid]}) but their catalogue could not be read"
         if why:
             changed.append(f"  {row.artist_name} - {row.title}: {why}")
     if changed:

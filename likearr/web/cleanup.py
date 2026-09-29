@@ -46,6 +46,7 @@ __all__ = [
     "read_checks",
     "read_spotify",
     "read_stage",
+    "trashes",
     "write_binding",
 ]
 
@@ -64,6 +65,16 @@ class Binding:
     checks: str = ""
     asks_spotify: bool = False
     """The export asks for a follow or a save, so the chain includes the Spotify preview."""
+    trashes: bool = True
+    """The export trashes an album, so the chain includes the move and the Lidarr checks."""
+
+    def chain(self) -> list[str]:
+        """The preview steps this export needs, in the order they run."""
+        return [
+            *(["stage"] if self.trashes else []),
+            *(["spotify"] if self.asks_spotify else []),
+            *(["checks"] if self.trashes else []),
+        ]
 
 
 def decisions_digest(path: Path) -> str | None:
@@ -81,22 +92,39 @@ def read_binding(job_dir: Path) -> Binding | None:
     if not isinstance(raw, dict) or not isinstance(raw.get("decisions_sha256"), str):
         return None
     ids = {k: raw[k] if isinstance(raw.get(k), str) else "" for k in ("stage", "spotify", "checks")}
-    return Binding(raw["decisions_sha256"], asks_spotify=raw.get("asks_spotify") is True, **ids)
+    return Binding(
+        raw["decisions_sha256"],
+        asks_spotify=raw.get("asks_spotify") is True,
+        trashes=raw.get("trashes") is not False,
+        **ids,
+    )
 
 
 def write_binding(job_dir: Path, binding: Binding) -> None:
     write_atomic(job_dir / BINDING_FILE, json.dumps(asdict(binding), indent=1), mode=0o600)
 
 
-def asks_spotify(decisions: Path) -> bool:
-    """Whether an exported decisions file asks `promote-save` for anything."""
+def _lists_any(decisions: Path, keys: tuple[str, ...], *, unreadable: bool) -> bool:
+    """Whether an exported decisions file has a non-empty list under any of `keys`; `unreadable`
+    when the file does not read as a JSON object."""
     try:
         raw = json.loads(decisions.read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return False
-    return isinstance(raw, dict) and any(
-        isinstance(raw.get(k), list) and raw[k] for k in ("promote", "save", "save_releases")
-    )
+        return unreadable
+    if not isinstance(raw, dict):
+        return unreadable
+    return any(isinstance(raw.get(k), list) and raw[k] for k in keys)
+
+
+def asks_spotify(decisions: Path) -> bool:
+    """Whether an exported decisions file asks `promote-save` for anything."""
+    return _lists_any(decisions, ("promote", "save", "save_releases"), unreadable=False)
+
+
+def trashes(decisions: Path) -> bool:
+    """Whether an exported decisions file asks `prune-stage` to move anything. An unreadable file
+    counts as yes, so the move preview runs and says what is wrong."""
+    return _lists_any(decisions, ("trash", "trash_artists"), unreadable=True)
 
 
 def _text(value: object) -> str:
