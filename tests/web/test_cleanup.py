@@ -107,6 +107,44 @@ def test_a_preview_file_that_does_not_read_is_never_a_crash(tmp_path: Path, cont
     assert read_stage(None) is None and read_checks(None) is None and read_spotify(None) is None
 
 
+def test_the_spotify_preview_names_a_save_matched_under_another_title(tmp_path: Path) -> None:
+    from datetime import UTC, datetime
+
+    from likearr.models import PromoteSavePlan, ReleaseKey, SaveAlbum
+    from likearr.shell.promote_save import write_plan
+
+    def save(title: str, spotify_title: str) -> SaveAlbum:
+        return SaveAlbum(
+            key=ReleaseKey("a", title),
+            artist_name="Radiohead",
+            title=title,
+            spotify_id="sp",
+            step="album:name",
+            spotify_title=spotify_title,
+            spotify_artists=("Radiohead",),
+        )
+
+    plan = PromoteSavePlan(
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        decisions_path="",
+        decisions_digest="d",
+        lidarr_digest="l",
+        reviewed_digest="r",
+        follow=[],
+        save=[save("Kid A", "Kid A (Remastered)"), save("In Rainbows", "In Rainbows")],
+        already_followed=[],
+        already_saved=[],
+        unmatched=[],
+    )
+    path = tmp_path / "promote-save.json"
+    write_plan(plan, path)
+
+    preview = read_spotify(path)
+
+    assert preview is not None
+    assert preview.save == ["Radiohead - Kid A (on Spotify: Radiohead - Kid A (Remastered))", "Radiohead - In Rainbows"]
+
+
 def test_names_from_a_preview_are_cut_to_a_page_s_worth(tmp_path: Path) -> None:
     path = tmp_path / "stage.json"
     path.write_text(json.dumps({"files": 1, "remove": [{"name": "x" * 5000, "why": "y"}]}))

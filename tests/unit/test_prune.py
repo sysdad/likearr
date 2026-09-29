@@ -17,12 +17,14 @@ from likearr.models import (
 )
 from tests.unit.fakes import (
     NOW,
+    album_intent,
     lidarr_album,
     lidarr_artist,
     lidarr_view,
     owned,
     reason,
     rg,
+    snapshot,
     spotify_album,
     track_intent,
 )
@@ -372,3 +374,132 @@ def test_a_song_s_only_copy_is_named_before_an_unread_catalogue() -> None:
     report = build_prune_report(desired, view, {}, [_resolution()], now=NOW)
 
     assert [r.protection.kind for r in report.protected if r.protection] == ["album_not_downloaded"]
+
+
+# --------------------------------------------------------------------------- failed lookups
+
+
+def _artist_failed(name: str = "Test Artist", step: str = METADATA_ERROR_STEP) -> ArtistResolution:
+    return ArtistResolution(
+        intent_key="followed:sp-9", status=ResolutionStatus.UNMAPPED, artist_mbid="", artist_name=name, step=step
+    )
+
+
+def _item_failed(intent_key: str, step: str = METADATA_ERROR_STEP) -> Resolution:
+    return Resolution(intent_key=intent_key, status=ResolutionStatus.UNMAPPED, step=step)
+
+
+def test_a_followed_artist_whose_own_lookup_failed_keeps_their_studio_albums_by_name() -> None:
+    """No MusicBrainz id this run, so the Lidarr artist is matched by name, as adopt does; a live
+    album and a compilation are not what a follow brings, and stay candidates."""
+    studio, ep = rg("rg-1", "Record"), rg("rg-2", "Short", primary=PrimaryType.EP)
+    live = rg("rg-3", "Live Record", secondary=[SecondaryType.LIVE])
+    hits = rg("rg-4", "Greatest Hits", secondary=[SecondaryType.COMPILATION])
+    view = lidarr_view(
+        artists=[lidarr_artist(ARTIST, name="The Test Artist")],
+        albums=[lidarr_album(a, files=3) for a in (studio, ep, live, hits)],
+    )
+    desired = desired_state(unmapped=[_artist_failed()])
+
+    report = build_prune_report(desired, view, {}, [], now=NOW)
+
+    assert [r.rg_mbid for r in report.protected] == ["rg-1", "rg-2"]
+    assert {r.protection for r in report.protected} == {Protection(kind="catalogue_unread", intent_key="followed:sp-9")}
+    assert [r.rg_mbid for r in report.candidates] == ["rg-3", "rg-4"]
+
+
+def test_a_followed_artist_mb_failed_during_keeps_their_albums_too() -> None:
+    """Unmapped at a plain not-found step, but MusicBrainz failed during it (`lookup_failed`)."""
+    view = _view(lidarr_album(rg("rg-1", "Record"), files=3))
+    desired = desired_state(unmapped=[_artist_failed(step="artist:search")])
+
+    report = build_prune_report(desired, view, {}, [], now=NOW, lookup_failed=frozenset({"followed:sp-9"}))
+
+    assert [r.rg_mbid for r in report.protected] == ["rg-1"]
+
+
+@pytest.mark.parametrize(
+    ("name", "step"),
+    [("Test Artist", "artist:search"), ("Someone Else", METADATA_ERROR_STEP)],
+    ids=["lookup-succeeded-no-match", "another-name"],
+)
+def test_a_followed_artist_whose_lookup_did_not_fail_keeps_nothing(name: str, step: str) -> None:
+    view = _view(lidarr_album(rg("rg-1", "Record"), files=3))
+    desired = desired_state(unmapped=[_artist_failed(name, step)])
+
+    report = build_prune_report(desired, view, {}, [], now=NOW)
+
+    assert [r.rg_mbid for r in report.candidates] == ["rg-1"] and not report.protected
+
+
+def test_a_liked_song_and_a_saved_album_whose_lookups_failed_keep_their_albums() -> None:
+    """Matched by title and artist name as adopt does, whatever the album's type; an album nothing
+    names stays a candidate."""
+    liked = track_intent("Song", spotify_album("Record (Deluxe Edition)", spotify_id="sp-1"), spotify_id="sp-t")
+    saved = album_intent(spotify_album("Live Record", spotify_id="sp-2"))
+    view = _view(
+        lidarr_album(rg("rg-1", "Record"), files=3),
+        lidarr_album(rg("rg-2", "Live Record", secondary=[SecondaryType.LIVE]), files=3),
+        lidarr_album(rg("rg-3", "Unnamed"), files=3),
+    )
+    desired = desired_state(unmapped=[_item_failed(liked.reason.key), _item_failed(saved.reason.key)])
+    source = snapshot(albums=[saved], tracks=[liked])
+
+    report = build_prune_report(desired, view, {}, [], now=NOW, tracks=source.tracks, snapshot=source)
+
+    assert [(r.rg_mbid, r.protection.kind if r.protection else "") for r in report.protected] == [
+        ("rg-1", "lookup_failed"),
+        ("rg-2", "lookup_failed"),
+    ]
+    song = report.protected[0].protection
+    assert song is not None and song.intent_key == liked.reason.key and song.song == "Song"
+    assert song.this_run_only
+    assert "could not be looked up" in (report.protected[1].protected_reason or "")
+    assert [r.rg_mbid for r in report.candidates] == ["rg-3"]
+
+
+def test_a_saved_album_mb_failed_during_keeps_its_album() -> None:
+    saved = album_intent(spotify_album("Record", spotify_id="sp-1"))
+    desired = desired_state(unmapped=[_item_failed(saved.reason.key, "search:no-match")])
+    view = _view(lidarr_album(rg("rg-1", "Record"), files=3))
+
+    report = build_prune_report(
+        desired, view, {}, [], now=NOW, snapshot=snapshot(albums=[saved]), lookup_failed={saved.reason.key}
+    )
+
+    assert [r.rg_mbid for r in report.protected] == ["rg-1"]
+
+
+@pytest.mark.parametrize(
+    ("step", "artists", "title", "with_snapshot"),
+    [
+        ("search:no-match", ("Test Artist",), "Record", True),
+        (METADATA_ERROR_STEP, ("Someone Else",), "Record", True),
+        (METADATA_ERROR_STEP, ("Test Artist",), "Another Record", True),
+        (METADATA_ERROR_STEP, ("Test Artist",), "Record", False),
+    ],
+    ids=["lookup-succeeded-no-match", "another-artist", "another-title", "no-snapshot"],
+)
+def test_a_lookup_that_did_not_fail_or_names_another_album_keeps_nothing(
+    step: str, artists: tuple[str, ...], title: str, with_snapshot: bool
+) -> None:
+    saved = album_intent(spotify_album(title, spotify_id="sp-1", artists=artists))
+    desired = desired_state(unmapped=[_item_failed(saved.reason.key, step)])
+    view = _view(lidarr_album(rg("rg-1", "Record"), files=3))
+
+    report = build_prune_report(
+        desired, view, {}, [], now=NOW, snapshot=snapshot(albums=[saved]) if with_snapshot else None
+    )
+
+    assert [r.rg_mbid for r in report.candidates] == ["rg-1"] and not report.protected
+
+
+def test_a_lookup_that_succeeded_leaves_the_report_as_it_was() -> None:
+    """Control: a resolved song whose album is downloaded protects nothing new."""
+    liked = track_intent("Song", spotify_album("Record", spotify_id="sp-1"), spotify_id="t1")
+    view = _view(lidarr_album(rg("rg-1", "Record"), files=3))
+    source = snapshot(tracks=[liked])
+
+    report = build_prune_report(desired_state(), view, {}, [], now=NOW, tracks=source.tracks, snapshot=source)
+
+    assert [r.rg_mbid for r in report.candidates] == ["rg-1"] and not report.protected

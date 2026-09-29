@@ -792,6 +792,33 @@ def test_an_unread_catalogue_keeps_the_studio_albums_and_the_review_says_so_once
         dec(Draft(), uview, QUEEN, "keep", **{FRG[2]: "trash"})
 
 
+def test_an_album_a_failed_lookup_names_is_kept_this_time(tmp_path: Path) -> None:
+    failed = {"kind": "lookup_failed", "intent_key": "album:sp-a", "album": "Jazz"}
+    report = {
+        "created_at": "",
+        "summary": {},
+        "candidates": [_frow(QUEEN, "Queen", FRG[1], "Live Killers", "Album", ["Live"], False)],
+        "protected": [
+            _frow(QUEEN, "Queen", FRG[3], "Jazz", "Album", [], False, protected_reason="x", protection=failed)
+        ],
+    }
+    path = tmp_path / "failed.json"
+    path.write_text(json.dumps(report))
+    view = read_report(path)
+    assert view is not None
+    queen = view.artist(QUEEN)
+    assert queen is not None
+    jazz = next(r for r in queen.releases if r.rg_mbid == FRG[3])
+
+    assert jazz.protection is not None and jazz.protection.this_run_only
+    assert net_effect(queen, dec(Draft(), view, QUEEN, "trash")) == [
+        "1 album is kept: a Spotify song or album that points here couldn't be looked up this time."
+    ]
+    assert kept_why(jazz).text == "A Spotify song or album that points here couldn't be looked up this time."
+    with pytest.raises(DecisionError, match="Jazz is kept: a Spotify song or album"):
+        dec(Draft(), view, QUEEN, "keep", **{FRG[3]: "trash"})
+
+
 # ---------------------------------------------------------------- why an album is always kept, in words
 
 ARETHA = "aaaaaaaa-0000-4000-8000-000000000064"

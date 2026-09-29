@@ -42,7 +42,7 @@
         {% set override = row.overrides[r.rg_mbid] %}
         <tr{% if r.rg_mbid in row.trashed %} class="trashed"{% endif %}>
           <td>{{ r.title }}
-            {% if r.protected %}{% set k = row.kept[r.rg_mbid] %}<span class="pill tone-ok">{{ "Kept this time" if r.protection and r.protection.kind == "catalogue_unread" else "Always kept" }}</span>
+            {% if r.protected %}{% set k = row.kept[r.rg_mbid] %}<span class="pill tone-ok">{{ "Kept this time" if r.protection and r.protection.this_run_only else "Always kept" }}</span>
             <span class="kept-why">{{ k.lead }}{% if k.album_url %}<a href="{{ k.album_url }}" target="_blank" rel="noopener noreferrer">{{ k.album }}</a>{% else %}{{ k.album }}{% endif %}{{ k.tail }}</span>
             {%- elif r.why %}<br><span class="note">{{ r.why }}</span>{% endif %}
             {% if r.rg_mbid in row.past_notes %}<br><span class="note{% if past.decision == 'trash' %} warn{% endif %}">{{ row.past_notes[r.rg_mbid] }}</span>{% endif %}

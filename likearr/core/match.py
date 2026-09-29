@@ -15,12 +15,15 @@ The bar for tiers 2 and 3 is deliberately high. A wrong match writes the wrong a
 user's Spotify library, which is worse than reporting a miss, so every rule here fails towards
 :class:`MatchResult` with no id and a reason a human can act on:
 
-1. **Artist first.** An album candidate whose artist credit does not match is not a candidate at
-   all, whatever its title says.
+1. **Artist first.** An album candidate whose main artist credit (the first one Spotify lists)
+   does not match is not a candidate at all, whatever its title says: an album where the artist is
+   only a secondary credit is someone else's record.
 2. **Normalised equality, never similarity.** :func:`likearr.core.normalize.normalize_title` and
    :func:`~likearr.core.normalize.normalize_name` fold case, accents, punctuation and the
    bracketed qualifiers that distinguish pressings ("(Deluxe Edition)", "- Remastered 2011").
-   There is no edit distance and no prefix rule: "Ghosts" does not match "Ghosts I-IV".
+   There is no edit distance and no prefix rule: "Ghosts" does not match "Ghosts I-IV". Only an
+   edition qualifier may differ (:func:`~likearr.core.normalize.fold_edition_title`): "Blue"
+   matches "Blue (Deluxe Edition)" but not "Blue (Live)", "Blue (Acoustic)" or "Blue (Demo)".
 3. **A tie is a miss, unless one candidate is the literal title.** Folding "Blue" and
    "Blue (Deluxe Edition)" to the same string is the point of step 2, so when several candidates
    survive it the one whose raw title is literally the one asked for wins. If none is, or more
@@ -32,9 +35,9 @@ from __future__ import annotations
 import re
 import urllib.parse
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
-from likearr.core.normalize import normalize_name, normalize_title
+from likearr.core.normalize import fold_edition_title, normalize_name, normalize_title
 from likearr.models import SpotifyAlbumRef, SpotifyArtistRef
 
 __all__ = [
@@ -117,6 +120,10 @@ class MatchResult:
     spotify_id: str = ""
     step: str = ""
     reason: str = ""
+    title: str = ""
+    """The matched Spotify album's title, for a name or UPC match; empty otherwise."""
+    artists: tuple[str, ...] = ()
+    """The matched Spotify album's artists, for a name or UPC match; empty otherwise."""
 
     @property
     def matched(self) -> bool:
@@ -135,18 +142,23 @@ def _describe(names: Sequence[str]) -> str:
     return f"{text} and {extra} more" if extra > 0 else text
 
 
-def _one_of(wanted_raw: str, exact: Sequence[tuple[str, str]], *, step: str) -> MatchResult:
+def _one_of(
+    wanted_raw: str, exact: Sequence[tuple[str, str]], *, step: str, artists: Sequence[tuple[str, ...]] = ()
+) -> MatchResult:
     """Turn the surviving ``(id, raw name)`` candidates into a match or an ambiguity.
 
     One candidate is the answer. Several means they all normalised alike - "Blue" and
     "Blue (Deluxe Edition)" do, which is what the normaliser is for - so the one whose raw text is
-    literally the one asked for wins. Anything else is reported rather than guessed at.
+    literally the one asked for wins. Anything else is reported rather than guessed at. `artists`,
+    when given, is each candidate's credit, recorded on the match with its title.
     """
+    credits = list(artists) or [() for _ in exact]
     if len(exact) == 1:
-        return MatchResult(spotify_id=exact[0][0], step=step)
-    literal = [(cid, raw) for cid, raw in exact if _squash(raw) == _squash(wanted_raw)]
+        return MatchResult(spotify_id=exact[0][0], step=step, title=exact[0][1], artists=credits[0])
+    literal = [i for i, (_, raw) in enumerate(exact) if _squash(raw) == _squash(wanted_raw)]
     if len(literal) == 1:
-        return MatchResult(spotify_id=literal[0][0], step=f"{step}:literal")
+        cid, raw = exact[literal[0]]
+        return MatchResult(spotify_id=cid, step=f"{step}:literal", title=raw, artists=credits[literal[0]])
     return MatchResult(reason=f"ambiguous: {len(exact)} Spotify matches ({_describe([raw for _, raw in exact])})")
 
 
@@ -165,7 +177,7 @@ def match_artist(name: str, candidates: Sequence[SpotifyArtistRef]) -> MatchResu
     exact = [(c.spotify_id, c.name) for c in usable if normalize_name(c.name) == wanted]
     if not exact:
         return MatchResult(reason=f"no Spotify artist named {name!r} ({len(usable)} search hits)")
-    return _one_of(name, exact, step=STEP_ARTIST_NAME)
+    return replace(_one_of(name, exact, step=STEP_ARTIST_NAME), title="")
 
 
 def match_album(
@@ -177,14 +189,18 @@ def match_album(
 ) -> MatchResult:
     """The Spotify album that *is* `title` by `artist_name`, or a reason there isn't exactly one.
 
-    Candidates are gated on the artist credit first: an album is a candidate only when one of its
-    credited artists normalises to `artist_name`. `step` is recorded on a match so the plan says
-    whether it came from a UPC search or a name search.
+    Candidates are gated on the artist credit first: an album is a candidate only when its main
+    (first) credited artist normalises to `artist_name`. Its title must then normalise alike and
+    differ from `title` by nothing but edition qualifiers ("(Deluxe Edition)", "- Remastered"), so
+    a kept "Blue" never matches a lone "Blue (Live)". `step` is recorded on a match so the plan says
+    whether it came from a UPC search or a name search, with the matched title and artists.
     """
     if not title.strip():
         return MatchResult(reason="no album title to search for")
     wanted_artist = normalize_name(artist_name)
-    gated = [c for c in candidates if c.spotify_id and any(normalize_name(a) == wanted_artist for a in c.artist_names)]
+    gated = [
+        c for c in candidates if c.spotify_id and c.artist_names and normalize_name(c.artist_names[0]) == wanted_artist
+    ]
     if not gated:
         if candidates:
             return MatchResult(
@@ -192,12 +208,21 @@ def match_album(
             )
         return MatchResult(reason=f"no Spotify album found for {artist_name!r} - {title!r}")
 
-    wanted_title = normalize_title(title)
-    exact = [(c.spotify_id, c.name) for c in gated if normalize_title(c.name) == wanted_title]
+    wanted_title, wanted_edition = normalize_title(title), fold_edition_title(title)
+    alike = [c for c in gated if normalize_title(c.name) == wanted_title]
+    same = [c for c in alike if fold_edition_title(c.name) == wanted_edition]
+    if alike and not same:
+        return MatchResult(
+            reason=(
+                f"no Spotify album titled {title!r} by {artist_name!r}; only other versions: "
+                f"{_describe([c.name for c in alike])}"
+            )
+        )
+    exact = [(c.spotify_id, c.name) for c in same]
     if not exact:
         return MatchResult(
             reason=(
                 f"no Spotify album titled {title!r} by {artist_name!r}; nearest: {_describe([c.name for c in gated])}"
             )
         )
-    return _one_of(title, exact, step=step)
+    return _one_of(title, exact, step=step, artists=[c.artist_names for c in same])

@@ -30,7 +30,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from likearr.fsio import write_atomic
-from likearr.shell.promote_save import PromoteSaveError, read_plan
+from likearr.shell.promote_save import PromoteSaveError, read_plan, save_differs, spotify_label
 
 __all__ = [
     "BINDING_FILE",
@@ -231,7 +231,10 @@ def read_spotify(path: Path | None) -> SpotifyPreview | None:
         return None
     return SpotifyPreview(
         follow=[_text(f.name) for f in plan.follow],
-        save=[_text(f"{s.artist_name} - {s.title}") for s in plan.save],
+        save=[
+            _text(f"{s.artist_name} - {s.title}" + (f" (on Spotify: {spotify_label(s)})" if save_differs(s) else ""))
+            for s in plan.save
+        ],
         already=len(plan.already_followed) + len(plan.already_saved),
         unmatched=[(_text(u.name), _text(u.reason)) for u in plan.unmatched],
         excluded_unreviewed=[(_text(u.name), _text(u.reason)) for u in plan.excluded_unreviewed],

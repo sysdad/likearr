@@ -602,6 +602,8 @@ def decide(
             raise DecisionError("not a release of this artist, or not a choice")
         if value == "trash" and _unread(by_rg[rg]):
             raise DecisionError(f"{by_rg[rg].title} is kept: its artist's catalogue couldn't be read this time")
+        if value == "trash" and _this_time(by_rg[rg]):
+            raise DecisionError(f"{by_rg[rg].title} is kept: {_FAILED_WHY_SHORT} this time")
         if value == "trash" and by_rg[rg].protected:
             raise DecisionError(
                 f"{by_rg[rg].title} is always kept: it holds the only copy of {_whose_song([by_rg[rg]])}"
@@ -771,7 +773,7 @@ def _same_as_artist(release: PruneRelease, decision: str, trashed: bool) -> str:
     if decision == "save":
         return "Same as artist: keep and save on Spotify"
     if decision == "trash":  # a protected album is never trashed
-        return f"Same as artist: keep ({'kept this time' if _unread(release) else 'always kept'})"
+        return f"Same as artist: keep ({'kept this time' if _this_time(release) else 'always kept'})"
     return "Same as artist: keep"
 
 
@@ -857,7 +859,7 @@ def net_effect(artist: PruneArtist, draft: Draft) -> list[str]:
             "Keeps the listed albums on disk. Following brings in studio albums and EPs only, so likearr "
             "won't fetch more like these."
         )
-    only_copies = [r for r in protected if not _unread(r)]
+    only_copies = [r for r in protected if not _this_time(r)]
     if only_copies:
         n = len(only_copies)
         lines.append(
@@ -867,6 +869,10 @@ def net_effect(artist: PruneArtist, draft: Draft) -> list[str]:
     if unread:
         n = len(unread)
         lines.append(f"{_albums(n)} {'is' if n == 1 else 'are'} kept: their catalogue couldn't be read this time.")
+    failed = [r for r in protected if _this_time(r) and not _unread(r)]
+    if failed:
+        n = len(failed)
+        lines.append(f"{_albums(n)} {'is' if n == 1 else 'are'} kept: {_FAILED_WHY_SHORT} this time.")
     own = [r for r in artist.releases if r.rg_mbid in draft.releases]
     if own:
         n = len(own)
@@ -886,12 +892,22 @@ _MUSICBRAINZ = "https://musicbrainz.org"
 _UNREAD_WHY = "You follow this artist, and their catalogue couldn't be read this time."
 """Why a followed artist's studio album is kept when their catalogue wasn't read: one sentence."""
 
+_FAILED_WHY_SHORT = "a Spotify song or album that points here couldn't be looked up"
+"""Why an album a failed lookup names is kept, without the "this time" ending."""
+
+_FAILED_WHY = "A Spotify song or album that points here couldn't be looked up this time."
+
 _SOME_SONG = "a song from your liked songs or playlists"
 """Whose song a protected album holds, when the report does not say: never an id."""
 
 
 def _unread(release: PruneRelease) -> bool:
     return release.protection is not None and release.protection.kind == "catalogue_unread"
+
+
+def _this_time(release: PruneRelease) -> bool:
+    """Kept only while a lookup fails: an unread catalogue, or a failed song or album lookup."""
+    return release.protection is not None and release.protection.this_run_only
 
 
 def _whose_song(releases: Sequence[PruneRelease]) -> str:
@@ -937,6 +953,8 @@ def kept_why(
     protection = release.protection
     if protection is not None and protection.kind == "catalogue_unread":
         return KeptWhy(_UNREAD_WHY)
+    if protection is not None and protection.this_run_only:
+        return KeptWhy(_FAILED_WHY)
     if protection is None or not protection.source:
         return KeptWhy(f"Only copy of {_SOME_SONG}.")
     song = protection.song or (songs or {}).get(protection.intent_key, "")

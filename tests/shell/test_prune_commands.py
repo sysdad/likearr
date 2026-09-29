@@ -22,6 +22,7 @@ from tests.shell.commands_shared import STRANGER
 from tests.shell.conftest import NOW, CapturingSink, FakeLidarr, FakeSource, make_config, make_context
 from tests.unit.fakes import (
     FakeLookup,
+    album_intent,
     artist_intent,
     lidarr_album,
     lidarr_artist,
@@ -522,6 +523,63 @@ def test_prune_stage_apply_refuses_an_album_of_an_artist_followed_since_whose_ca
         assert json.loads(manifest.read_text())["candidates"], "the albums were candidates before the follow"
         source.snapshot = snapshot(artists=[artist_intent("A Stranger", spotify_id="sp-a9")])
         lookup.fail.add("artist_release_groups")
+        with pytest.raises(prune_commands.PruneStageError, match="catalogue could not be read"):
+            _stage_all(ctx, manifest, tmp_path)
+
+    assert not (tmp_path / "holding").exists(), "nothing was moved"
+
+
+def test_prune_report_keeps_what_a_failed_artist_or_album_lookup_names(tmp_path: Path, sink: CapturingSink) -> None:
+    """A followed artist whose own lookup failed keeps their studio albums, matched by name; a
+    saved album whose lookup failed keeps the album of its title."""
+    source, lookup, lidarr = _prune_world(tmp_path)
+    source.snapshot = snapshot(artists=[artist_intent("A Stranger", spotify_id="sp-a9")])
+    lookup.fail.add("search_artist_candidates")
+    out = tmp_path / "prune.json"
+    with make_context(tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink) as ctx:
+        assert prune_commands.prune_report_command(ctx, out=out, now=NOW) == EXIT_OK
+    payload = json.loads(out.read_text())
+    assert payload["candidates"] == []
+    assert {row["protection"]["kind"] for row in payload["protected"]} == {"catalogue_unread"}
+
+    lookup.fail.clear()
+    lookup.fail.add("search_release_group_candidates")
+    source.snapshot = snapshot(albums=[album_intent(spotify_album("Another Record", artists=("A Stranger",)))])
+    with make_context(tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink) as ctx:
+        assert prune_commands.prune_report_command(ctx, out=out, now=NOW) == EXIT_OK
+    payload = json.loads(out.read_text())
+    assert [row["rg_mbid"] for row in payload["protected"]] == ["rg-8"]
+    assert payload["protected"][0]["protection"]["kind"] == "lookup_failed"
+    assert [row["rg_mbid"] for row in payload["candidates"]] == ["rg-9"]
+
+
+def test_prune_stage_apply_refuses_an_album_a_failed_lookup_now_names(tmp_path: Path, sink: CapturingSink) -> None:
+    source, lookup, lidarr = _prune_world(tmp_path)
+    manifest = tmp_path / "prune.json"
+    with make_context(
+        tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink, config=_library_config(tmp_path)
+    ) as ctx:
+        assert prune_commands.prune_report_command(ctx, out=manifest, now=NOW) == EXIT_OK
+        source.snapshot = snapshot(albums=[album_intent(spotify_album("Another Record", artists=("A Stranger",)))])
+        lookup.fail.add("search_release_group_candidates")
+        with pytest.raises(prune_commands.PruneStageError, match="could not be looked up") as exc:
+            _stage_all(ctx, manifest, tmp_path)
+
+    assert "Another Record" in str(exc.value) and "Something Else" not in str(exc.value)
+    assert not (tmp_path / "holding").exists(), "nothing was moved"
+
+
+def test_prune_stage_apply_refuses_the_albums_of_a_followed_artist_whose_lookup_now_fails(
+    tmp_path: Path, sink: CapturingSink
+) -> None:
+    source, lookup, lidarr = _prune_world(tmp_path)
+    manifest = tmp_path / "prune.json"
+    with make_context(
+        tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink, config=_library_config(tmp_path)
+    ) as ctx:
+        assert prune_commands.prune_report_command(ctx, out=manifest, now=NOW) == EXIT_OK
+        source.snapshot = snapshot(artists=[artist_intent("A Stranger", spotify_id="sp-a9")])
+        lookup.fail.add("search_artist_candidates")
         with pytest.raises(prune_commands.PruneStageError, match="catalogue could not be read"):
             _stage_all(ctx, manifest, tmp_path)
 

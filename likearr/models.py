@@ -792,6 +792,10 @@ class SaveAlbum:
     spotify_id: str
     step: str
     """How the match was made, e.g. ``album:upc`` or ``album:name``."""
+    spotify_title: str = ""
+    """The matched Spotify album's title; empty for a MusicBrainz-link match or an older plan."""
+    spotify_artists: tuple[str, ...] = ()
+    """The matched Spotify album's artists; empty for a MusicBrainz-link match or an older plan."""
 
 
 @dataclass(frozen=True, slots=True)

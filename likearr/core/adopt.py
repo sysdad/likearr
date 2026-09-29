@@ -38,8 +38,9 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from likearr.core.desire import CATALOGUE_TOO_LARGE_STEP, CATALOGUE_UNREAD_STEPS
-from likearr.core.normalize import normalize_name, normalize_title, strip_release_qualifiers
-from likearr.core.resolver import METADATA_ERROR_STEP, is_lookup_failed
+from likearr.core.failed_lookups import failed_artist_names, failed_items
+from likearr.core.normalize import normalize_name
+from likearr.core.resolver import METADATA_ERROR_STEP
 from likearr.models import (
     RESOLVER_VERSION,
     ArtistResolution,
@@ -49,7 +50,6 @@ from likearr.models import (
     Reason,
     ReasonKind,
     ReleaseKey,
-    Resolution,
     SourceSnapshot,
     UnmonitorRelease,
 )
@@ -213,20 +213,12 @@ def plan_adoption(
         and (u.step in CATALOGUE_UNREAD_STEPS or u.intent_key in lookup_failed)
     }
     # A followed artist whose own lookup failed has no MusicBrainz id to match, only a name.
-    failed_artists = {
-        normalize_name(u.artist_name)
-        for u in desired.unmapped
-        if isinstance(u, ArtistResolution)
-        and not u.artist_mbid
-        and u.artist_name
-        and (is_lookup_failed(u.step) or u.intent_key in lookup_failed)
-    }
-    failed = _failed_lookup_titles(desired, snapshot, lookup_failed)
+    failed_artists = failed_artist_names(desired, lookup_failed)
+    failed = failed_items(desired, snapshot, lookup_failed)
     for artist_mbid in sorted(view.albums):
         albums = view.albums[artist_mbid]
         artist = view.artists.get(artist_mbid)
         name = normalize_name(artist.name) if artist is not None and artist.name else None
-        failed_titles = failed.get(name) if name is not None else None
         for rg_mbid in sorted(albums):
             album = albums[rg_mbid]
             if not album.monitored:
@@ -271,44 +263,11 @@ def plan_adoption(
             if name is not None and name in failed_artists:
                 plan.held.append(HeldRelease(key=key, title=album.title, step=METADATA_ERROR_STEP, cause=HELD_ARTIST))
                 continue
-            if failed_titles is not None and _names(failed_titles, album.title):
+            if artist is not None and failed.naming(artist.name, album.title) is not None:
                 plan.held.append(HeldRelease(key=key, title=album.title, step=METADATA_ERROR_STEP, cause=HELD_ITEM))
                 continue
             plan.unmonitor.append(UnmonitorRelease(key=key, title=album.title, lost_reasons=frozenset()))
     return plan
-
-
-def _failed_lookup_titles(
-    desired: DesiredState, snapshot: SourceSnapshot | None, lookup_failed: AbstractSet[str]
-) -> dict[str, tuple[set[str], set[str]]]:
-    """Normalised artist name -> the Spotify album titles of source items whose lookup failed,
-    normalised raw and again with trailing release qualifiers stripped, as the resolver does."""
-    if snapshot is None:
-        return {}
-    keys = {
-        u.intent_key
-        for u in desired.unmapped
-        if isinstance(u, Resolution) and (is_lookup_failed(u.step) or u.intent_key in lookup_failed)
-    }
-    if not keys:
-        return {}
-    albums = [i.album for i in snapshot.albums if i.reason.key in keys]
-    albums += [i.album for i in snapshot.tracks if i.reason.key in keys]
-    out: dict[str, tuple[set[str], set[str]]] = {}
-    for album in albums:
-        plain, stripped = normalize_title(album.name), normalize_title(strip_release_qualifiers(album.name))
-        for name in album.artist_names:
-            plains, strippeds = out.setdefault(normalize_name(name), (set(), set()))
-            plains.add(plain)
-            strippeds.add(stripped)
-    return out
-
-
-def _names(titles: tuple[set[str], set[str]], title: str) -> bool:
-    """True when one of a failed item's album titles is this album's title, compared raw or with
-    trailing release qualifiers stripped from both."""
-    plains, strippeds = titles
-    return normalize_title(title) in plains or normalize_title(strip_release_qualifiers(title)) in strippeds
 
 
 def _step_of(steps: dict[str, str]) -> str:
