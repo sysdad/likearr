@@ -37,7 +37,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from likearr.core.cron import CronError, min_interval_minutes, parse_cron
+from likearr.core.cron import CronError, min_interval_minutes, next_fire_from, parse_cron
 from likearr.fsio import write_atomic
 from likearr.models import LIKED_TRACK_SCOPE_ALBUM, LIKED_TRACK_SCOPES, ExclusionRules
 
@@ -534,6 +534,7 @@ _SECRET_ENV: dict[tuple[str, str], str] = {
     ("spotify", "client_secret"): "LIKEARR_SPOTIFY_CLIENT_SECRET",
     ("health.mqtt", "username"): "LIKEARR_MQTT_USERNAME",
     ("health.mqtt", "password"): "LIKEARR_MQTT_PASSWORD",
+    ("ui", "password"): "LIKEARR_UI_PASSWORD",
 }
 """Secrets someone might write into the file. They are never read from it, so they are unknown keys
 like any other; the message names the env var instead of guessing at a spelling."""
@@ -842,10 +843,12 @@ def _paused_at(value: object) -> datetime | None:
     return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
 
 
-def validate_cron_and_timezone(cron: str, timezone: str) -> None:
+def validate_cron_and_timezone(cron: str, timezone: str, *, now: datetime | None = None) -> None:
     """Refuse a cron line or timezone the way `_schedule` refuses one at load: a line
     `core.cron.parse_cron` cannot read, one that fires more often than
-    `MIN_SCHEDULE_INTERVAL_MINUTES`, or a timezone `zoneinfo` does not recognise.
+    `MIN_SCHEDULE_INTERVAL_MINUTES`, one that never fires (a day that does not exist in its
+    month), or a timezone `zoneinfo` does not recognise. `now` (default: the clock) is where the
+    never-fires search starts.
 
     The one place this wording lives, so a live preview (`web.settings.preview_schedule`) and a
     rejected save can never disagree about why a line is bad. Validates only the
@@ -856,7 +859,7 @@ def validate_cron_and_timezone(cron: str, timezone: str) -> None:
         ConfigError: names `[schedule] cron` or `[schedule] timezone`, and why.
     """
     try:
-        parse_cron(cron)
+        expr = parse_cron(cron)
     except CronError as exc:
         raise ConfigError(f"[schedule] cron: {exc}") from exc
     gap = min_interval_minutes(cron)
@@ -867,9 +870,11 @@ def validate_cron_and_timezone(cron: str, timezone: str) -> None:
             "Spotify, and Spotify's Developer Mode quota is a daily allowance, not a per-run one"
         )
     try:
-        ZoneInfo(timezone)
+        tz = ZoneInfo(timezone)
     except (ZoneInfoNotFoundError, ValueError, OSError) as exc:  # "America" is a dir; a 300-char name is OSError
         raise ConfigError(f"[schedule] timezone {timezone!r} is not an IANA timezone name") from exc
+    if next_fire_from(expr, now or datetime.now(UTC), tz) is None:
+        raise ConfigError(f"[schedule] cron {cron!r} never fires (for example a day that does not exist in that month)")
 
 
 def _schedule(section: dict[str, Any]) -> ScheduleConfig:
@@ -985,6 +990,23 @@ def load_config(path: Path | str) -> Config:
     return parse_config(raw, base_dir=p.parent)
 
 
+def _playlists(section: dict[str, Any]) -> tuple[str, ...]:
+    """`[spotify] playlists`: a list of playlist ID strings. A bare string would otherwise load as
+    one-character IDs."""
+    value = section.get("playlists", [])
+    if not isinstance(value, list) or not all(isinstance(x, str) for x in value):
+        raise ConfigError(f"[spotify] playlists must be a list of playlist ID strings, not {value!r}")
+    return tuple(value)
+
+
+def _contact() -> str:
+    """`LIKEARR_MUSICBRAINZ_CONTACT`, which goes into an HTTP User-Agent header: printable ASCII only."""
+    value = os.environ.get(MUSICBRAINZ_CONTACT_ENV, "").strip()
+    if any(not 0x20 <= ord(ch) <= 0x7E for ch in value):
+        raise ConfigError(f"{MUSICBRAINZ_CONTACT_ENV} must be printable ASCII - use an email address or URL")
+    return value or DEFAULT_MUSICBRAINZ_CONTACT
+
+
 def parse_config(raw: dict, *, base_dir: Path | None = None) -> Config:
     base = base_dir or Path.cwd()
 
@@ -994,6 +1016,9 @@ def parse_config(raw: dict, *, base_dir: Path | None = None) -> Config:
 
     _check_sections(raw)
     li = _checked(raw, "lidarr", "lidarr")
+    refresh_timeout_s = _float(li, "refresh_timeout_s", 300.0, name="lidarr")
+    if refresh_timeout_s <= 0:
+        raise ConfigError(f"[lidarr] refresh_timeout_s must be a number > 0, got {refresh_timeout_s:g}")
     lidarr = LidarrConfig(
         url=os.environ.get(LIDARR_URL_ENV, "").strip().rstrip("/"),
         root_folder=str(li.get("root_folder", "")),
@@ -1001,7 +1026,7 @@ def parse_config(raw: dict, *, base_dir: Path | None = None) -> Config:
         lean_profile=str(li.get("lean_profile", "Lean")),
         full_profile=str(li.get("full_profile", "Full")),
         tag=str(li.get("tag", "likearr")),
-        refresh_timeout_s=_float(li, "refresh_timeout_s", 300.0, name="lidarr"),
+        refresh_timeout_s=refresh_timeout_s,
         refresh_per_album_s=_float(li, "refresh_per_album_s", 2.0, name="lidarr", at_least=0),
         refresh_timeout_max_s=_float(li, "refresh_timeout_max_s", 3600.0, name="lidarr", at_least=0),
         max_refreshes_per_run=_int(li, "max_refreshes_per_run", 10, name="lidarr", at_least=0),
@@ -1010,7 +1035,7 @@ def parse_config(raw: dict, *, base_dir: Path | None = None) -> Config:
     sp = _checked(raw, "spotify", "spotify")
     spotify = SpotifyConfig(
         token_file=path_of(sp.get("token_file", DEFAULT_TOKEN_FILE)),
-        playlists=tuple(str(x) for x in sp.get("playlists", [])),
+        playlists=_playlists(sp),
         redirect_uri=str(sp.get("redirect_uri", "http://127.0.0.1:8765/callback")),
         followed_artists=_bool(sp, "followed_artists", True, name="spotify"),
         saved_albums=_bool(sp, "saved_albums", True, name="spotify"),
@@ -1025,7 +1050,7 @@ def parse_config(raw: dict, *, base_dir: Path | None = None) -> Config:
             f"which allows one request a second, got {min_interval_s:g}; only a self-hosted mirror may go lower"
         )
     musicbrainz = MusicBrainzConfig(
-        contact=os.environ.get(MUSICBRAINZ_CONTACT_ENV, "").strip() or DEFAULT_MUSICBRAINZ_CONTACT,
+        contact=_contact(),
         base_url=base_url,
         min_interval_s=min_interval_s,
         negative_cache_days=_int(mb, "negative_cache_days", 7, name="musicbrainz", at_least=0),

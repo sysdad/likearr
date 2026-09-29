@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from likearr.config import load_config, parse_config
+from likearr.config import DEFAULT_SCHEDULE_CRON, DEFAULT_SCHEDULE_TIMEZONE, load_config, parse_config
 from likearr.web.settings import (
     BACKUP_KEEP,
     FIELDS,
@@ -25,6 +25,7 @@ from likearr.web.settings import (
     plan_pause,
     plan_resume,
     plan_save,
+    plan_schedule,
     preview_schedule,
     write_config,
 )
@@ -617,6 +618,52 @@ def test_resuming_an_already_enabled_schedule_still_confirms(config_path: Path) 
     check = plan_resume(config_path.read_text(), base_dir=config_path.parent)
 
     assert check.confirm != []
+
+
+def test_resuming_clears_the_pause_reason_and_time(config_path: Path) -> None:
+    paused = plan_pause(config_path.read_text(), "testing", base_dir=config_path.parent, now=UTC_NOW)
+
+    check = plan_resume(paused.new_text, base_dir=config_path.parent)
+
+    reloaded = load_config_from_text(check.new_text, config_path.parent)
+    assert reloaded.schedule.paused_reason == ""
+    assert reloaded.schedule.paused_at is None
+    assert "paused_" not in check.new_text
+
+
+@pytest.mark.parametrize(("cron", "timezone"), [("", "UTC"), ("   ", "UTC"), ("0 6 * * *", "")])
+def test_an_empty_schedule_value_is_refused_like_the_live_preview(config_path: Path, cron: str, timezone: str) -> None:
+    check = plan_schedule(config_path.read_text(), cron, timezone, base_dir=config_path.parent, now=UTC_NOW)
+
+    assert check.errors
+    assert next(iter(check.errors.values())) == preview_schedule(cron.strip(), timezone.strip(), now=UTC_NOW).error
+    assert check.new_text == config_path.read_text()
+
+
+def test_a_timezone_only_change_writes_only_the_timezone(config_path: Path) -> None:
+    text = config_path.read_text()
+
+    check = plan_schedule(text, DEFAULT_SCHEDULE_CRON, "America/New_York", base_dir=config_path.parent, now=UTC_NOW)
+
+    assert check.errors == {}
+    assert [c.key for c in check.changes] == ["timezone"]
+    assert "cron" not in check.new_text
+    assert 'timezone = "America/New_York"' in check.new_text
+
+
+def test_a_cron_only_change_writes_only_the_cron(config_path: Path) -> None:
+    check = plan_schedule(
+        config_path.read_text(), "0 3 * * *", DEFAULT_SCHEDULE_TIMEZONE, base_dir=config_path.parent, now=UTC_NOW
+    )
+
+    assert [c.key for c in check.changes] == ["cron"]
+    assert "timezone" not in check.new_text
+
+
+def test_a_never_firing_cron_is_refused_on_save(config_path: Path) -> None:
+    check = plan_schedule(config_path.read_text(), "0 0 30 2 *", "UTC", base_dir=config_path.parent, now=UTC_NOW)
+
+    assert "never fires" in check.errors["schedule.cron"]
 
 
 # ---------------------------------------------------------------- live schedule preview

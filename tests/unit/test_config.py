@@ -1535,3 +1535,76 @@ def test_manage_monitored_is_off_when_the_key_is_missing(tmp_path: Path) -> None
 def test_manage_monitored_must_be_a_boolean(tmp_path: Path) -> None:
     with pytest.raises(ConfigError, match="manage_monitored"):
         parse_config(_raw(rules={"manage_monitored": "yes"}), base_dir=tmp_path)
+
+
+# ---------------------------------------------------------------- type and range checks
+
+
+@pytest.mark.parametrize("value", ["abc123", 5, {"id": "x"}, ["ok", 3]])
+def test_playlists_must_be_a_list_of_strings(tmp_path: Path, value: object) -> None:
+    with pytest.raises(ConfigError, match=r"\[spotify\] playlists must be a list"):
+        parse_config(_raw(spotify={"playlists": value}), base_dir=tmp_path)
+
+
+def test_a_list_of_playlist_ids_still_loads(tmp_path: Path) -> None:
+    config = parse_config(_raw(spotify={"playlists": ["pl1", "pl2"]}), base_dir=tmp_path)
+
+    assert config.spotify.playlists == ("pl1", "pl2")
+
+
+@pytest.mark.parametrize("value", [0, -5, -0.5])
+def test_a_refresh_timeout_of_zero_or_less_fails_the_load(tmp_path: Path, value: float) -> None:
+    with pytest.raises(ConfigError, match=r"\[lidarr\] refresh_timeout_s must be a number > 0"):
+        parse_config(_raw(lidarr={"refresh_timeout_s": value}), base_dir=tmp_path)
+
+
+@pytest.mark.parametrize("value", [1, 30, 300, 900.5])
+def test_a_positive_refresh_timeout_loads(tmp_path: Path, value: float) -> None:
+    assert parse_config(_raw(lidarr={"refresh_timeout_s": value}), base_dir=tmp_path).lidarr.refresh_timeout_s == value
+
+
+@pytest.mark.parametrize("value", ["caf\u00e9@example.test", "me\u2014x@example.test", "a\tb"])
+def test_a_non_ascii_musicbrainz_contact_fails_the_load_naming_the_env_var(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, value: str
+) -> None:
+    monkeypatch.setenv("LIKEARR_MUSICBRAINZ_CONTACT", value)
+
+    with pytest.raises(ConfigError, match="LIKEARR_MUSICBRAINZ_CONTACT must be printable ASCII"):
+        parse_config(MINIMAL_RAW, base_dir=tmp_path)
+
+
+def test_an_ascii_contact_url_or_email_loads(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("LIKEARR_MUSICBRAINZ_CONTACT", "https://example.test/likearr (me@example.test)")
+
+    assert parse_config(MINIMAL_RAW, base_dir=tmp_path).musicbrainz.contact.startswith("https://example.test")
+
+
+def test_a_ui_password_in_the_toml_points_at_its_env_var(tmp_path: Path) -> None:
+    config = parse_config(_raw(ui={"password": "SECRET-SENTINEL"}), base_dir=tmp_path)
+
+    assert any("LIKEARR_UI_PASSWORD" in e for e in config.ui.errors)
+    assert not any("SECRET-SENTINEL" in e for e in config.ui.errors)
+
+
+@pytest.mark.parametrize("cron", ["0 0 30 2 *", "0 0 31 4 *"])
+def test_a_cron_that_never_fires_is_refused(tmp_path: Path, cron: str) -> None:
+    with pytest.raises(ConfigError, match=r"\[schedule\] cron .* never fires") as direct:
+        validate_cron_and_timezone(cron, "UTC")
+    with pytest.raises(ConfigError, match="never fires") as via_load:
+        parse_config(_raw(schedule={"cron": cron}), base_dir=tmp_path)
+
+    assert str(direct.value) == str(via_load.value)
+    assert "\n" not in str(direct.value)
+
+
+def test_a_leap_day_cron_still_loads(tmp_path: Path) -> None:
+    parse_config(_raw(schedule={"cron": "0 0 29 2 *"}), base_dir=tmp_path)
+
+
+def test_the_example_config_loads_with_the_new_checks(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LIKEARR_MUSICBRAINZ_CONTACT", "someone@example.test")
+
+    config = load_config(EXAMPLE_CONFIG_PATH)
+
+    assert config.lidarr.refresh_timeout_s > 0
+    assert config.spotify.playlists == ()
