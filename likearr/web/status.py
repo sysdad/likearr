@@ -690,7 +690,8 @@ def health_glance(
     run = describe_run(published, now=now, tz=tz)
     problems: list[tuple[str, str]] = []
     if record.status is RunStatus.ERROR:
-        problems.append((f"The last run failed: {record.message or 'see its log'}.", "#history"))
+        reason = (record.message or "see its log").removesuffix(".")
+        problems.append((f"The last run failed: {reason}.", "#history"))
     elif record.status is RunStatus.STALE:
         problems.append(
             ("The last apply was refused: Spotify or Lidarr changed since its check. Check again.", "#history")

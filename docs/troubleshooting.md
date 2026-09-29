@@ -54,6 +54,7 @@ Status says what happened in words. By health status:
   changes again and apply the new plan.
 - **`error`**: the run stopped. The message says why. If
   Spotify's quota is spent, wait for it to recover and don't run extra checks meanwhile.
+  If Spotify had a temporary problem, nothing changed and the next run tries again.
 
 An artist Lidarr can't add because its metadata doesn't know them yet is retried every run. It can
 take weeks for Lidarr's metadata to catch up.

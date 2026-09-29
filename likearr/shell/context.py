@@ -27,6 +27,7 @@ from likearr.adapters.spotify_library import PlaylistEntry, SpotifyLibrary
 from likearr.adapters.state_sqlite import SqliteState
 from likearr.config import LIDARR_URL_ENV, Config, ConfigError, load_config
 from likearr.logging_setup import setup_logging
+from likearr.playlist_names import names_path, read_names
 from likearr.ports import (
     ArtistDetails,
     ArtistLinks,
@@ -229,7 +230,12 @@ def build_context(
             spotify_client = build_client()
             closeables.append(spotify_client)
             auth = SpotifyAuth(config.spotify, spotify_client)
-            source = SpotifySource(config.spotify, auth, spotify_client)
+            source = SpotifySource(
+                config.spotify,
+                auth,
+                spotify_client,
+                playlist_names=read_names(names_path(Path(config_path))).names,
+            )
             # Its own search cache lives in the state DB, on its own connection, exactly like the
             # MusicBrainz cache - so a re-plan after a quota error repeats no search calls.
             library = SpotifyLibrary(auth, spotify_client, cache_path=config.state_db)

@@ -5,11 +5,13 @@ from __future__ import annotations
 import json
 from dataclasses import replace
 from datetime import UTC, date, datetime
+from typing import Any
 
 import httpx
 import pytest
 import respx
 
+from likearr.adapters import spotify
 from likearr.adapters.spotify import ALL_SCOPES, SpotifyAuth, SpotifySource
 from likearr.config import SpotifyConfig
 from likearr.models import ReasonKind, SourceKind
@@ -27,6 +29,7 @@ def make_source(
     config: SpotifyConfig,
     client: httpx.Client,
     clock: FakeClock,
+    playlist_names: dict[str, str] | None = None,
     **overrides: object,
 ) -> SpotifySource:
     """A source wired to a valid, unexpired fake token, with sources disabled unless asked for."""
@@ -46,7 +49,7 @@ def make_source(
         )
     )
     auth = SpotifyAuth(config, client, now=clock.time, sleep=clock.sleep)
-    return SpotifySource(config, auth, client, now=lambda: FETCHED_AT, sleep=clock.sleep)
+    return SpotifySource(config, auth, client, now=lambda: FETCHED_AT, sleep=clock.sleep, playlist_names=playlist_names)
 
 
 def album_json(album_id: str, name: str, *, upc: str | None = "0000000000001", **extra: object) -> dict:
@@ -717,6 +720,117 @@ def test_server_error_aborts_the_whole_read(
     respx.get(f"{API}/me/albums").mock(return_value=httpx.Response(500, text="boom"))
     with pytest.raises(SourceError):
         make_source(spotify_config, client, clock, saved_albums=True).read()
+
+
+SPOTIFY_502 = httpx.Response(
+    502, json={"error": {"status": 502, "message": "An unexpected error occurred. Please try again later."}}
+)
+PLAIN_502 = (
+    'Spotify had a temporary problem (HTTP 502) reading playlist "Road Trip". '
+    "Nothing was changed; the next run tries again."
+)
+
+
+@respx.mock
+def test_a_502_that_clears_within_the_read_window_is_ridden_out(
+    spotify_config: SpotifyConfig, client: httpx.Client, clock: FakeClock
+) -> None:
+    route = respx.get(f"{API}/playlists/{PLAYLIST_ID}/items").mock(
+        side_effect=[SPOTIFY_502, SPOTIFY_502, SPOTIFY_502, httpx.Response(200, json={"items": [], "next": None})]
+    )
+    respx.get(f"{API}/playlists/{PLAYLIST_ID}").mock(return_value=httpx.Response(200, json={"tracks": {"total": 0}}))
+
+    snapshot = make_source(spotify_config, client, clock, playlists=(PLAYLIST_ID,)).read()
+
+    assert route.call_count == 4
+    assert snapshot.counts[f"playlist:{PLAYLIST_ID}"] == 0
+    assert clock.slept == [8.0, 16.0, 32.0]
+
+
+@respx.mock
+def test_a_persistent_502_fails_with_a_plain_message_naming_the_playlist(
+    spotify_config: SpotifyConfig, client: httpx.Client, clock: FakeClock, caplog: pytest.LogCaptureFixture
+) -> None:
+    route = respx.get(f"{API}/playlists/{PLAYLIST_ID}/items").mock(return_value=SPOTIFY_502)
+    source = make_source(
+        spotify_config, client, clock, playlist_names={PLAYLIST_ID: "Road Trip"}, playlists=(PLAYLIST_ID,)
+    )
+
+    with pytest.raises(SourceError) as raised:
+        source.read()
+
+    assert str(raised.value) == PLAIN_502
+    assert route.call_count == spotify._READ_ATTEMPTS
+    assert sum(clock.slept) == 176.0
+    detail = "\n".join(r.getMessage() for r in caplog.records)
+    assert f"/playlists/{PLAYLIST_ID}/items" in detail
+    assert "HTTP 502" in detail
+    assert "An unexpected error occurred" in detail
+
+
+@respx.mock
+def test_a_persistent_network_error_fails_the_same_plain_way(
+    spotify_config: SpotifyConfig, client: httpx.Client, clock: FakeClock, caplog: pytest.LogCaptureFixture
+) -> None:
+    route = respx.get(f"{API}/me/tracks").mock(side_effect=httpx.ConnectError("connection refused"))
+
+    with pytest.raises(SourceError) as raised:
+        make_source(spotify_config, client, clock, liked_tracks=True).read()
+
+    assert str(raised.value) == (
+        "Spotify had a temporary problem (no response) reading your Liked Songs. "
+        "Nothing was changed; the next run tries again."
+    )
+    assert route.call_count == spotify._READ_ATTEMPTS
+    assert "ConnectError" in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("flag", "url", "named"),
+    [
+        ("saved_albums", "/me/albums", "your saved albums"),
+        ("followed_artists", "/me/following", "your followed artists"),
+        ("playlists", f"/playlists/{PLAYLIST_ID}/items", "a playlist"),
+    ],
+)
+@respx.mock
+def test_a_failed_read_names_what_it_was_reading(
+    spotify_config: SpotifyConfig, client: httpx.Client, clock: FakeClock, flag: str, url: str, named: str
+) -> None:
+    respx.get(f"{API}{url}").mock(return_value=httpx.Response(503))
+    enabled: dict[str, Any] = {flag: (PLAYLIST_ID,) if flag == "playlists" else True}
+
+    with pytest.raises(SourceError, match=f"^Spotify had a temporary problem \\(HTTP 503\\) reading {named}\\. "):
+        make_source(spotify_config, client, clock, **enabled).read()
+
+
+@respx.mock
+def test_a_quota_rejection_keeps_its_wording(
+    spotify_config: SpotifyConfig, client: httpx.Client, clock: FakeClock
+) -> None:
+    respx.get(f"{API}/me/tracks").mock(
+        return_value=httpx.Response(429, json={"error": {"status": 429, "message": "QUOTA_EXCEEDED"}})
+    )
+    with pytest.raises(SourceError, match="liked_tracks: Spotify rejected the request with QUOTA_EXCEEDED"):
+        make_source(spotify_config, client, clock, liked_tracks=True).read()
+    assert clock.slept == []
+
+
+@respx.mock
+def test_the_token_request_inside_a_read_keeps_its_short_profile(
+    spotify_config: SpotifyConfig, client: httpx.Client, clock: FakeClock
+) -> None:
+    source = make_source(spotify_config, client, clock, liked_tracks=True)
+    spotify_config.token_file.write_text(
+        json.dumps({"access_token": "a", "refresh_token": "r", "expires_at": 0.0, "scope": ALL_SCOPES})
+    )
+    token = respx.post(TOKEN_URL).mock(return_value=httpx.Response(503))
+
+    with pytest.raises(SourceError):
+        source.read()
+
+    assert token.call_count == spotify._TOKEN_ATTEMPTS
+    assert sum(clock.slept) <= spotify._TOKEN_MAX_BACKOFF_S
 
 
 @respx.mock

@@ -12,6 +12,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
+from zoneinfo import ZoneInfo
 
 import h11
 import httpx
@@ -48,6 +49,7 @@ from likearr.shell.context import Context
 from likearr.shell.diff_io import diff_summary, read_diff, write_diff
 from likearr.shell.plan import resolution_max_age
 from likearr.shell.run import apply, plan, print_plan, run_command, tagged_without_state
+from likearr.web.status import health_glance
 from tests.shell.conftest import (
     ALBUMS_ONLY_TAG_ID,
     FULL_ID,
@@ -288,6 +290,28 @@ def test_source_error_stops_before_any_lidarr_call(tmp_path: Path, sink: Capturi
     assert sink.last.spotify_ok is False
     assert sink.last.status is RunStatus.ERROR
     assert "QUOTA_EXCEEDED" in sink.last.message
+
+
+def test_a_spotify_outage_reaches_the_run_record_and_status_as_its_plain_message(
+    tmp_path: Path, sink: CapturingSink
+) -> None:
+    plain = (
+        'Spotify had a temporary problem (HTTP 502) reading playlist "Road Trip". '
+        "Nothing was changed; the next run tries again."
+    )
+    _source, lookup, lidarr = followed_world()
+    with make_context(
+        tmp_path, source=FakeSource(error=SourceError(plain)), lookup=lookup, lidarr=lidarr, sink=sink
+    ) as ctx:
+        code = run_command(ctx, now=NOW, out=tmp_path / "diff.json", do_apply=True, scheduled=True)
+        row = ctx.state.last_published_run()
+
+    assert code == EXIT_ERROR
+    assert lidarr.calls == []
+    assert sink.last.message == plain
+    assert row is not None and row.record.message == plain
+    glance = health_glance(row, now=NOW, tz=ZoneInfo("UTC"))
+    assert f"The last run failed: {plain}" in [text for text, _ in glance.problems]
 
 
 RAW_NEWLINE_KEY_BODY = "fake-lidarr-key-0123456789"
