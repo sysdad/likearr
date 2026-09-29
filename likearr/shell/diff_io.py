@@ -174,6 +174,7 @@ def diff_summary(diff: Diff) -> dict[str, int]:
         "catalogue_gaps_recent": sum(1 for u in diff.unmapped if is_recent_catalogue_gap(u)),
         "projected_wanted": diff.projected_wanted,
         "claim": len(diff.claim),
+        "disown": len(diff.disown),
     }
 
 
@@ -236,6 +237,7 @@ def diff_to_dict(diff: Diff) -> dict[str, Any]:
         "unmapped": [_unresolved_to_dict(u) for u in diff.unmapped],
         "projected_wanted": diff.projected_wanted,
         "claim": [_owned_to_dict(c) for c in diff.claim],
+        "disown": [_key_to_dict(k) for k in diff.disown],
     }
 
 
@@ -295,6 +297,7 @@ def diff_from_dict(raw: Mapping[str, Any]) -> Diff:
             ],
             name_collisions=[_collision_from_dict(c) for c in _items(raw, "name_collisions")],
             claim=[_owned_from_dict(c) for c in _items(raw, "claim")],
+            disown=[_key_from_dict(k) for k in _items(raw, "disown")],
         )
     except DiffFileError:
         raise

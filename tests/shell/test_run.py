@@ -21,7 +21,7 @@ import respx
 from likearr.adapters.health import MqttSink, WebhookSink
 from likearr.adapters.http import build_client
 from likearr.adapters.lidarr import LidarrClient
-from likearr.config import MqttSinkConfig, ScheduleConfig, WebhookSinkConfig
+from likearr.config import MqttSinkConfig, RulesConfig, ScheduleConfig, WebhookSinkConfig
 from likearr.logging_setup import setup_logging
 from likearr.models import (
     EXIT_BUSY,
@@ -4158,3 +4158,64 @@ def test_no_lost_state_warning_when_every_tagged_artist_has_a_row(
     assert not any("no record of them" in r.getMessage() for r in caplog.records)
     assert sink.last.tagged_without_state == 0
     assert sink.last.message == ""
+
+
+# --------------------------------------------------------------------------- disowning
+
+
+def test_an_unliked_album_already_unmonitored_is_disowned_and_a_later_hand_monitor_survives(
+    tmp_path: Path, sink: CapturingSink, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """likearr owns the live album for a track no longer liked, and Lidarr already shows it
+    unmonitored (a batch that failed after applying, say)."""
+    source, lookup, lidarr = followed_world()
+    lidarr.seed(
+        lidarr_artist("artist-1", id=1, name="Test Artist"),
+        lidarr_album(ALBUM, id=101, monitored=True),
+        lidarr_album(EP, id=102, monitored=True),
+        lidarr_album(LIVE, id=103, monitored=False),
+    )
+    key = ReleaseKey("artist-1", "rg-3")
+    out = tmp_path / "diff.json"
+    with make_context(tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink) as ctx:
+        ctx.state.record_monitored([_owned_release(key, Reason(ReasonKind.LIKED, "sp-track-gone"), album_id=103)])
+        run_command(ctx, now=NOW, out=out)
+        planned = capsys.readouterr().out
+        assert read_diff(out).disown == [key]
+        assert "1 albums already unmonitored or gone in Lidarr to stop tracking" in planned
+        assert run_command(ctx, now=NOW, apply_path=out, do_apply=True) == EXIT_OK
+        assert key not in ctx.state.owned_releases()
+        assert "set_albums_monitored" not in lidarr.names(), "a disown never calls Lidarr"
+
+        lidarr.albums["artist-1"]["rg-3"] = replace(lidarr.albums["artist-1"]["rg-3"], monitored=True)
+        assert run_command(ctx, now=NOW, out=out, do_apply=True, scheduled=True) == EXIT_OK
+
+    assert lidarr.album("artist-1", "rg-3").monitored is True  # type: ignore[union-attr]
+
+
+def test_a_claimed_album_later_unliked_and_already_unmonitored_is_disowned(tmp_path: Path, sink: CapturingSink) -> None:
+    source, lookup, lidarr = _hand_artist_world()
+    config = make_config(tmp_path, rules=RulesConfig(manage_monitored=True))
+    key = ReleaseKey("artist-1", "rg-1")
+    with make_context(tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink, config=config) as ctx:
+        run_command(ctx, now=NOW, out=tmp_path / "diff.json", do_apply=True, scheduled=True)
+        assert key in ctx.state.owned_releases()
+
+        lidarr.albums["artist-1"]["rg-1"] = replace(lidarr.albums["artist-1"]["rg-1"], monitored=False)
+        source.snapshot = snapshot()
+        run_command(ctx, now=NOW, out=tmp_path / "diff.json", do_apply=True, scheduled=True)
+        owned = ctx.state.owned_releases()
+
+    assert key not in owned
+    assert lidarr.album("artist-1", "rg-1").monitored is False  # type: ignore[union-attr]
+
+
+def test_an_owned_album_is_kept_when_its_artist_is_gone_from_lidarr(tmp_path: Path, sink: CapturingSink) -> None:
+    source, lookup, lidarr = followed_world()
+    key = ReleaseKey("artist-9", "rg-9")
+    with make_context(tmp_path, source=source, lookup=lookup, lidarr=lidarr, sink=sink) as ctx:
+        ctx.state.record_monitored([_owned_release(key, Reason(ReasonKind.LIKED, "sp-track-gone"), album_id=909)])
+        run_command(ctx, now=NOW, out=tmp_path / "diff.json", do_apply=True, scheduled=True)
+        owned = ctx.state.owned_releases()
+
+    assert key in owned, "a missing artist says nothing about its album"

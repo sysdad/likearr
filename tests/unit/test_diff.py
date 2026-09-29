@@ -384,6 +384,116 @@ def test_an_owned_release_that_is_not_monitored_in_lidarr_is_left_alone() -> Non
     assert not diff(desired_state(), view, {key: record}).unmonitor
 
 
+def test_an_unwanted_owned_release_already_unmonitored_is_disowned() -> None:
+    album = rg("rg-1", "Record")
+    view = lidarr_view(artists=[lidarr_artist(ARTIST)], albums=[lidarr_album(album, monitored=False)])
+    key, record = owned(album, LIKED)
+    result = diff(desired_state(), view, {key: record})
+    assert result.disown == [key]
+    assert result.is_empty, "a disown is state only, not a change to Lidarr"
+
+
+def test_a_wanted_owned_release_already_unmonitored_is_kept_and_remonitored() -> None:
+    album = rg("rg-1", "Record")
+    view = lidarr_view(artists=[lidarr_artist(ARTIST)], albums=[lidarr_album(album, monitored=False)])
+    key, record = owned(album, LIKED)
+    result = diff(desired_state((album, [LIKED])), view, {key: record})
+    assert result.disown == []
+    assert [m.key for m in result.monitor] == [key]
+
+
+def test_an_owned_release_gone_from_lidarr_is_disowned() -> None:
+    album = rg("rg-1", "Record")
+    view = lidarr_view(artists=[lidarr_artist(ARTIST)])
+    key, record = owned(album, LIKED)
+    assert diff(desired_state(), view, {key: record}).disown == [key]
+
+
+def test_a_wanted_owned_release_gone_from_lidarr_is_kept() -> None:
+    album = rg("rg-1", "Record")
+    view = lidarr_view(artists=[lidarr_artist(ARTIST)])
+    key, record = owned(album, LIKED)
+    assert diff(desired_state((album, [LIKED])), view, {key: record}).disown == []
+
+
+def test_an_owned_release_is_kept_when_its_artist_is_missing_or_its_albums_were_not_read() -> None:
+    """No album in the view says nothing when the artist's albums were never loaded."""
+    album = rg("rg-1", "Record")
+    key, record = owned(album, LIKED)
+    missing = lidarr_view()
+    not_loaded = lidarr_view(artists=[lidarr_artist(ARTIST)])
+    not_loaded.albums.clear()
+    assert diff(desired_state(), missing, {key: record}).disown == []
+    assert diff(desired_state(), not_loaded, {key: record}).disown == []
+
+
+@pytest.mark.parametrize("monitored", [False, None], ids=["unmonitored", "gone"])
+def test_a_manual_release_is_never_disowned(monitored: bool | None) -> None:
+    album = rg("rg-1", "Record")
+    albums = [] if monitored is None else [lidarr_album(album, monitored=monitored)]
+    view = lidarr_view(artists=[lidarr_artist(ARTIST)], albums=albums)
+    key, record = owned(album, Reason(kind=ReasonKind.MANUAL, source_id="adopt"))
+    assert diff(desired_state(), view, {key: record}).disown == []
+
+
+def test_a_release_whose_reason_merely_failed_to_resolve_is_not_disowned() -> None:
+    album = rg("rg-1", "Record")
+    view = lidarr_view(artists=[lidarr_artist(ARTIST)], albums=[lidarr_album(album, monitored=False)])
+    key, record = owned(album, LIKED)
+    assert diff(desired_state(), view, {key: record}, live_reason_keys={LIKED.key}).disown == []
+
+
+def test_a_guarded_run_disowns_nothing() -> None:
+    gone, held = rg("rg-1", "Gone"), rg("rg-2", "Held")
+    view = lidarr_view(
+        artists=[lidarr_artist(ARTIST)],
+        albums=[lidarr_album(gone, monitored=False), lidarr_album(held, id=11, monitored=True)],
+    )
+    owned_map = dict([owned(gone, LIKED), owned(held, SAVED)])
+    result = diff(desired_state(), view, owned_map, schema_ok=False)
+    assert result.guarded
+    assert result.disown == []
+
+
+def test_a_shrink_guard_that_holds_an_unmonitor_disowns_nothing() -> None:
+    gone, held = rg("rg-1", "Gone"), rg("rg-2", "Held")
+    view = lidarr_view(
+        artists=[lidarr_artist(ARTIST)],
+        albums=[lidarr_album(gone, monitored=False), lidarr_album(held, id=11, monitored=True)],
+    )
+    owned_map = dict([owned(gone, SAVED), owned(held, LIKED)])
+    result = diff(
+        desired_state(),
+        view,
+        owned_map,
+        last_source_counts={"liked_tracks": 100},
+        source_counts={"liked_tracks": 50},
+    )
+    assert [g.code for g in result.guards] == ["source-shrink"]
+    assert result.disown == []
+
+
+def test_a_scheduled_run_over_the_unmonitor_cap_disowns_nothing() -> None:
+    albums = [rg(f"rg-{i}", f"Record {i}") for i in range(3)]
+    view = lidarr_view(
+        artists=[lidarr_artist(ARTIST)], albums=[lidarr_album(a, id=10 + i) for i, a in enumerate(albums)]
+    )
+    owned_map = dict(owned(a, LIKED) for a in albums)
+    capped = replace(GUARDS, max_unmonitors_scheduled=2)
+    assert diff(desired_state(), view, owned_map, guards=capped, scheduled=True).disown == []
+    assert len(diff(desired_state(), view, owned_map, guards=capped).disown) == 3
+
+
+def test_a_hand_monitor_of_a_disowned_album_makes_the_plan_stale() -> None:
+    album = rg("rg-1", "Record")
+    view = lidarr_view(artists=[lidarr_artist(ARTIST)], albums=[lidarr_album(album, monitored=False)])
+    key, record = owned(album, LIKED)
+    planned = diff(desired_state(), view, {key: record})
+    monitored = lidarr_view(artists=[lidarr_artist(ARTIST)], albums=[lidarr_album(album, monitored=True)])
+    assert planned.lidarr_digest == lidarr_digest(view, [], [], [], [], disown=planned.disown)
+    assert planned.lidarr_digest != lidarr_digest(monitored, [], [], [], [], disown=planned.disown)
+
+
 def test_one_surviving_reason_keeps_a_release_monitored() -> None:
     album = rg("rg-1", "Record")
     view = lidarr_view(artists=[lidarr_artist(ARTIST)], albums=[lidarr_album(album, monitored=True)])
