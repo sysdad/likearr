@@ -41,6 +41,7 @@ import unicodedata
 
 __all__ = [
     "credits_match",
+    "fold_edition_title",
     "fold_title",
     "has_remix_marker",
     "normalize_name",
@@ -244,6 +245,108 @@ def fold_title(title: str) -> str:
     'bjork and friends'
     """
     return _fold(title)
+
+
+_EDITION_EXACT: frozenset[str] = frozenset(
+    {
+        "deluxe",
+        "expanded",
+        "explicit",
+        "clean",
+        "mono",
+        "stereo",
+        "bonus",
+        "bonus track",
+        "bonus tracks",
+        "anniversary",
+        "non-pa",
+        "non-pa release",
+    }
+)
+"""Qualifiers that name another edition of the same recordings, not other recordings."""
+
+_CREDIT_HEADS: tuple[str, ...] = ("feat.", "feat ", "ft.", "ft ", "featuring ")
+"""A featured credit ("(feat. Someone)") names the same recordings, whatever the name in it says."""
+
+_EDITION_TAILS: frozenset[str] = frozenset(
+    {"edition", "editon", "remaster", "remastered", "master", "mastered", "reissue", "deluxe", "expanded"}
+)
+
+_EDITION_WORDS: frozenset[str] = _EDITION_EXACT | _EDITION_TAILS
+"""A ``... Version`` segment is an edition only with one of these in it ("Deluxe Version")."""
+
+_NOT_EDITION_WORDS: frozenset[str] = frozenset(
+    {
+        "live",
+        "demo",
+        "demos",
+        "acoustic",
+        "instrumental",
+        "instrumentals",
+        "unplugged",
+        "remix",
+        "remixes",
+        "mix",
+        "edit",
+        "session",
+        "sessions",
+        "karaoke",
+        "rerecording",
+        "re-recording",
+        "orchestral",
+    }
+)
+"""Words that make a segment other recordings however it ends: "(Live Edition)" is not an edition."""
+
+
+def _is_edition_qualifier(segment: str) -> bool:
+    """True when a bracketed or dash-separated segment names an edition of the same recordings:
+    "(Deluxe Edition)", "- Remastered 2011", "[Explicit]", "(feat. Someone)". "(Live)", "(Acoustic)",
+    "(Demo)", "(Taylor's Version)", "(with Someone)" and "- Single" are not."""
+    seg = _SPACES.sub(" ", segment.strip().strip("\"'.,;:")).lower()
+    if not seg:
+        return False
+    if seg.startswith(_CREDIT_HEADS):
+        return True
+    words = [w.strip("\"'.,;:()[]") for w in seg.split(" ")]
+    if any(w in _NOT_EDITION_WORDS for w in words):
+        return False
+    if seg in _EDITION_EXACT or _REMASTER_HEAD.match(seg):
+        return True
+    if words[-1] in _EDITION_TAILS:
+        return True
+    return words[-1] in ("version", "versions") and any(w in _EDITION_WORDS for w in words[:-1])
+
+
+def fold_edition_title(title: str) -> str:
+    """Fold a title with only its edition qualifiers removed (see `_is_edition_qualifier`).
+
+    Any other qualifier stays, so two titles that differ by "(Live)" or "(Acoustic)" fold apart
+    while "Blue" and "Blue (Deluxe Edition)" fold alike.
+
+    >>> fold_edition_title("Blue (Deluxe Edition)")
+    'blue'
+    >>> fold_edition_title("Blue - Remastered 2011")
+    'blue'
+    >>> fold_edition_title("Blue (Live)")
+    'blue live'
+    """
+
+    def repl(m: re.Match[str]) -> str:
+        inner = m.group(1) if m.group(1) is not None else (m.group(2) or "")
+        return " " if _is_edition_qualifier(inner) else m.group(0)
+
+    previous = None
+    out = title
+    while out != previous:
+        previous = out
+        out = _BRACKETED.sub(repl, out)
+    while True:
+        head, sep, tail = out.rpartition(" - ")
+        if not sep or not _is_edition_qualifier(tail):
+            break
+        out = head
+    return _fold(out)
 
 
 def normalize_name(name: str) -> str:

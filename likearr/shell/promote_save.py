@@ -117,6 +117,8 @@ __all__ = [
     "PromoteSaveError",
     "promote_save_command",
     "read_plan",
+    "save_differs",
+    "spotify_label",
     "tier_breakdown",
     "write_plan",
 ]
@@ -565,6 +567,8 @@ def plan_promote_save(
                         title=item.album.title,
                         spotify_id=result.spotify_id,
                         step=result.step,
+                        spotify_title=result.title,
+                        spotify_artists=result.artists,
                     )
                 )
             else:
@@ -631,6 +635,26 @@ def plan_promote_save(
         searches_used=getattr(library, "searches", 0),
         budget_exhausted=budget_exhausted,
     )
+
+
+def _squash(value: str) -> str:
+    return " ".join(value.casefold().split())
+
+
+def save_differs(item: SaveAlbum) -> bool:
+    """The matched Spotify album's title or main artist is not literally the kept album's (case and
+    spacing aside): what a reviewer should look at before applying. False when not recorded."""
+    if not item.spotify_title:
+        return False
+    main = item.spotify_artists[0] if item.spotify_artists else ""
+    return _squash(item.spotify_title) != _squash(item.title) or _squash(main) != _squash(item.artist_name)
+
+
+def spotify_label(item: SaveAlbum) -> str:
+    """``Artist, Artist - Title`` as Spotify credits the matched album; empty when not recorded."""
+    if not item.spotify_artists:
+        return item.spotify_title
+    return f"{', '.join(item.spotify_artists)} - {item.spotify_title}"
 
 
 def tier_breakdown(plan: PromoteSavePlan) -> dict[str, int]:
@@ -740,6 +764,8 @@ def _save_to_dict(item: SaveAlbum) -> dict[str, Any]:
         "title": item.title,
         "spotify_id": item.spotify_id,
         "step": item.step,
+        "spotify_title": item.spotify_title,
+        "spotify_artists": list(item.spotify_artists),
     }
 
 
@@ -792,12 +818,16 @@ def _follow_from_dict(raw: Mapping[str, Any]) -> FollowArtist:
 
 
 def _save_from_dict(raw: Mapping[str, Any]) -> SaveAlbum:
+    """A plan written before the matched title and artists were recorded reads with them empty."""
+    artists = raw.get("spotify_artists")
     return SaveAlbum(
         key=ReleaseKey(artist_mbid=str(raw["artist_mbid"]), rg_mbid=str(raw["rg_mbid"])),
         artist_name=str(raw.get("artist_name") or ""),
         title=str(raw.get("title") or ""),
         spotify_id=str(raw["spotify_id"]),
         step=str(raw.get("step") or ""),
+        spotify_title=str(raw.get("spotify_title") or ""),
+        spotify_artists=tuple(a for a in artists if isinstance(a, str)) if isinstance(artists, list) else (),
     )
 
 
@@ -998,6 +1028,12 @@ def print_plan(plan: PromoteSavePlan, out: Path) -> None:
         emit("matched by (best tier first - check the last one hardest):")
         for step, count in sorted(breakdown.items(), key=lambda kv: (_TIER_ORDER.get(kv[0], 99), kv[0])):
             emit(f"  {count:>6} {step}")
+    differs = [s for s in plan.save if save_differs(s)]
+    if differs:
+        emit("")
+        emit("saved under a different title or credit on Spotify (check these):")
+        for item in differs:
+            emit(f"  {item.artist_name} - {item.title}  ->  {spotify_label(item)}")
     if plan.unmatched:
         emit("")
         emit("unmatched:")

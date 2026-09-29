@@ -658,6 +658,62 @@ def test_the_plan_file_round_trips(tmp_path: Path) -> None:
     assert (again.decisions_digest, again.lidarr_digest) == (plan.decisions_digest, plan.lidarr_digest)
 
 
+def test_the_plan_records_the_matched_spotify_title_and_artists(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A reviewer can see an edition the name search matched; the literal match is not called out."""
+    lidarr, library, links = a_library()
+    library.album_hits[("Radiohead", "Kid A")] = [sp_album("sp-kida", "Kid A (Remastered)")]
+    decisions = write_decisions(tmp_path, save=[SAVE_MBID])
+
+    _, plan = plan_once(tmp_path, decisions, lidarr, library, links)
+
+    kid_a = next(s for s in plan.save if s.spotify_id == "sp-kida")
+    assert (kid_a.spotify_title, kid_a.spotify_artists) == ("Kid A (Remastered)", ("Radiohead",))
+    raw = json.loads((tmp_path / "plan.json").read_text())
+    assert {s["spotify_title"] for s in raw["save"]} == {"Kid A (Remastered)", "In Rainbows"}
+    out = capsys.readouterr().out
+    assert "Radiohead - Kid A  ->  Radiohead - Kid A (Remastered)" in out
+    assert "In Rainbows  ->" not in out
+
+
+def test_a_lone_live_version_is_not_saved_for_a_kept_studio_album(tmp_path: Path) -> None:
+    lidarr, library, links = a_library()
+    library.album_hits[("Radiohead", "Kid A")] = [sp_album("sp-live", "Kid A (Live)")]
+    decisions = write_decisions(tmp_path, save=[SAVE_MBID])
+
+    _, plan = plan_once(tmp_path, decisions, lidarr, library, links)
+
+    assert "sp-live" not in [s.spotify_id for s in plan.save]
+    assert "only other versions" in next(u for u in plan.unmatched if u.rg_mbid == "rg-also").reason
+
+
+def test_an_album_where_the_artist_is_a_secondary_credit_is_not_saved(tmp_path: Path) -> None:
+    lidarr, library, links = a_library()
+    guest = SpotifyAlbumRef("sp-guest", "Kid A", ("Someone Else", "Radiohead"), None, "album", None)
+    library.album_hits[("Radiohead", "Kid A")] = [guest]
+    decisions = write_decisions(tmp_path, save=[SAVE_MBID])
+
+    _, plan = plan_once(tmp_path, decisions, lidarr, library, links)
+
+    assert "sp-guest" not in [s.spotify_id for s in plan.save]
+
+
+def test_a_plan_written_before_the_matched_title_was_recorded_still_loads(tmp_path: Path) -> None:
+    lidarr, library, links = a_library()
+    decisions = write_decisions(tmp_path, save=[SAVE_MBID])
+    _, plan = plan_once(tmp_path, decisions, lidarr, library, links)
+    raw = ps.plan_to_dict(plan)
+    for item in raw["save"]:
+        del item["spotify_title"], item["spotify_artists"]
+
+    again = ps.plan_from_dict(raw)
+
+    assert [s.spotify_id for s in again.save] == [s.spotify_id for s in plan.save]
+    assert {(s.spotify_title, s.spotify_artists) for s in again.save} == {("", ())}
+    assert not any(ps.save_differs(s) for s in again.save)
+
+
 def test_the_dry_run_prints_every_unmatched_item(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     lidarr, library, links = a_library()
     library.album_hits[("Radiohead", "Kid A")] = []

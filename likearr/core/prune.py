@@ -5,19 +5,23 @@ This only ever produces a report. Nothing here deletes, moves or unmonitors anyt
 
 A row is a **candidate** when the album has files, no source wants it and likearr does not own it.
 A candidate is **protected** instead when deleting it would take away the only local copy of a
-song the user liked, or when it is a studio album or EP of a followed artist whose catalogue could
-not be read - see :func:`build_prune_report` for the rules. Why, is kept as data (`Protection`), so
+song the user liked, when it is a studio album or EP of a followed artist whose catalogue or own
+lookup failed this run, or when a song or saved album whose lookup failed names it - see
+:func:`build_prune_report` for the rules. Why, is kept as data (`Protection`), so
 the review can say it in words with no id in them.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any
 
 from likearr.core.desire import CATALOGUE_UNREAD_STEPS
+from likearr.core.failed_lookups import FailedItems, failed_artist_names, failed_items
+from likearr.core.normalize import normalize_name
 from likearr.models import (
     ArtistResolution,
     DesiredState,
@@ -28,27 +32,35 @@ from likearr.models import (
     Resolution,
     ResolutionStatus,
     SecondaryType,
+    SourceSnapshot,
     TrackIntent,
 )
 
 __all__ = [
     "PROTECTION_KINDS",
+    "LookupGaps",
     "Protection",
     "PruneReport",
     "PruneRow",
     "build_prune_report",
     "follow_may_bring",
+    "lookup_gaps",
     "split_track_key",
     "unread_catalogues",
 ]
 
 _TRACK_REASON_PREFIXES = ("liked:", "playlist:")
 
-PROTECTION_KINDS = ("pending_album", "album_not_downloaded", "catalogue_unread")
+PROTECTION_KINDS = ("pending_album", "album_not_downloaded", "catalogue_unread", "lookup_failed")
 """``pending_album``: the song is waiting for its album to be released, so nothing is monitored
 for it. ``album_not_downloaded``: the album it matched has no files yet. ``catalogue_unread``: the
-artist is followed, but their catalogue could not be read this run, so whether the follow wants
-this album is unknown."""
+artist is followed, but their catalogue or their own lookup could not be read this run, so whether
+the follow wants this album is unknown. ``lookup_failed``: a liked song, playlist song or saved
+album of this title and artist failed its lookup this run, so whether it wants this album is
+unknown."""
+
+THIS_RUN_KINDS = frozenset({"catalogue_unread", "lookup_failed"})
+"""Kinds that hold only while a lookup keeps failing: the next run that reads it decides."""
 
 
 def split_track_key(intent_key: str) -> tuple[str, str, str] | None:
@@ -72,7 +84,8 @@ class Protection:
     """One of `PROTECTION_KINDS`."""
     intent_key: str
     """`Reason.key` of the liked song or playlist track whose only copy this is; for
-    ``catalogue_unread``, of the artist's follow."""
+    ``catalogue_unread``, of the artist's follow; for ``lookup_failed``, of the song or saved
+    album whose lookup failed."""
     song: str = ""
     """The track's title, from the run's snapshot; empty when the snapshot did not have it."""
     song_artists: tuple[str, ...] = ()
@@ -91,8 +104,18 @@ class Protection:
         parts = split_track_key(self.intent_key)
         return parts[1] if parts is not None else ""
 
+    @property
+    def this_run_only(self) -> bool:
+        """Kept only until a run reads what failed (`THIS_RUN_KINDS`)."""
+        return self.kind in THIS_RUN_KINDS
+
     def describe(self) -> str:
         """The terminal's line, ids and all: `prune-stage` quotes it when it refuses a trash."""
+        if self.kind == "lookup_failed":
+            return (
+                f"a Spotify song or album of this title and artist ({self.intent_key}) could not be looked up "
+                "this run, so whether it wants this album is unknown"
+            )
         if self.kind == "catalogue_unread":
             return (
                 f"its artist is followed ({self.intent_key}) but their catalogue could not be read this run, "
@@ -192,6 +215,8 @@ def build_prune_report(
     followed_read: bool = True,
     unmatched_follows: frozenset[str] = frozenset(),
     tracks: Iterable[TrackIntent] = (),
+    snapshot: SourceSnapshot | None = None,
+    lookup_failed: AbstractSet[str] = frozenset(),
 ) -> PruneReport:
     """List the albums with files that no source asks for, protecting liked songs' only copy.
 
@@ -215,6 +240,13 @@ def build_prune_report(
     would bring: those rows are protected (``catalogue_unread``). Their other releases - a live
     album, a compilation - are not what a follow brings, and stay candidates.
 
+    **Failed lookups.** Rows are protected the same way, matched by name as `adopt` does (see
+    `likearr.core.failed_lookups`), when a followed artist of the row's artist name failed their
+    own lookup (``catalogue_unread``, studio albums and EPs only), or when a saved album, liked
+    song or playlist song in `snapshot` whose lookup failed names the row's title and artist
+    (``lookup_failed``, whatever its type). `lookup_failed` holds the intent keys MusicBrainz
+    failed during (`ResolveResult.provisional`).
+
     Each row also says whether its artist is followed (`followed_read` False: follows were not
     read, so ``None``), and whether a Spotify follow of that name went unmatched
     (`unmatched_follows`: casefolded names). A protected row names the song it protects by its
@@ -222,7 +254,7 @@ def build_prune_report(
     """
     report = PruneReport(created_at=now)
     songs = {track.reason.key: track for track in tracks}
-    unread = unread_catalogues(desired)
+    gaps = lookup_gaps(desired, snapshot, lookup_failed)
 
     protectors: dict[str, list[tuple[Resolution, bool]]] = {}
     for resolution in resolutions:
@@ -254,13 +286,13 @@ def build_prune_report(
             if wanted or is_owned:
                 continue
 
-            protection = _protection(protectors.get(rg_mbid, []), songs)
-            brought = follow_may_bring(album.primary_type, album.secondary_types)
-            if protection is None and artist_mbid in unread and brought:
-                protection = Protection(kind="catalogue_unread", intent_key=unread[artist_mbid])
+            artist_name = artist.name if artist is not None else desired.artists.get(artist_mbid, artist_mbid)
+            protection = _protection(protectors.get(rg_mbid, []), songs) or gaps.protection(
+                artist_mbid, artist_name, album.title, album.primary_type, album.secondary_types
+            )
             row = PruneRow(
                 artist_mbid=artist_mbid,
-                artist_name=artist.name if artist is not None else desired.artists.get(artist_mbid, artist_mbid),
+                artist_name=artist_name,
                 lidarr_artist_id=artist.id if artist is not None else None,
                 rg_mbid=rg_mbid,
                 title=album.title,
@@ -289,13 +321,65 @@ def build_prune_report(
     return report
 
 
-def unread_catalogues(desired: DesiredState) -> dict[str, str]:
-    """Followed artists whose catalogue could not be read this run: artist mbid -> follow's intent key."""
+def unread_catalogues(desired: DesiredState, lookup_failed: AbstractSet[str] = frozenset()) -> dict[str, str]:
+    """Followed artists whose catalogue could not be read this run: artist mbid -> follow's intent
+    key. With `lookup_failed`, also an unmapped follow MusicBrainz failed during, as `adopt` holds."""
     return {
         u.artist_mbid: u.intent_key
         for u in desired.unmapped
-        if isinstance(u, ArtistResolution) and u.artist_mbid and u.step in CATALOGUE_UNREAD_STEPS
+        if isinstance(u, ArtistResolution)
+        and u.artist_mbid
+        and (u.step in CATALOGUE_UNREAD_STEPS or u.intent_key in lookup_failed)
     }
+
+
+@dataclass(frozen=True, slots=True)
+class LookupGaps:
+    """What this run could not look up, for deciding whether an album is kept this time."""
+
+    unread: dict[str, str] = field(default_factory=dict)
+    """`unread_catalogues`: artist mbid -> follow's intent key."""
+    failed_artists: dict[str, str] = field(default_factory=dict)
+    """`failed_artist_names`: normalised name -> follow's intent key."""
+    failed: FailedItems = field(default_factory=FailedItems)
+
+    def protection(
+        self,
+        artist_mbid: str,
+        artist_name: str,
+        title: str,
+        primary_type: PrimaryType | None,
+        secondary_types: frozenset[SecondaryType],
+    ) -> Protection | None:
+        """Why this album is kept this time, or None."""
+        if follow_may_bring(primary_type, secondary_types):
+            if artist_mbid in self.unread:
+                return Protection(kind="catalogue_unread", intent_key=self.unread[artist_mbid])
+            follow = self.failed_artists.get(normalize_name(artist_name)) if artist_name else None
+            if follow is not None:
+                return Protection(kind="catalogue_unread", intent_key=follow)
+        item = self.failed.naming(artist_name, title)
+        if item is None:
+            return None
+        is_track = split_track_key(item.intent_key) is not None
+        return Protection(
+            kind="lookup_failed",
+            intent_key=item.intent_key,
+            song=item.name if is_track else "",
+            song_artists=item.artists if is_track else (),
+            album=title,
+        )
+
+
+def lookup_gaps(
+    desired: DesiredState, snapshot: SourceSnapshot | None, lookup_failed: AbstractSet[str] = frozenset()
+) -> LookupGaps:
+    """The catalogues, followed artists and songs or saved albums this run could not look up."""
+    return LookupGaps(
+        unread=unread_catalogues(desired, lookup_failed),
+        failed_artists=failed_artist_names(desired, lookup_failed),
+        failed=failed_items(desired, snapshot, lookup_failed),
+    )
 
 
 def follow_may_bring(primary_type: PrimaryType | None, secondary_types: frozenset[SecondaryType]) -> bool:

@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from likearr.adapters.lock import run_lock
-from likearr.core.prune import PruneReport, PruneRow, build_prune_report, follow_may_bring, unread_catalogues
+from likearr.core.prune import PruneReport, PruneRow, build_prune_report, lookup_gaps
 from likearr.fsio import write_atomic
 from likearr.models import EXIT_ERROR, EXIT_OK, PrimaryType, ReleaseKey, ResolutionStatus, SecondaryType
 from likearr.ports import LidarrError, LidarrMetadataError, SourceError
@@ -81,12 +81,14 @@ def prune_report_command(ctx: Context, *, out: Path = Path("prune.json"), now: d
         ),
         # The songs a protected row names by title, not by id.
         tracks=result.snapshot.tracks,
+        snapshot=result.snapshot,
+        lookup_failed=result.resolve_result.provisional,
     )
     write_atomic(out, json.dumps(_prune_to_dict(report), indent=2) + "\n", mode=0o600)
 
     emit(f"likearr prune report ({out}):")
     emit(f"  {report.total_candidates:>6} candidates, {_human_bytes(report.total_bytes)}")
-    emit(f"  {len(report.protected):>6} protected (a liked track's only copy, or a followed artist's unread catalogue)")
+    emit(f"  {len(report.protected):>6} protected (a liked track's only copy, or kept while a lookup fails this run)")
     top = sorted(report.bytes_by_artist.items(), key=lambda kv: (-kv[1], kv[0]))[:PRUNE_TOP_N]
     if top:
         emit("")
@@ -533,13 +535,14 @@ def _check_manifest_fresh(ctx: Context, selected: Sequence[PruneRow], *, now: da
     A prune report is a snapshot of "nothing asks for these files". A manifest can sit for days
     while the user follows the artist or a run takes ownership of the album, and moving files out
     from under either would undo a decision made after the review. Only what changed is named.
-    A Spotify read that failed its schema check can't answer, so it refuses too.
+    A Spotify read that failed its schema check can't answer, so it refuses too, and so does an
+    album the report would now keep because a lookup failed this run.
     """
     fresh = plan(ctx, now=now, scheduled=False, persist=False)
     if not fresh.spotify_schema_ok:
         raise PruneStageError(f"{_SHORT_READ}; nothing was moved. Try again later")
     owned = ctx.state.owned_releases()
-    unread = unread_catalogues(fresh.desired)
+    gaps = lookup_gaps(fresh.desired, fresh.snapshot, fresh.resolve_result.provisional)
     changed: list[str] = []
     for row in selected:
         key = ReleaseKey(artist_mbid=row.artist_mbid, rg_mbid=row.rg_mbid)
@@ -549,8 +552,10 @@ def _check_manifest_fresh(ctx: Context, selected: Sequence[PruneRow], *, now: da
             why = "now owned by likearr"
         elif release is not None and release.reasons:
             why = "now wanted by Spotify (" + ", ".join(sorted(r.key for r in release.reasons)) + ")"
-        elif row.artist_mbid in unread and follow_may_bring(row.primary_type, row.secondary_types):
-            why = f"its artist is followed ({unread[row.artist_mbid]}) but their catalogue could not be read"
+        elif (
+            kept := gaps.protection(row.artist_mbid, row.artist_name, row.title, row.primary_type, row.secondary_types)
+        ) is not None:
+            why = kept.describe()
         if why:
             changed.append(f"  {row.artist_name} - {row.title}: {why}")
     if changed:

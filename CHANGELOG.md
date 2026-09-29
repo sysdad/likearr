@@ -41,6 +41,13 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
   with the reason.
 - **Clean up keeps the studio albums and EPs of a followed artist whose catalogue couldn't be
   read** this time, instead of listing them as removable.
+- **Clean up keeps an album when a lookup that names it failed** this time: a followed artist of
+  that name whose own lookup failed keeps their studio albums and EPs, and a liked song or saved
+  album of that title and artist keeps its album. `prune-stage --apply` refuses them too.
+- **`promote-save` no longer saves another version of a kept album**: "Blue" doesn't match "Blue
+  (Live)", "(Acoustic)" or "(Demo)", only an edition such as "(Deluxe Edition)" or "Remastered".
+  The artist must be the album's main credit. The plan shows the Spotify title and artists when
+  they differ.
 - **`prune-report` refuses when the Spotify read was incomplete**, and `prune-stage --apply`
   refuses too, rather than listing albums you still want.
 - **A Clean up review that trashes nothing skips the move preview** and its commands.

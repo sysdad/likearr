@@ -6,6 +6,7 @@ import pytest
 
 from likearr.core.normalize import (
     credits_match,
+    fold_edition_title,
     has_remix_marker,
     normalize_name,
     normalize_title,
@@ -284,3 +285,28 @@ def test_has_remix_marker_finds_the_word_wherever_it_sits(title: str) -> None:
 )
 def test_has_remix_marker_leaves_ordinary_titles_alone(title: str) -> None:
     assert not has_remix_marker(title)
+
+
+@pytest.mark.parametrize(
+    ("title", "expected"),
+    [
+        ("Blue (Deluxe Edition)", "blue"),
+        ("Blue (Super Deluxe)", "blue"),
+        ("Blue - Remastered 2011", "blue"),
+        ("Blue (2011 Remaster)", "blue"),
+        ("Blue [Explicit]", "blue"),
+        ("Blue (Deluxe Version)", "blue"),
+        ("Blue (20th Anniversary Edition)", "blue"),
+        ("Blue (feat. Mix Master Mike)", "blue"),
+        ("Blue (with Someone)", "blue with someone"),
+        ("Blue - Single", "blue single"),
+        ("Blue (Live)", "blue live"),
+        ("Blue (Acoustic)", "blue acoustic"),
+        ("Blue (Demo)", "blue demo"),
+        ("Blue (Live Edition)", "blue live edition"),
+        ("Blue (Taylor's Version)", "blue taylor s version"),
+        ("Blue (Remastered) (Live)", "blue live"),
+    ],
+)
+def test_fold_edition_title_drops_only_edition_qualifiers(title: str, expected: str) -> None:
+    assert fold_edition_title(title) == expected

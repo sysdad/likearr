@@ -179,6 +179,51 @@ def test_a_featured_credit_on_the_album_still_matches_the_primary_artist() -> No
     assert match_album("JAY-Z", "Watch the Throne", hits, step="album:name").spotify_id == "sp-a"
 
 
+def test_an_album_where_the_artist_is_only_a_secondary_credit_is_refused() -> None:
+    hits = [album("sp-a", "Watch the Throne", "JAY-Z", "Kanye West")]
+    result = match_album("Kanye West", "Watch the Throne", hits, step="album:name")
+    assert not result.matched
+    assert "credited to 'Kanye West'" in result.reason
+
+
+@pytest.mark.parametrize(
+    "qualifier", ["(Live)", "(Acoustic)", "(Demo)", "- Live at Leeds", "(Taylor's Version)", "- Single", "(with Guest)"]
+)
+def test_a_lone_other_version_of_the_title_is_not_the_kept_album(qualifier: str) -> None:
+    result = match_album("Joni Mitchell", "Blue", [album("sp-a", f"Blue {qualifier}", "Joni Mitchell")], step="s")
+    assert not result.matched
+    assert "only other versions" in result.reason and qualifier in result.reason
+
+
+@pytest.mark.parametrize(
+    "title",
+    [
+        "Blue (Deluxe Edition)",
+        "Blue - Remastered 2011",
+        "Blue (2021 Remaster)",
+        "Blue [Explicit]",
+        "Blue (feat. Guest)",
+    ],
+)
+def test_an_edition_qualifier_still_matches_and_records_what_it_matched(title: str) -> None:
+    hits = [album("sp-a", title, "Joni Mitchell", "Guest")]
+    result = match_album("Joni Mitchell", "Blue", hits, step="album:name")
+    assert result.spotify_id == "sp-a"
+    assert (result.title, result.artists) == (title, ("Joni Mitchell", "Guest"))
+
+
+def test_a_kept_live_album_matches_its_own_title_and_an_edition_of_it() -> None:
+    hits = [album("sp-studio", "Blue", "Joni Mitchell"), album("sp-live", "Blue (Live) [Remastered]", "Joni Mitchell")]
+    result = match_album("Joni Mitchell", "Blue (Live)", hits, step="album:name")
+    assert (result.spotify_id, result.title) == ("sp-live", "Blue (Live) [Remastered]")
+
+
+def test_the_literal_title_wins_over_another_version_and_is_recorded() -> None:
+    hits = [album("sp-live", "Blue (Live)", "Joni Mitchell"), album("sp-plain", "Blue", "Joni Mitchell")]
+    result = match_album("Joni Mitchell", "Blue", hits, step="album:name")
+    assert (result.spotify_id, result.step, result.title) == ("sp-plain", "album:name", "Blue")
+
+
 def test_no_hits_at_all_says_so() -> None:
     result = match_album("Radiohead", "In Rainbows", [], step="album:name")
     assert not result.matched
