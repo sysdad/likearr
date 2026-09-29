@@ -7,7 +7,8 @@ Two ideas carry most of the safety:
 
 **Ownership.** likearr unmonitors only releases it monitored itself, recorded in `owned`, and
 never anything marked `manual`. A release that is monitored in Lidarr but not owned is invisible
-to `unmonitor` - `adopt` is the only path that ever takes responsibility for it.
+to `unmonitor` until it is claimed: `adopt` claims the ones a source wants, and
+`[rules] manage_monitored` claims already-monitored albums the desired state holds.
 
 **A name may exist once.** Lidarr matches an incoming download to an artist by *name*, so two
 artists sharing one name make every import of theirs ambiguous and Lidarr refuses to guess. An

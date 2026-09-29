@@ -69,9 +69,9 @@ CREATE TABLE IF NOT EXISTS mb_cache (
 """
 
 _BROWSE_PAGE = 100
+"""MusicBrainz's maximum for a browse request."""
 _MAX_CATALOGUE_PAGES = 30
 """3,000 release groups: far beyond any real artist's catalogue, far short of a runaway crawl."""
-"""MusicBrainz's maximum for a browse request."""
 
 _TRACKLIST_RELEASE_LIMIT = 5
 """How many releases of a group to fetch when looking for a representative tracklist.
@@ -988,7 +988,6 @@ class MusicBrainzLookup:
             out.append(
                 ArtistRelation(
                     relationship=str(relation.get("type") or ""),
-                    direction=str(relation.get("direction") or ""),
                     artist_mbid=str(artist["id"]),
                     artist_name=str(artist.get("name") or ""),
                 )

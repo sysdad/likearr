@@ -324,13 +324,11 @@ class LidarrPort(Protocol):
         """Lidarr's own metadata lookup for a release group (album/lookup). Raise LidarrMetadataError on outage."""
         ...
 
-    def search_release_group(self, artist: str, title: str) -> ReleaseGroup | None: ...
-
     def search_release_group_candidates(self, artist: str, title: str) -> Sequence[ReleaseGroup]:
         """Lidarr's name search, one hit per artist whose name and title both match.
 
-        One artist's answer is exactly `search_release_group`'s. Several are same-named artists,
-        which the resolver decides between exactly as it does for MusicBrainz's candidates."""
+        Several hits are same-named artists, which the resolver decides between exactly as it
+        does for MusicBrainz's candidates."""
         ...
 
     def add_artist(

@@ -17,7 +17,7 @@ from likearr.adapters.musicbrainz import jittered_max_age
 from likearr.core.desire import build_desired
 from likearr.core.diff import build_diff
 from likearr.core.health import lidarr_metadata_outage
-from likearr.core.resolver import ResolveResult, resolve_all
+from likearr.core.resolver import ResolveResult, is_lookup_failed, resolve_all
 from likearr.models import (
     PROGRESS_MARKER_POST_RESOLVE,
     RESOLVER_VERSION,
@@ -354,10 +354,6 @@ def _lost_state_message(count: int) -> str:
     )
 
 
-METADATA_ERROR_STEP = "error:metadata"
-"""`core.desire`'s step for a followed artist whose catalogue could not be listed."""
-
-
 def _mb_errors(resolve_result: ResolveResult, diff: Diff) -> int:
     """Intents abandoned this run because a MusicBrainz lookup failed.
 
@@ -369,7 +365,7 @@ def _mb_errors(resolve_result: ResolveResult, diff: Diff) -> int:
     it is permanent rather than an outage, and counting it would make `mb_ok` false on every run
     for that artist.
     """
-    return resolve_result.metadata_errors + sum(1 for u in diff.unmapped if u.step == METADATA_ERROR_STEP)
+    return resolve_result.metadata_errors + sum(1 for u in diff.unmapped if is_lookup_failed(u.step))
 
 
 def _mb_ok(ctx: Context, resolve_result: ResolveResult, diff: Diff) -> bool:

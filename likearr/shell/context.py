@@ -23,7 +23,7 @@ from likearr.adapters.lidarr import LIDARR_TIMEOUT, LidarrClient
 from likearr.adapters.lookup import CompositeLookup
 from likearr.adapters.musicbrainz import MusicBrainzLookup, build_user_agent
 from likearr.adapters.spotify import SpotifyAuth, SpotifySource
-from likearr.adapters.spotify_library import OwnedPlaylist, PlaylistEntry, SpotifyLibrary
+from likearr.adapters.spotify_library import PlaylistEntry, SpotifyLibrary
 from likearr.adapters.state_sqlite import SqliteState
 from likearr.config import LIDARR_URL_ENV, Config, ConfigError, load_config
 from likearr.logging_setup import setup_logging
@@ -89,11 +89,6 @@ class SpotifyLibraryShell(SpotifyLibraryPort, Protocol):
     picker) needs the user's own playlists, which no part of the core ever asks for, so the port
     `promote-save` was written against stays as it is.
     """
-
-    def owned_playlists(self) -> list[OwnedPlaylist]:
-        """Every playlist a run can read (owned, or collaborative with the scope), sorted by name.
-        Read-only."""
-        ...
 
     def all_playlists(self) -> list[PlaylistEntry]:
         """Every playlist `GET /me/playlists` lists, owned and not, sorted by name. Read-only."""

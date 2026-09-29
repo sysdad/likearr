@@ -88,9 +88,6 @@ class Entry:
 class Ledger:
     releases: dict[str, Entry] = field(default_factory=dict)
     artists: dict[str, Entry] = field(default_factory=dict)
-    imports: list[str] = field(default_factory=list)
-    """Carried forward untouched and read by nothing: an older likearr's one-time import command
-    recorded digests here. A ledger with a non-empty list keeps it; one without never gets one."""
     problem: str = ""
     """Why the file on disk will not read; empty when it read, or when there is none yet. A
     ledger with a problem is read as empty and must never be written over (`LedgerUnreadable`)."""
@@ -179,11 +176,9 @@ def read_ledger(path: Path) -> Ledger:
     for part in ("releases", "artists"):
         if not isinstance(raw.get(part, {}), dict):
             return Ledger(problem=f"{path} has a {part!r} that is not a JSON object")
-    imports = raw.get("imports")
     return Ledger(
         releases=parse_entries(raw.get("releases"), RELEASE_DECISIONS),
         artists=parse_entries(raw.get("artists"), ARTIST_DECISIONS),
-        imports=[str(d) for d in imports if isinstance(d, str)] if isinstance(imports, list) else [],
     )
 
 
@@ -205,8 +200,6 @@ def write_ledger(path: Path, ledger: Ledger) -> None:
         "releases": {k: e.to_dict() for k, e in sorted(ledger.releases.items())},
         "artists": {k: e.to_dict() for k, e in sorted(ledger.artists.items())},
     }
-    if ledger.imports:
-        body["imports"] = ledger.imports
     write_atomic(path, json.dumps(body, indent=1) + "\n", mode=0o600)
 
 
@@ -230,6 +223,5 @@ def record(ledger: Ledger, releases: Mapping[str, str], artists: Mapping[str, st
     return Ledger(
         releases=_merge(ledger.releases, releases, on=on, source=source),
         artists=_merge(ledger.artists, artists, on=on, source=source),
-        imports=list(ledger.imports),
         problem=ledger.problem,
     )

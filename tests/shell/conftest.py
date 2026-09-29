@@ -27,7 +27,7 @@ from typing import Any
 import pytest
 
 from likearr.adapters.lidarr import expected_metadata_profile_types
-from likearr.adapters.spotify_library import OwnedPlaylist, PlaylistEntry
+from likearr.adapters.spotify_library import PlaylistEntry
 from likearr.adapters.state_sqlite import SqliteState
 from likearr.config import (
     Config,
@@ -113,13 +113,13 @@ class FakeLibrary:
     """(artist name, album title) -> what `search?type=album` returns."""
     followed: set[str] = field(default_factory=set)
     saved: set[str] = field(default_factory=set)
-    playlists: list[OwnedPlaylist] = field(default_factory=list)
-    """What `owned_playlists` answers, already filtered to the user's own and sorted."""
+    playlists: list[PlaylistEntry] = field(default_factory=list)
+    """The user's own playlists `all_playlists` answers with; each must have `owned=True`."""
     unowned_playlists: list[PlaylistEntry] = field(default_factory=list)
     """Non-owned rows `all_playlists` adds alongside `playlists` (followed, collaborative,
     Spotify's own algorithmic and editorial playlists) - each must already have `owned=False`."""
     playlists_error: SourceError | None = None
-    """Raised by `owned_playlists` and `all_playlists` instead, the way an expired token or the
+    """Raised by `all_playlists` instead, the way an expired token or the
     quota looks."""
     searches: int = 0
     budget: int | None = None
@@ -155,18 +155,11 @@ class FakeLibrary:
         self.calls.append(("saved_album_ids", None))
         return frozenset(self.saved)
 
-    def owned_playlists(self) -> list[OwnedPlaylist]:
-        self.calls.append(("owned_playlists", None))
-        if self.playlists_error is not None:
-            raise self.playlists_error
-        return list(self.playlists)
-
     def all_playlists(self) -> list[PlaylistEntry]:
         self.calls.append(("all_playlists", None))
         if self.playlists_error is not None:
             raise self.playlists_error
-        owned = [PlaylistEntry(id=p.id, name=p.name, track_count=p.track_count, owned=True) for p in self.playlists]
-        return sorted(owned + list(self.unowned_playlists), key=lambda p: (p.name.casefold(), p.id))
+        return sorted(list(self.playlists) + list(self.unowned_playlists), key=lambda p: (p.name.casefold(), p.id))
 
     def follow_artists(self, artist_ids: Sequence[str]) -> None:
         self.calls.append(("follow_artists", list(artist_ids)))
@@ -366,9 +359,6 @@ class FakeLidarr:
         return dict(self.albums.get(artist.mbid, {}))
 
     def lookup_release_group(self, rg_mbid: str) -> ReleaseGroup | None:
-        return None
-
-    def search_release_group(self, artist: str, title: str) -> ReleaseGroup | None:
         return None
 
     def search_release_group_candidates(self, artist: str, title: str) -> tuple[ReleaseGroup, ...]:

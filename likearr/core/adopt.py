@@ -39,7 +39,7 @@ from datetime import datetime
 
 from likearr.core.desire import CATALOGUE_TOO_LARGE_STEP, CATALOGUE_UNREAD_STEPS
 from likearr.core.normalize import normalize_name, normalize_title, strip_release_qualifiers
-from likearr.core.resolver import METADATA_ERROR_STEP
+from likearr.core.resolver import METADATA_ERROR_STEP, is_lookup_failed
 from likearr.models import (
     RESOLVER_VERSION,
     ArtistResolution,
@@ -219,7 +219,7 @@ def plan_adoption(
         if isinstance(u, ArtistResolution)
         and not u.artist_mbid
         and u.artist_name
-        and (u.step == METADATA_ERROR_STEP or u.intent_key in lookup_failed)
+        and (is_lookup_failed(u.step) or u.intent_key in lookup_failed)
     }
     failed = _failed_lookup_titles(desired, snapshot, lookup_failed)
     for artist_mbid in sorted(view.albums):
@@ -288,7 +288,7 @@ def _failed_lookup_titles(
     keys = {
         u.intent_key
         for u in desired.unmapped
-        if isinstance(u, Resolution) and (u.step == METADATA_ERROR_STEP or u.intent_key in lookup_failed)
+        if isinstance(u, Resolution) and (is_lookup_failed(u.step) or u.intent_key in lookup_failed)
     }
     if not keys:
         return {}

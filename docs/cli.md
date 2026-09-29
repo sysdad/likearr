@@ -17,7 +17,7 @@ logging. Exit codes are in [Troubleshooting](troubleshooting.md#exit-codes).
 |---|---|
 | `run` | Plans a run and writes `diff.json`; applies a reviewed plan with `--apply`. |
 | `auth` | Connects likearr to your Spotify account. |
-| `doctor` | Checks config, Lidarr, MusicBrainz and Spotify. Changes nothing. |
+| `doctor` | Checks config, Lidarr, MusicBrainz and Spotify. Changes nothing, apart from creating the state database on a fresh install. |
 | `setup-profiles` | Creates the metadata profiles, the tag and the root folder defaults in Lidarr. |
 | `adopt` | Lets likearr manage albums you already monitor that match what you like. |
 | `playlists` | Lists your Spotify playlists and which ones a run can read. Changes nothing. |

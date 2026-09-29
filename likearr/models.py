@@ -23,103 +23,9 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 
 RESOLVER_VERSION = 12
-"""Bump when resolution rules change; cached resolutions with an older version are re-resolved.
-
-3: a followed artist resolves through MusicBrainz's Spotify URL relationship rather than a name
-search. Every artist resolution cached under version 2 was made by the name search that picked
-the wrong artist for two shared names, so all of them are recomputed on the first run after this.
-
-4: a liked or playlist track whose album does not map falls back to the track's ISRC before
-giving up (``track:album:isrc``). Nothing that resolved under 3 resolves differently - the new
-step runs only where 3 answered UNMAPPED, and UNMAPPED is re-resolved every run anyway - so this
-bump buys re-resolution of the *cached* answers rather than a change of rule for any of them.
-
-5: when the name search finds the album title under two different MusicBrainz artists who share
-the Spotify artist's name, the earliest release date no longer decides. A track's ISRC
-chooses the artist, and failing that the intent is UNMAPPED at ``ambiguous:same-name-artists``.
-This one *does* change answers that resolved under 4 - "Busy Earnin'" by the London band Jungle
-moves off a US band's 1969 album - and nothing but a bump reaches a cached RESOLVED answer, so every
-cached resolution is recomputed on the first run after deploy (budget about an hour at
-MusicBrainz's 1 request/second; answers still fresh in `mb_cache` cost no request) and
-`Fingerprint` re-baselines the health comparison, so that run reports nothing as new.
-
-6: a saved album whose name search finds several same-titled releases by its artist prefers the
-Album, then a studio release, then the year Spotify gives, before the earliest date. The rule
-shipped earlier made the earliest date decide (without a bump), so the re-resolve 5 forced sent
-six saved albums to an earlier same-titled single, EP or demo, and those wrong answers are now
-cached. Only a bump reaches a cached RESOLVED answer; the cost and the re-baseline are as for 5.
-
-7: Lidarr's name-search fallback - used when MusicBrainz fails or finds nothing - hands the
-resolver every same-named artist's match instead of the first one, so two artists
-sharing a name are decided by the track's ISRC or left ambiguous, as they already are for
-MusicBrainz's matches. That changes an answer only where the fallback saw two artists, and an
-offline replay of a real library's snapshot changes none - the fallback needs an outage or a miss,
-and the replay has no Lidarr - but a guess cached by an earlier fallback is only reachable by a
-bump, and the rule is that a change which can alter a resolution bumps. Deployed
-together with 6, it costs one re-resolve, not two.
-
-8: a liked or playlist track whose album title MusicBrainz holds under a *different* artist
-credit - Spotify's "John Mayer" for MusicBrainz's "John Mayer Trio" - is taken under that credit
-when MusicBrainz records a ``member of band`` or ``collaboration`` relationship joining the two
-artists, and never on the names alone. The rule runs only where 7 answered UNMAPPED at
-``track:album:search`` after the ISRC stand-in, so it cannot change an answer 7 resolved, and an
-offline replay of stored resolutions changes none. It is a bump anyway: it changes what matches,
-and the rule is that such a change bumps, so every answer is recomputed under it once.
-
-9: two changes, one bump, so one re-resolve. Among one artist's same-titled releases
-the name search found, a title equal to the one Spotify printed - nothing folded away but case and
-punctuation - beats one that only matches once a qualifier is dropped, before the earliest date
-decides: CRUISR's plain EP *All Over* had been losing to the earlier *All Over (Bear//Face
-Remix)*, because `normalize_title` reads "(... Remix)" as a qualifier. A saved album applies the
-same rule, but only after its type and studio preferences. And with `allow_remix_releases` off,
-a track whose every release is refused only for being a remix is kept on one of them
-(``track:remix-only``) while `keep_remix_only_tracks` is on, which is the default. The first
-changes answers that resolved under 8, so only a bump reaches them.
-
-10: the resolver train, one bump for seven changes, so one re-resolve. A saved album's barcode
-matches after dropping leading zeros, and several release groups on one barcode are narrowed by
-title. A song from a Various Artists compilation takes its ISRC's artist before a same-name
-search. The `smallest` scope drops an ISRC's differently-titled recordings. The title search skips
-a studio release whose main performers differ from a multi-performer release Spotify named
-(featured guests do not count). A catalogue too large to browse skips the title search instead of
-failing. `deny_releases` also applies to a followed artist's catalogue. Titles fold letters in any
-script. An offline replay of a real library's snapshot moved no stored answer; the fixes land on
-intents the old rules left unmapped or wrong.
-
-11: a saved album matched by its barcode (``album:upc``) takes its release group's own artist
-credit, never the release's. A barcode search's release group carries no credit, and
-10 filled it from the release: Spotify's barcode for *At the Jazz Corner of the World* is a digital
-release credited to Art Blakey, while its release group is credited only to Art Blakey & The Jazz
-Messengers, so 10 keyed the album to a new Art Blakey artist. A release group that cannot be
-fetched is now dropped from the barcode's answer instead. A dry run had already cached that wrong
-RESOLVED answer, and only a bump reaches a cached one.
-
-12: Lidarr's album-search fallback compares artist and title with the core normaliser instead of an
-ASCII-only fold of its own. That fold turned a name written wholly in a non-Latin script
-into "", so for a saved album or a track's album that MusicBrainz missed, Lidarr's search could
-return a same-titled album by a different non-Latin artist and the credit check passed on "" == "".
-What re-resolves differently: answers reached through that fallback, which now need the title
-(`normalize_title`) and the credit (`credits_match`) to match, never on an empty string. MusicBrainz
-answers are untouched; every cached answer is recomputed once, as for any bump.
-
-Not bumped when it changed the rule, and that was the mistake 6 corrects: it changed which release
-the name search picks, and the old answers only survived because nothing re-resolved them.
-
-Not bumped. Making the `smallest` scope's reuse sensitive to follow
-state, and giving positive MusicBrainz cache entries a maximum age, change *when a cached answer
-stops being reused*; they change no rule. The same intent, the same follow state and the same
-MusicBrainz data still produce the same release, step and detail. A bump would also re-resolve
-every cached resolution in a single run, which is precisely what the jittered cache TTL exists to
-avoid, and would reset the health baseline through `Fingerprint` for nothing.
-
-Not bumped, for the same reason. An answer reached after a MusicBrainz failure is no
-longer cached, whatever path reached it, and the Lidarr fallback after a MusicBrainz error honours
-the negative cache. The same lookup answers still produce the same release and step; what
-changes is what is cached, plus two things no cache ever holds: an `error:metadata` where a
-negative-cached Lidarr term used to be re-asked during an outage, and the wording of the
-UNMAPPED ambiguity detail. A provisional answer also never clears a waiting track's pending
-clock, which changes *when* the singles fallback can fire after an outage, never what it picks.
-"""
+"""The version of the resolution rules. Every cached resolution records the version that made it.
+A bump re-resolves every cached answer on the next run, so bump it whenever a change can alter
+what a song, album or artist resolves to."""
 
 LIKED_TRACK_SCOPE_ALBUM = "album"
 """`[rules] liked_track_scope`: a liked track resolves to the studio Album/EP holding the song."""
@@ -231,7 +137,6 @@ class ReasonKind(enum.StrEnum):
     SAVED = "saved"
     LIKED = "liked"
     PLAYLIST = "playlist"
-    PENDING_ALBUM = "pending_album"  # a liked single waiting for its album (nothing monitored)
     MANUAL = "manual"  # kept by the user at adoption time; never removed by the tool
 
 
@@ -527,8 +432,6 @@ class ArtistRelation:
 
     relationship: str
     """MusicBrainz's relationship type name, as it sends it, e.g. ``"member of band"``."""
-    direction: str
-    """``"forward"`` or ``"backward"``: which end of the relationship the asked-about artist is."""
     artist_mbid: str
     """The artist at the other end."""
     artist_name: str
@@ -966,6 +869,10 @@ class RunStatus(enum.StrEnum):
     no hand apply has completed yet (the message then says it is waiting for the first
     reviewed apply). Not a failure and not `skipped`: nothing is "in progress" here, the schedule
     itself is holding. A hand run never gets this status - both holds are scheduled-only."""
+
+
+APPLIED_STATUSES = frozenset({RunStatus.OK, RunStatus.GUARDED, RunStatus.DEGRADED})
+"""Statuses of an apply that actually ran. A stale, skipped or failed one changed nothing."""
 
 
 EXIT_OK = 0

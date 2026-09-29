@@ -18,9 +18,9 @@ Three invariants hold on every path through this module:
 - **A source error means nothing happens.** Not a partial apply, not a "monitors only" apply:
   a `SourceError` publishes a health record with ``spotify_ok=false`` and exits 1, before a
   single Lidarr write.
-- **Ownership is only claimed for what likearr itself flipped.** An album already monitored when
-  likearr looked stays unowned; claiming it would hand likearr the right to unmonitor something a
-  human chose.
+- **Ownership is claimed only on purpose.** An album already monitored when likearr looked stays
+  unowned, unless adopt claims it or `[rules] manage_monitored` is on; otherwise likearr would
+  unmonitor something a human chose.
 - **Every exit publishes a health record.** Including an unexpected exception, whose class and
   redacted message become the record's `message`.
 """

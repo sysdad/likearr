@@ -1559,9 +1559,9 @@ def test_artist_relations_are_read_from_artist_rels_and_cached(lookup: MusicBrai
     second = lookup.artist_relations(TRIO_MBID)
 
     assert first == second
-    assert [(r.relationship, r.direction, r.artist_mbid, r.artist_name) for r in first] == [
-        ("member of band", "backward", MAYER_MBID, "John Mayer"),
-        ("member of band", "backward", palladino, "Pino Palladino"),
+    assert [(r.relationship, r.artist_mbid, r.artist_name) for r in first] == [
+        ("member of band", MAYER_MBID, "John Mayer"),
+        ("member of band", palladino, "Pino Palladino"),
     ], "a relation without an artist is ignored"
     assert route.call_count == 1
     assert dict(httpx.URL(str(route.calls[0].request.url)).params)["inc"] == "artist-rels"

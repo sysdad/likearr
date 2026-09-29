@@ -65,7 +65,6 @@ __all__ = [
     "LIBRARY_BATCH",
     "PAGE_LIMIT",
     "SEARCH_LIMIT",
-    "OwnedPlaylist",
     "PlaylistEntry",
     "SpotifyLibrary",
 ]
@@ -112,21 +111,10 @@ _NEGATIVE_CACHE_DAYS = 7.0
 
 
 @dataclass(frozen=True, slots=True)
-class OwnedPlaylist:
-    """A playlist a run can read: one the authorized user owns, or collaborates on once the token
-    has ``playlist-read-collaborative`` - the only kinds Development Mode reads items from."""
-
-    id: str
-    name: str
-    track_count: int
-    """What the playlist object itself reports; 0 when it reports nothing."""
-
-
-@dataclass(frozen=True, slots=True)
 class PlaylistEntry:
     """One row of ``GET /me/playlists``, owned or not - what the picker shows.
 
-    Unlike :class:`OwnedPlaylist`, nothing is dropped for being someone else's: the picker (and
+    Nothing is dropped for being someone else's: the picker (and
     ``likearr playlists``) need every playlist the account can see, so the ones Development Mode
     will not read items from can be shown, greyed out, with the reason. A playlist you collaborate
     on but do not own is `owned=False`, `collaborative=True`, and `readable` once the stored token
@@ -416,17 +404,6 @@ class SpotifyLibrary:
             sum(1 for p in out if p.readable),
         )
         return out
-
-    def owned_playlists(self) -> list[OwnedPlaylist]:
-        """Every playlist a run can read - owned, or collaborative with the scope - sorted
-        by name (casefolded), then id.
-
-        The selectable subset of `all_playlists`: Development Mode returns zero items for any other
-        playlist, so offering one would only set up a run that fails on it.
-        """
-        return [
-            OwnedPlaylist(id=p.id, name=p.name, track_count=p.track_count) for p in self.all_playlists() if p.readable
-        ]
 
     # ---------------------------------------------------------------- paging
 

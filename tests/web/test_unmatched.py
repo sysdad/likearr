@@ -9,13 +9,13 @@ import pytest
 
 from likearr.core.desire import CATALOGUE_TOO_LARGE_STEP
 from likearr.core.diff import CATALOGUE_GAP_STEP, RECENT_GAP_STEP
-from likearr.core.explain import LOOKUP_FAILED_STEP
 from likearr.core.resolver import (
     AMBIGUOUS_SAME_NAME_STEP,
     ARTIST_AMBIGUOUS_STEP,
     EXCLUDED_COMPILATION_STEP,
     EXCLUDED_DENIED_STEP,
     EXCLUDED_REMIX_STEP,
+    METADATA_ERROR_STEP,
     UNAVAILABLE_STEP,
 )
 from likearr.models import (
@@ -168,7 +168,7 @@ def test_the_musicbrainz_search_quotes_the_title_and_artist_safely() -> None:
 def test_each_outcome_lands_in_its_own_group() -> None:
     songs = [track_intent(f"S{i}", spotify_album(f"A{i}", spotify_id=f"sp-{i}"), spotify_id=f"t{i}") for i in range(5)]
     steps = ["track:album:search", AMBIGUOUS_SAME_NAME_STEP, EXCLUDED_COMPILATION_STEP, "track:pending"]
-    steps.append(LOOKUP_FAILED_STEP)
+    steps.append(METADATA_ERROR_STEP)
     resolutions = {t.reason.key: _unmapped(t.reason.key, s) for t, s in zip(songs, steps, strict=True)}
     last = _last(tracks=songs, resolutions=resolutions)
 
@@ -206,7 +206,7 @@ def test_each_outcome_lands_in_its_own_group() -> None:
         (EXCLUDED_DENIED_STEP, "excluded", "denied"),
         ("track:excluded:something-new", "excluded", "left-out"),
         ("track:pending", "pending", "waiting"),
-        (LOOKUP_FAILED_STEP, "failed", "lookup-failed"),
+        (METADATA_ERROR_STEP, "failed", "lookup-failed"),
     ],
 )
 def test_every_step_the_resolver_and_the_plan_write_has_a_plain_reason(step: str, group: str, code: str) -> None:
@@ -334,7 +334,7 @@ def test_the_cards_count_exactly_what_status_counts_for_the_same_run() -> None:
 
     songs = [track_intent(f"S{i}", spotify_album(f"A{i}", spotify_id=f"sp-{i}"), spotify_id=f"t{i}") for i in range(7)]
     steps = ["track:album:search", "track:album:search", AMBIGUOUS_SAME_NAME_STEP, EXCLUDED_REMIX_STEP]
-    steps += ["track:pending", LOOKUP_FAILED_STEP]
+    steps += ["track:pending", METADATA_ERROR_STEP]
     resolutions = {t.reason.key: _unmapped(t.reason.key, step) for t, step in zip(songs, steps, strict=False)}
     # songs[6] has no resolution at all: a miss on both pages. A stray resolution Spotify no longer
     # lists is on neither.
@@ -392,7 +392,7 @@ def _many() -> list:
     tracks.append(track_intent("Road Song", TRY, spotify_id="sp-road", playlist_id=ROAD_TRIP))
     tracks.append(track_intent("Failed One", spotify_album("Flaky", artists=("Zed",)), spotify_id="sp-f"))
     resolutions = {t.reason.key: _unmapped(t.reason.key, "track:album:search") for t in tracks}
-    resolutions["liked:sp-f"] = _unmapped("liked:sp-f", LOOKUP_FAILED_STEP)
+    resolutions["liked:sp-f"] = _unmapped("liked:sp-f", METADATA_ERROR_STEP)
     return build_rows(_last(tracks=tracks, resolutions=resolutions), playlist_names={ROAD_TRIP: "Road trip"})
 
 

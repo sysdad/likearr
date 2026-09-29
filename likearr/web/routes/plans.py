@@ -383,7 +383,8 @@ _CHANGE_KEYS = (
     "refresh_artists",
     "claim",
 )
-"""The `diff_summary` counts that are changes: to Lidarr, and the albums likearr starts managing."""
+"""The `diff_summary` counts that are changes: to Lidarr, and the albums likearr starts managing.
+`_plan_counts.html` lists the same keys without `claim`, which it words as a note instead."""
 
 
 def _changes(diff: Diff, summary: dict[str, int]) -> int:

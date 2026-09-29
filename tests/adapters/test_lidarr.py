@@ -261,7 +261,7 @@ def test_lookup_release_group_keeps_a_4xx_as_a_plain_lidarr_error(lidarr: Lidarr
 
 
 @respx.mock
-def test_search_release_group_is_conservative(lidarr: LidarrClient) -> None:
+def test_search_release_group_candidates_are_conservative(lidarr: LidarrClient) -> None:
     route = respx.get(f"{V1}/album/lookup").mock(
         return_value=httpx.Response(
             200,
@@ -279,13 +279,13 @@ def test_search_release_group_is_conservative(lidarr: LidarrClient) -> None:
             ],
         )
     )
-    group = lidarr.search_release_group("Fake Band", "Fake Album")
+    found = lidarr.search_release_group_candidates("Fake Band", "Fake Album")
     assert route.calls[0].request.url.params["term"] == "Fake Band Fake Album"
-    assert group is not None and group.mbid == RG_MBID
+    assert [g.mbid for g in found] == [RG_MBID]
 
 
 @respx.mock
-def test_search_release_group_rejects_everything_doubtful(lidarr: LidarrClient) -> None:
+def test_search_release_group_candidates_reject_everything_doubtful(lidarr: LidarrClient) -> None:
     respx.get(f"{V1}/album/lookup").mock(
         return_value=httpx.Response(
             200,
@@ -298,8 +298,8 @@ def test_search_release_group_rejects_everything_doubtful(lidarr: LidarrClient) 
             ],
         )
     )
-    assert lidarr.search_release_group("Fake Band", "Fake Album") is None
-    assert lidarr.search_release_group("", "Fake Album") is None
+    assert lidarr.search_release_group_candidates("Fake Band", "Fake Album") == ()
+    assert lidarr.search_release_group_candidates("", "Fake Album") == ()
 
 
 def _lookup_hit(rg: str, title: str, artist_mbid: str, artist: str = "Jungle") -> dict:
@@ -331,7 +331,7 @@ def test_search_candidates_keep_two_same_named_artists_apart(lidarr: LidarrClien
 
 
 @respx.mock
-def test_search_candidates_for_one_artist_are_exactly_the_old_answer(lidarr: LidarrClient) -> None:
+def test_search_candidates_for_one_artist_are_that_artists_first_match(lidarr: LidarrClient) -> None:
     respx.get(f"{V1}/album/lookup").mock(
         return_value=httpx.Response(
             200,
@@ -343,10 +343,8 @@ def test_search_candidates_for_one_artist_are_exactly_the_old_answer(lidarr: Lid
     )
 
     found = lidarr.search_release_group_candidates("Fake Band", "Fake Album")
-    single = lidarr.search_release_group("Fake Band", "Fake Album")
 
     assert [g.mbid for g in found] == [RG_MBID]
-    assert single is not None and single.mbid == RG_MBID
     assert lidarr.search_release_group_candidates("", "Fake Album") == ()
 
 
