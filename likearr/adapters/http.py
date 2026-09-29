@@ -375,6 +375,7 @@ def request_with_retries(
     max_backoff: float = 60.0,
     before_attempt: Callable[[], None] | None = None,
     timeout: httpx.Timeout | None = None,
+    on_retry: Callable[[str, float, int, int], None] | None = None,
 ) -> httpx.Response:
     """Perform one request, retrying transient failures with backoff.
 
@@ -387,6 +388,9 @@ def request_with_retries(
             `acquire`), so a retry can never jump a per-host request budget.
         timeout: overrides the client's timeout for this request's attempts, for a caller that
             needs a known worst case (the Spotify token request).
+        on_retry: called before each retry's wait with the problem ("HTTP 502", or the transport
+            error's class name), the wait in seconds, the attempt about to be made and
+            `max_attempts`. Retries are logged at DEBUG either way.
 
     `Retry-After` is a floor, never a ceiling: a server saying "0" (MusicBrainz does, on 503)
     still gets likearr's exponential backoff, so a throttled API is never hammered. But a
@@ -428,6 +432,8 @@ def request_with_retries(
                     f"{method} {shown} failed: {type(exc).__name__}: {exc}", url=shown, literals=literals
                 ) from exc
             log.debug("%s %s: transport error, retrying in %.1fs", method, shown, backoff)
+            if on_retry is not None:
+                on_retry(type(exc).__name__, backoff, attempt + 1, max_attempts)
             sleep(backoff)
             continue
 
@@ -450,6 +456,8 @@ def request_with_retries(
                 )
             wait = backoff if delay is None else max(backoff, delay)
             log.debug("%s %s: HTTP %s, retrying in %.1fs", method, shown, response.status_code, wait)
+            if on_retry is not None:
+                on_retry(f"HTTP {response.status_code}", wait, attempt + 1, max_attempts)
             sleep(wait)
             continue
 

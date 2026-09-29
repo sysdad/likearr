@@ -49,7 +49,7 @@ from likearr.shell.context import Context
 from likearr.shell.diff_io import diff_summary, read_diff, write_diff
 from likearr.shell.plan import resolution_max_age
 from likearr.shell.run import apply, plan, print_plan, run_command, tagged_without_state
-from likearr.web.status import health_glance
+from likearr.web.status import describe_run, health_glance
 from tests.shell.conftest import (
     ALBUMS_ONLY_TAG_ID,
     FULL_ID,
@@ -310,6 +310,7 @@ def test_a_spotify_outage_reaches_the_run_record_and_status_as_its_plain_message
     assert lidarr.calls == []
     assert sink.last.message == plain
     assert row is not None and row.record.message == plain
+    assert describe_run(row, now=NOW, tz=ZoneInfo("UTC")).headline == f"Failed: {plain}"
     glance = health_glance(row, now=NOW, tz=ZoneInfo("UTC"))
     assert f"The last run failed: {plain}" in [text for text, _ in glance.problems]
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import replace
 from datetime import UTC, date, datetime
 from typing import Any
@@ -733,18 +734,26 @@ PLAIN_502 = (
 
 @respx.mock
 def test_a_502_that_clears_within_the_read_window_is_ridden_out(
-    spotify_config: SpotifyConfig, client: httpx.Client, clock: FakeClock
+    spotify_config: SpotifyConfig, client: httpx.Client, clock: FakeClock, caplog: pytest.LogCaptureFixture
 ) -> None:
+    caplog.set_level(logging.INFO, logger="likearr.adapters.spotify")
     route = respx.get(f"{API}/playlists/{PLAYLIST_ID}/items").mock(
         side_effect=[SPOTIFY_502, SPOTIFY_502, SPOTIFY_502, httpx.Response(200, json={"items": [], "next": None})]
     )
     respx.get(f"{API}/playlists/{PLAYLIST_ID}").mock(return_value=httpx.Response(200, json={"tracks": {"total": 0}}))
 
-    snapshot = make_source(spotify_config, client, clock, playlists=(PLAYLIST_ID,)).read()
+    snapshot = make_source(
+        spotify_config, client, clock, playlist_names={PLAYLIST_ID: "Road Trip"}, playlists=(PLAYLIST_ID,)
+    ).read()
 
     assert route.call_count == 4
     assert snapshot.counts[f"playlist:{PLAYLIST_ID}"] == 0
     assert clock.slept == [8.0, 16.0, 32.0]
+    retries = [r.getMessage() for r in caplog.records if r.levelno == logging.INFO and "retrying" in r.getMessage()]
+    assert retries == [
+        f'Spotify returned HTTP 502 reading playlist "Road Trip"; retrying in {wait} s (attempt {n} of 6)'
+        for wait, n in ((8, 2), (16, 3), (32, 4))
+    ]
 
 
 @respx.mock

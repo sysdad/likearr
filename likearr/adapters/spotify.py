@@ -68,6 +68,7 @@ from likearr.ports import QuotaExceeded, SchemaError, SourceError
 __all__ = [
     "ALL_SCOPES",
     "ME_URL",
+    "NOTHING_CHANGED_RETRY",
     "READ_SCOPES",
     "REFRESH_TOKEN_LIFETIME_MONTHS",
     "TOKEN_REQUEST_WORST_CASE_S",
@@ -160,6 +161,9 @@ The token endpoint therefore gets its own short profile instead of the general o
 a 60 s read timeout and up to 60 s of backoff: minutes). Per attempt, 30 s is the sum of the
 connect, write, read and pool timeouts above.
 """
+
+NOTHING_CHANGED_RETRY = "Nothing was changed; the next run tries again."
+"""How a failed source read's message ends, so a headline does not say "changed nothing" again."""
 
 _READ_ATTEMPTS = 6
 """Attempts a source read makes before a 5xx or network error fails the run."""
@@ -1008,9 +1012,7 @@ def _as_source_error(exc: HttpError, context: str, *, token_request: bool = Fals
 def _temporary_problem(exc: HttpError, reading: str) -> str:
     """The run's message when Spotify failed a read with a 5xx or a network error."""
     problem = "no response" if exc.status_code is None else f"HTTP {exc.status_code}"
-    return (
-        f"Spotify had a temporary problem ({problem}) reading {reading}. Nothing was changed; the next run tries again."
-    )
+    return f"Spotify had a temporary problem ({problem}) reading {reading}. {NOTHING_CHANGED_RETRY}"
 
 
 def _parse_release_date(value: object, precision: object) -> date | None:
@@ -1103,7 +1105,19 @@ def authorized_request(
     retry_profile: dict[str, Any] = (
         {}
         if reading is None
-        else {"max_attempts": _READ_ATTEMPTS, "base_backoff": _READ_BASE_BACKOFF_S, "max_backoff": _READ_MAX_BACKOFF_S}
+        else {
+            "max_attempts": _READ_ATTEMPTS,
+            "base_backoff": _READ_BASE_BACKOFF_S,
+            "max_backoff": _READ_MAX_BACKOFF_S,
+            "on_retry": lambda problem, wait, attempt, attempts: log.info(
+                "Spotify returned %s reading %s; retrying in %.0f s (attempt %d of %d)",
+                problem,
+                reading,
+                wait,
+                attempt,
+                attempts,
+            ),
+        }
     )
     for attempt in (1, 2):
         headers = {"Authorization": f"Bearer {auth.access_token()}"}
