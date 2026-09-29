@@ -25,7 +25,6 @@ from likearr.adapters.spotify_library import (
     _MAX_LIBRARY_PAGES,
     LIBRARY_BATCH,
     SEARCH_LIMIT,
-    OwnedPlaylist,
     PlaylistEntry,
     SpotifyLibrary,
 )
@@ -518,7 +517,7 @@ def mock_me(user_id: str = ME) -> respx.Route:
 
 
 @respx.mock
-def test_owned_playlists_keeps_only_the_users_own(
+def test_all_playlists_marks_only_the_users_own_as_owned(
     spotify_config: SpotifyConfig, client: httpx.Client, clock: FakeClock
 ) -> None:
     mock_me()
@@ -535,9 +534,13 @@ def test_owned_playlists_keeps_only_the_users_own(
             ),
         )
     )
-    owned = make_library(spotify_config, client, clock).owned_playlists()
+    entries = make_library(spotify_config, client, clock).all_playlists()
 
-    assert owned == [OwnedPlaylist(id="pl-mine", name="Mine", track_count=12)]
+    assert [(p.id, p.owned, p.readable) for p in entries] == [
+        ("pl-spotify", False, False),
+        ("pl-mine", True, True),
+        ("pl-followed", False, False),
+    ]
     assert dict(route.calls[0].request.url.params)["limit"] == "50"
 
 
@@ -600,8 +603,7 @@ def test_a_collaborative_playlist_someone_else_owns_is_readable_with_the_scope(
     spotify_config: SpotifyConfig, client: httpx.Client, clock: FakeClock
 ) -> None:
     """With playlist-read-collaborative granted, a playlist you collaborate on is a
-    source like one you own - listed as readable, and among `owned_playlists` (the picker's
-    selectable set). A followed playlist stays unreadable."""
+    source like one you own - listed as readable, and offered by the picker. A followed playlist stays unreadable."""
     _collaborative_listing()
     library = make_library(spotify_config, client, clock)
 
@@ -609,7 +611,7 @@ def test_a_collaborative_playlist_someone_else_owns_is_readable_with_the_scope(
     assert by_id["pl-collab"].readable and not by_id["pl-collab"].owned and not by_id["pl-collab"].needs_reauth
     assert by_id["pl-mine-collab"].readable and by_id["pl-mine-collab"].owned
     assert not by_id["pl-followed"].readable and not by_id["pl-followed"].needs_reauth
-    assert [p.id for p in library.owned_playlists()] == ["pl-mine", "pl-mine-collab", "pl-collab"]
+    assert [p.id for p in library.all_playlists() if p.readable] == ["pl-mine", "pl-mine-collab", "pl-collab"]
 
 
 @respx.mock
@@ -624,7 +626,7 @@ def test_before_a_reauth_a_collaborative_playlist_is_listed_but_not_offered(
     by_id = {p.id: p for p in library.all_playlists()}
     assert not by_id["pl-collab"].readable and by_id["pl-collab"].needs_reauth
     assert by_id["pl-mine-collab"].readable and not by_id["pl-mine-collab"].needs_reauth
-    assert [p.id for p in library.owned_playlists()] == ["pl-mine", "pl-mine-collab"]
+    assert [p.id for p in library.all_playlists() if p.readable] == ["pl-mine", "pl-mine-collab"]
 
 
 @respx.mock
@@ -633,7 +635,7 @@ def test_all_playlists_treats_a_missing_owner_as_not_owned(
 ) -> None:
     """An entry with an id but no readable `owner` is listed, greyed out, not dropped - only a
     `null` entry or one with no id at all is skipped (that is Spotify saying "will never show
-    you this one", which `owned_playlists` already covered)."""
+    you this one")."""
     mock_me()
     respx.get(url__startswith=f"{API}/me/playlists").mock(
         return_value=httpx.Response(200, json=playlists_page([{"id": "pl-x", "name": "No Owner"}], None))
@@ -644,7 +646,7 @@ def test_all_playlists_treats_a_missing_owner_as_not_owned(
 
 
 @respx.mock
-def test_owned_playlists_reads_either_total_shape(
+def test_all_playlists_reads_either_total_shape(
     spotify_config: SpotifyConfig, client: httpx.Client, clock: FakeClock
 ) -> None:
     """`tracks.total` is the classic shape; the 2026 Dev Mode API may carry it as `items.total`."""
@@ -663,13 +665,13 @@ def test_owned_playlists_reads_either_total_shape(
             ),
         )
     )
-    owned = make_library(spotify_config, client, clock).owned_playlists()
+    owned = make_library(spotify_config, client, clock).all_playlists()
 
     assert [(p.id, p.track_count) for p in owned] == [("pl-a", 5), ("pl-b", 7), ("pl-c", 3), ("pl-d", 0)]
 
 
 @respx.mock
-def test_owned_playlists_follows_the_pages_and_sorts_by_name(
+def test_all_playlists_follows_the_pages_and_sorts_by_name(
     spotify_config: SpotifyConfig, client: httpx.Client, clock: FakeClock
 ) -> None:
     mock_me()
@@ -685,14 +687,14 @@ def test_owned_playlists_follows_the_pages_and_sorts_by_name(
         return httpx.Response(200, json=playlists_page(pages[page], nxt))
 
     route = respx.get(url__startswith=f"{API}/me/playlists").mock(side_effect=respond)
-    owned = make_library(spotify_config, client, clock).owned_playlists()
+    owned = make_library(spotify_config, client, clock).all_playlists()
 
     assert route.call_count == len(pages)
-    assert [p.id for p in owned] == ["pl-1", "pl-3", "pl-2", "pl-4"], "name casefolded, then id"
+    assert [p.id for p in owned] == ["pl-1", "pl-3", "pl-2", "pl-4", "pl-5"], "name casefolded, then id"
 
 
 @respx.mock
-def test_owned_playlists_skips_malformed_entries(
+def test_all_playlists_skips_malformed_entries(
     spotify_config: SpotifyConfig, client: httpx.Client, clock: FakeClock
 ) -> None:
     """Spotify sends `null` for a playlist it cannot show; that is not a reason to fail the list."""
@@ -711,7 +713,7 @@ def test_owned_playlists_skips_malformed_entries(
             ),
         )
     )
-    assert [p.id for p in make_library(spotify_config, client, clock).owned_playlists()] == ["pl-ok"]
+    assert [p.id for p in make_library(spotify_config, client, clock).all_playlists()] == ["pl-x", "pl-ok"]
 
 
 @pytest.mark.parametrize(
@@ -722,26 +724,26 @@ def test_owned_playlists_skips_malformed_entries(
     ],
 )
 @respx.mock
-def test_owned_playlists_page_missing_its_pagination_fields_is_a_schema_error(
+def test_all_playlists_page_missing_its_pagination_fields_is_a_schema_error(
     spotify_config: SpotifyConfig, client: httpx.Client, clock: FakeClock, body: dict, match: str
 ) -> None:
     mock_me()
     respx.get(url__startswith=f"{API}/me/playlists").mock(return_value=httpx.Response(200, json=body))
     with pytest.raises(SchemaError, match=match):
-        make_library(spotify_config, client, clock).owned_playlists()
+        make_library(spotify_config, client, clock).all_playlists()
 
 
 @respx.mock
-def test_owned_playlists_without_a_user_id_is_a_schema_error(
+def test_all_playlists_without_a_user_id_is_a_schema_error(
     spotify_config: SpotifyConfig, client: httpx.Client, clock: FakeClock
 ) -> None:
     respx.get(f"{API}/me").mock(return_value=httpx.Response(200, json={"display_name": "Me"}))
     with pytest.raises(SchemaError, match="'id'"):
-        make_library(spotify_config, client, clock).owned_playlists()
+        make_library(spotify_config, client, clock).all_playlists()
 
 
 @respx.mock
-def test_owned_playlists_next_that_never_ends_is_refused(
+def test_all_playlists_next_that_never_ends_is_refused(
     spotify_config: SpotifyConfig, client: httpx.Client, clock: FakeClock
 ) -> None:
     mock_me()
@@ -751,12 +753,12 @@ def test_owned_playlists_next_that_never_ends_is_refused(
         )
     )
     with pytest.raises(SourceError, match="refusing to page further"):
-        make_library(spotify_config, client, clock).owned_playlists()
+        make_library(spotify_config, client, clock).all_playlists()
     assert route.call_count == _MAX_LIBRARY_PAGES
 
 
 @respx.mock
-def test_owned_playlists_refreshes_once_on_a_401(
+def test_all_playlists_refreshes_once_on_a_401(
     spotify_config: SpotifyConfig, client: httpx.Client, clock: FakeClock
 ) -> None:
     """Every call goes through `authorized_request`, so a 401 takes the locked refresh path."""
@@ -769,5 +771,5 @@ def test_owned_playlists_refreshes_once_on_a_401(
     respx.get(url__startswith=f"{API}/me/playlists").mock(
         return_value=httpx.Response(200, json=playlists_page([playlist("pl-1", "One")], None))
     )
-    assert [p.id for p in make_library(spotify_config, client, clock).owned_playlists()] == ["pl-1"]
+    assert [p.id for p in make_library(spotify_config, client, clock).all_playlists()] == ["pl-1"]
     assert token.call_count == 1

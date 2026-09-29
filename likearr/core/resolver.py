@@ -56,10 +56,12 @@ __all__ = [
     "EXCLUDED_REMIX_STEP",
     "EXCLUDED_STEP_PREFIX",
     "JOINING_RELATIONSHIPS",
+    "METADATA_ERROR_STEP",
     "REMIX_ONLY_STEP",
     "UNAVAILABLE_STEP",
     "ResolveResult",
     "is_excluded",
+    "is_lookup_failed",
     "resolve_album",
     "resolve_all",
     "resolve_artist",
@@ -704,7 +706,14 @@ def _refusal(rg: ReleaseGroup, rules: ExclusionRules, *, track_is_remix: bool) -
 
 
 METADATA_ERROR_STEP = "error:metadata"
-"""An intent whose lookup raised `MetadataError`: UNMAPPED for this run only, never cached."""
+"""An intent whose lookup raised `MetadataError`, or a followed artist whose catalogue could not
+be listed: UNMAPPED for this run only, never cached."""
+
+
+def is_lookup_failed(step: str) -> bool:
+    """Whether an unmapped intent's `step` says its lookup failed this run (`METADATA_ERROR_STEP`)."""
+    return step == METADATA_ERROR_STEP
+
 
 SINGLE_FALLBACK_STEP = "track:single-fallback"
 """A pending track settled on its single once the fallback window passed. RESOLVED, and the one
@@ -2069,7 +2078,7 @@ def _settle(result: ResolveResult, key: str, due: Resolution | None, *, failed: 
     when a lookup failed during it.
     """
     fresh = result.resolutions[key]
-    if due is not None and (failed or fresh.step == METADATA_ERROR_STEP):
+    if due is not None and (failed or is_lookup_failed(fresh.step)):
         result.resolutions[key] = due
         return
     if due is not None and due.step == SINGLE_FALLBACK_STEP and fresh.status is ResolutionStatus.PENDING_ALBUM:

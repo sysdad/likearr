@@ -1,4 +1,5 @@
-{# What a plan changes, as a row of counts. Needs `summary` (`diff_summary`) and `guarded`. #}
+{# What a plan changes, as a row of counts. Needs `summary` (`diff_summary`) and `guarded`.
+   Lidarr writes only: `routes/plans.py` `_CHANGE_KEYS` also counts `claim`, worded as a note below. #}
 {% set items = [
   ("add_artists", "artists to add"), ("monitor", "releases to monitor"), ("unmonitor", "releases to unmonitor"),
   ("ratchets", "profiles to widen"), ("monitor_artists", "artists to re-monitor"),

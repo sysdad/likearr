@@ -757,7 +757,6 @@ TRY = ReleaseGroup(
 )
 MAYER = ArtistRelation(
     relationship="member of band",
-    direction="backward",
     artist_mbid="00000000-0000-4000-8000-0000000000b2",
     artist_name="John Mayer",
 )

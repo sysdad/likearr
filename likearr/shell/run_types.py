@@ -131,7 +131,6 @@ _LIDARR_READS = frozenset(
         "import_lists",
         "command_queue",
         "lookup_release_group",
-        "search_release_group",
         "search_release_group_candidates",
         "artist_track_file_records",
         # Get-or-create, and almost always only a get: `_execute` counts the create itself, when the

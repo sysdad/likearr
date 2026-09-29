@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from likearr.core.adopt import HELD_ARTIST, HELD_ITEM, choose, plan_adoption
-from likearr.core.desire import CATALOGUE_ERROR_STEP, CATALOGUE_TOO_LARGE_STEP
+from likearr.core.desire import CATALOGUE_TOO_LARGE_STEP
 from likearr.core.resolver import METADATA_ERROR_STEP
 from likearr.models import ArtistResolution, ReasonKind, ReleaseKey, Resolution, ResolutionStatus
 from tests.unit.fakes import (
@@ -182,7 +182,7 @@ def _unread(artist_mbid: str, step: str) -> ArtistResolution:
     )
 
 
-@pytest.mark.parametrize("step", [CATALOGUE_TOO_LARGE_STEP, CATALOGUE_ERROR_STEP])
+@pytest.mark.parametrize("step", [CATALOGUE_TOO_LARGE_STEP, METADATA_ERROR_STEP])
 def test_an_unread_catalogue_holds_back_only_what_would_have_been_unmonitored(step: str) -> None:
     """None of the artist's catalogue reached the desired set, so "no source wants it" is not
     known for a plain hand-monitored album: it is held, with the reason, not unmonitored. A
@@ -216,7 +216,7 @@ def test_an_artist_whose_catalogue_reads_is_not_held() -> None:
         artists=[lidarr_artist(ARTIST), lidarr_artist("artist-9", id=9)],
         albums=[lidarr_album(ours, id=101, monitored=True), lidarr_album(theirs, id=901, monitored=True)],
     )
-    desired = desired_state(unmapped=[_unread("artist-9", CATALOGUE_ERROR_STEP)])
+    desired = desired_state(unmapped=[_unread("artist-9", METADATA_ERROR_STEP)])
 
     plan = plan_adoption(desired, view, {}, set(), now=NOW, unmonitor_rest=True)
 
@@ -352,7 +352,7 @@ def test_by_default_adoption_claims_and_leaves_everything_else() -> None:
     wanted = rg("rg-1", "Saved")
     plain = rg("rg-2", "By Hand")
     view = _view(lidarr_album(wanted, id=101, monitored=True), lidarr_album(plain, id=102, monitored=True))
-    desired = desired_state((wanted, [SAVED]), unmapped=[_unread(ARTIST, CATALOGUE_ERROR_STEP)])
+    desired = desired_state((wanted, [SAVED]), unmapped=[_unread(ARTIST, METADATA_ERROR_STEP)])
 
     plan = plan_adoption(desired, view, {}, set(), now=NOW)
 

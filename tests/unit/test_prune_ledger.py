@@ -92,14 +92,12 @@ def test_only_well_formed_entries_survive_a_read(tmp_path: Path) -> None:
     assert set(ledger.releases) == {RG[0], RG[4]}
     assert len(ledger.releases[RG[4]].source) == 200
     assert set(ledger.artists) == {A1}  # an artist records only promote / save
-    assert ledger.imports == ["abc"]
 
 
 def test_the_ledger_round_trips(tmp_path: Path) -> None:
     ledger = Ledger(
         releases={RG[0]: Entry("keep", "2026-01-15", "review")},
         artists={A1: Entry("save", "2026-01-15", "review")},
-        imports=["d1"],
     )
     path = tmp_path / "ui" / "prune-ledger.json"  # the directory is made
 
@@ -126,9 +124,9 @@ def test_an_artist_decided_otherwise_is_forgotten() -> None:
     assert set(after.artists) == {A2, A3}
 
 
-def test_a_ledger_with_an_imports_key_still_loads_and_keeps_it_on_the_next_export(tmp_path: Path) -> None:
+def test_a_ledger_with_an_old_imports_key_still_loads_and_drops_it_on_the_next_export(tmp_path: Path) -> None:
     """An older likearr's one-time import left an ``imports`` list in the file (the live ledger has
-    one). It still reads, its decisions carry forward, and the next export leaves the list alone."""
+    one). It still reads, its decisions carry forward, and the next export no longer writes the list."""
     path = tmp_path / "ui" / "prune-ledger.json"
     path.parent.mkdir()
     kept = {"decision": "keep", "on": "2026-01-15", "from": "review of 2026-01-15 (decisions.json)"}
@@ -152,7 +150,7 @@ def test_a_ledger_with_an_imports_key_still_loads_and_keeps_it_on_the_next_expor
     assert after.releases[RG[1]].decision == "trash"
     assert after.releases[RG[2]] == Entry("keep", "2026-10-01", "Clean up j1")
     assert set(after.artists) == {A1}
-    assert json.loads(path.read_text())["imports"] == ["0" * 64]
+    assert "imports" not in json.loads(path.read_text())
 
 
 def test_a_new_ledger_has_no_imports_key(tmp_path: Path) -> None:

@@ -28,7 +28,7 @@ from likearr.ports import CatalogueTooLarge, MetadataError, MetadataLookup
 
 from .resolver import METADATA_ERROR_STEP, ResolveResult
 
-__all__ = ["CATALOGUE_ERROR_STEP", "CATALOGUE_TOO_LARGE_STEP", "CATALOGUE_UNREAD_STEPS", "build_desired"]
+__all__ = ["CATALOGUE_TOO_LARGE_STEP", "CATALOGUE_UNREAD_STEPS", "build_desired"]
 
 CATALOGUE_TOO_LARGE_STEP = "error:catalogue-too-large"
 """Step for a followed artist past MusicBrainz's browse ceiling: permanent, not an outage.
@@ -38,10 +38,7 @@ named, actionable condition rather than counted as a metadata failure. The healt
 on this string, which keeps it pure - the same trick `core.diff.is_catalogue_gap` uses.
 """
 
-CATALOGUE_ERROR_STEP = METADATA_ERROR_STEP
-"""Step for a followed artist whose catalogue lookup raised `MetadataError` this run."""
-
-CATALOGUE_UNREAD_STEPS = frozenset({CATALOGUE_TOO_LARGE_STEP, CATALOGUE_ERROR_STEP})
+CATALOGUE_UNREAD_STEPS = frozenset({CATALOGUE_TOO_LARGE_STEP, METADATA_ERROR_STEP})
 """The steps of a followed artist in `unmapped` whose catalogue was not read, so none of their
 releases are in the desired set: whether a source wants any of them is unknown, not "no"."""
 
@@ -146,7 +143,7 @@ def build_desired(
                     status=ResolutionStatus.UNMAPPED,
                     artist_mbid=mbid,
                     artist_name=artists[mbid],
-                    step=CATALOGUE_ERROR_STEP,
+                    step=METADATA_ERROR_STEP,
                     detail=(
                         f"could not list the catalogue of {artists[mbid]!r} ({mbid}): {e}. "
                         "The artist keeps whatever likearr already monitors for them"

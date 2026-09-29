@@ -28,12 +28,20 @@ from typing import Any
 
 from likearr.core.diff import config_changes
 from likearr.core.explain import deniable, deny_note, describe_step
-from likearr.models import RESOLVER_VERSION, Diff, HealthRecord, Profile, Reason, ReasonKind, Resolution, RunStatus
+from likearr.models import (
+    APPLIED_STATUSES,
+    RESOLVER_VERSION,
+    Diff,
+    HealthRecord,
+    Profile,
+    Reason,
+    ReasonKind,
+    Resolution,
+)
 from likearr.playlist_names import playlist_url
 from likearr.web.jobs import JobMeta, JobState
 
 __all__ = [
-    "APPLIED",
     "EXPIRE_AFTER",
     "PAGE_SIZE",
     "SECTIONS",
@@ -54,9 +62,6 @@ __all__ = [
 EXPIRE_AFTER = timedelta(days=7)
 PAGE_SIZE = 50
 
-APPLIED = frozenset({RunStatus.OK, RunStatus.GUARDED, RunStatus.DEGRADED})
-"""Statuses of an apply that ran. A stale, skipped or failed one changed nothing."""
-
 _REVIEWABLE_JOBS = frozenset({JobState.DONE, JobState.GUARDED})
 """A dry run that planned: exit 0, or exit 2 with guards holding some unmonitors back."""
 
@@ -73,8 +78,9 @@ class PlanState:
 
 
 _CHANGE_COUNTS = ("monitored", "unmonitored", "added", "new_items_none", "claimed")
-"""What an apply's health record says it changed, artists set to "Monitor New Albums: None" and
-albums likearr started managing included: an apply that did only that moved Lidarr from under the plan too. Ratchets and
+"""What an apply's health record says it changed (the record's names, not the diff-summary keys of
+`routes.plans._CHANGE_KEYS`), artists set to "Monitor New Albums: None" and albums likearr started
+managing included: an apply that did only that moved Lidarr from under the plan too. Ratchets and
 re-monitored artists are not in the record; an apply that did only those (rare: they come with
 monitors) leaves the plan reviewable, and `apply`'s digest check still refuses it if Lidarr moved."""
 
@@ -118,7 +124,7 @@ def applied_since(records: Sequence[HealthRecord], finished_at: str) -> bool:
     after = datetime.fromisoformat(finished_at).timestamp()
     return any(
         not r.dry_run
-        and (r.status in APPLIED or bool(r.changes_made))
+        and (r.status in APPLIED_STATUSES or bool(r.changes_made))
         and r.ts > after
         and any(r.counts.get(k, 0) > 0 for k in _CHANGE_COUNTS)
         for r in records
@@ -219,8 +225,6 @@ def describe_reasons(reasons: frozenset[Reason] | set[Reason], playlist_names: M
         playlists[name] = playlists.get(name, 0) + 1
     for name, count in sorted(playlists.items()):
         parts.append(f"a song in {name}" if count == 1 else f"{count} songs in {name}")
-    if kinds[ReasonKind.PENDING_ALBUM]:
-        parts.append("a liked single waiting for its album")
     if kinds[ReasonKind.MANUAL]:
         parts.append("kept by hand when likearr adopted the library")
     return "; ".join(parts)

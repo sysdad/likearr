@@ -358,20 +358,12 @@ class LidarrClient:
                 return _release_group_from(raw)
         return None
 
-    def search_release_group(self, artist: str, title: str) -> ReleaseGroup | None:
-        """Free-text fallback for Lidarr's metadata lookup. Conservative: both names must match.
-
-        The first match, in Lidarr's order. `CompositeLookup` asks `search_release_group_candidates`
-        instead, because the first match of two same-named artists is a guess.
-        """
-        found = self.search_release_group_candidates(artist, title)
-        return found[0] if found else None
-
     def search_release_group_candidates(self, artist: str, title: str) -> tuple[ReleaseGroup, ...]:
-        """Every artist's first match, in Lidarr's order; one artist's is `search_release_group`'s.
+        """Free-text fallback for Lidarr's metadata lookup: every artist's first match, in Lidarr's
+        order. Conservative: both names must match.
 
-        Only the first hit per artist is kept, so a single artist's answer is exactly what this
-        search always gave, and only a *second artist* - Jungle the London band and Jungle the US
+        Only the first hit per artist is kept, so a single artist's answer is the first
+        match, and only a *second artist* - Jungle the London band and Jungle the US
         one, say - changes anything: the resolver then decides between them on the track's ISRC,
         or refuses to, as it does for MusicBrainz's candidates.
 
@@ -521,7 +513,7 @@ class LidarrClient:
             self._sleep(_COMMAND_POLL_S)
 
     def set_albums_monitored(self, album_ids: Sequence[int], monitored: bool) -> None:
-        """Flip the monitored flag on albums, in batches of 100."""
+        """Flip the monitored flag on albums, in batches of `BATCH_SIZE`."""
         for batch in _batched(list(album_ids)):
             self._request("PUT", "album/monitor", json={"albumIds": list(batch), "monitored": monitored})
 

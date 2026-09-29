@@ -258,7 +258,6 @@ class Corpus:
                 mbid: [
                     ArtistRelation(
                         relationship=r["type"],
-                        direction=r["direction"],
                         artist_mbid=r["artist"]["id"],
                         artist_name=r["artist"]["name"],
                     )
@@ -293,9 +292,9 @@ def load_corpus(path: Path = CORPUS_PATH) -> Corpus:
 # --------------------------------------------------------------------------- model builders
 
 
-def relation(mbid: str, name: str, relationship: str = "member of band", direction: str = "backward") -> ArtistRelation:
+def relation(mbid: str, name: str, relationship: str = "member of band") -> ArtistRelation:
     """One artist-artist relationship, `member of band` seen from the band by default."""
-    return ArtistRelation(relationship=relationship, direction=direction, artist_mbid=mbid, artist_name=name)
+    return ArtistRelation(relationship=relationship, artist_mbid=mbid, artist_name=name)
 
 
 def rg(

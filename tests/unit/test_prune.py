@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from likearr.core.desire import CATALOGUE_ERROR_STEP, CATALOGUE_UNREAD_STEPS
+from likearr.core.desire import CATALOGUE_UNREAD_STEPS
 from likearr.core.prune import Protection, build_prune_report, split_track_key
+from likearr.core.resolver import METADATA_ERROR_STEP
 from likearr.models import (
     ArtistResolution,
     PrimaryType,
@@ -330,7 +331,7 @@ def test_totals_add_up_across_several_artists() -> None:
 # --------------------------------------------------------------------------- unread catalogues
 
 
-def _unread(step: str = CATALOGUE_ERROR_STEP) -> ArtistResolution:
+def _unread(step: str = METADATA_ERROR_STEP) -> ArtistResolution:
     return ArtistResolution(
         intent_key="followed:sp-1",
         status=ResolutionStatus.UNMAPPED,

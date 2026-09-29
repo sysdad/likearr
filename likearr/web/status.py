@@ -27,7 +27,7 @@ from likearr.adapters.state_sqlite import RunRow
 from likearr.config import is_mbid
 from likearr.core.cron import CronError, longest_gap
 from likearr.core.explain import resolution_outcome
-from likearr.models import EXIT_BUSY, HealthRecord, NameCollision, RunStatus, SourceKind
+from likearr.models import APPLIED_STATUSES, EXIT_BUSY, HealthRecord, NameCollision, RunStatus, SourceKind
 from likearr.playlist_names import playlist_url
 from likearr.shell.last_run import LastRun
 from likearr.shell.run import CONDITION_TEXT
@@ -54,9 +54,6 @@ __all__ = [
     "source_counts",
     "stale_after",
 ]
-
-_APPLIED = frozenset({RunStatus.OK, RunStatus.GUARDED, RunStatus.DEGRADED})
-"""Statuses of an apply that actually ran. A stale, skipped or failed one changed nothing."""
 
 _REAUTH_WARN_DAYS = 30
 
@@ -268,7 +265,7 @@ def last_change(view: StatusView) -> RunSummary | None:
             continue
         counts = run.record.counts
         changed = sum(counts.get(k, 0) for k in ("monitored", "unmonitored", "added", "new_items_none", "claimed"))
-        if changed or run.record.status not in _APPLIED:
+        if changed or run.record.status not in APPLIED_STATUSES:
             return run
     return None
 
@@ -277,7 +274,7 @@ def change_summary(run: RunSummary) -> str:
     """The "Last change to Lidarr" card's line: what an apply did, or its headline when it did
     not finish cleanly."""
     record = run.record
-    if record.status not in _APPLIED:
+    if record.status not in APPLIED_STATUSES:
         return run.headline
     counts = record.counts
     monitored, unmonitored, added = counts.get("monitored", 0), counts.get("unmonitored", 0), counts.get("added", 0)
@@ -309,7 +306,7 @@ def pending_changes(view: StatusView, *, schedule_on: bool, first_applied: bool,
     what the check recorded: its blocking guards, and its unmonitor count against the cap a
     scheduled run applies (`max_unmonitors_scheduled`)."""
     run = view.last_any
-    if run is None or not run.record.dry_run or run.record.status not in _APPLIED:
+    if run is None or not run.record.dry_run or run.record.status not in APPLIED_STATUSES:
         return None
     counts = run.record.counts
     monitored, unmonitored, added = counts.get("monitored", 0), counts.get("unmonitored", 0), counts.get("added", 0)
@@ -394,7 +391,7 @@ def describe_run(row: RunRow, *, now: datetime, tz: ZoneInfo) -> RunSummary:
         when=when,
         ago=ago(now, when),
         applied=not record.dry_run
-        and (record.status in _APPLIED or bool(record.changes_made) or bool(record.lidarr_changed)),
+        and (record.status in APPLIED_STATUSES or bool(record.changes_made) or bool(record.lidarr_changed)),
         run_id=row.id,
         headline=_headline(record),
         tone=_tone(record, guards),

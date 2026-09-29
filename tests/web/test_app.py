@@ -1237,7 +1237,7 @@ def test_run_page_labels_a_stale_refusal_as_no_changes_made(client: TestClient, 
 def test_the_run_page_labels_a_guarded_run_s_blocked_unmonitors(client: TestClient, data_dir: Path) -> None:
     """A guard holds back *every* unmonitor for a guarded run (`allow_unmonitors=not guarded` in
     `shell.run._execute`), but the stored diff still lists them - the plan it was attempting, not
-    what changed in Lidarr. `RunStatus.GUARDED` is in `status._APPLIED`, so this reaches Status's
+    what changed in Lidarr. `RunStatus.GUARDED` is in `APPLIED_STATUSES`, so this reaches Status's
     "Last applied run" like a clean apply would, and needs the same kind of caveat."""
     with SqliteState(data_dir / "state.sqlite") as state:
         state.record_run(_record(ts=int(NOW.timestamp()) - 60, status=RunStatus.GUARDED), _run76_diff())

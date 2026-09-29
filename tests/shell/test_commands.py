@@ -14,7 +14,7 @@ import pytest
 
 from likearr.adapters.lock import LockHeld, run_lock
 from likearr.adapters.spotify import SpotifyAccount, SpotifyAuth, TokenSet
-from likearr.adapters.spotify_library import OwnedPlaylist, PlaylistEntry
+from likearr.adapters.spotify_library import PlaylistEntry
 from likearr.models import EXIT_ERROR, EXIT_OK, EXIT_STALE, ReasonKind, ReleaseGroup, ReleaseKey
 from likearr.ports import CatalogueTooLarge, MetadataError, SourceError
 from likearr.shell import commands
@@ -972,8 +972,8 @@ def test_auth_records_the_account_in_the_token_file(
 # --------------------------------------------------------------------------- playlists
 
 
-MINE = OwnedPlaylist(id="pl-mine-0000000000000a", name="Mine", track_count=12)
-ALSO_MINE = OwnedPlaylist(id="pl-mine-0000000000000b", name="Road Trip", track_count=0)
+MINE = PlaylistEntry(id="pl-mine-0000000000000a", name="Mine", track_count=12, owned=True)
+ALSO_MINE = PlaylistEntry(id="pl-mine-0000000000000b", name="Road Trip", track_count=0, owned=True)
 NOT_MINE = PlaylistEntry(id="pl-other-000000000000c", name="Discover Weekly", track_count=30, owned=False)
 SHARED = PlaylistEntry(
     id="pl-shared-00000000000d",

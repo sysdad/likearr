@@ -24,7 +24,13 @@ from dataclasses import dataclass, field, replace
 from datetime import date
 
 from likearr.core.normalize import normalize_name, normalize_title
-from likearr.core.resolver import AMBIGUOUS_SAME_NAME_STEP, REMIX_ONLY_STEP, UNAVAILABLE_STEP, is_excluded
+from likearr.core.resolver import (
+    AMBIGUOUS_SAME_NAME_STEP,
+    REMIX_ONLY_STEP,
+    UNAVAILABLE_STEP,
+    is_excluded,
+    is_lookup_failed,
+)
 from likearr.models import (
     AlbumIntent,
     ArtistIntent,
@@ -576,8 +582,6 @@ def _reason_phrase(reason: Reason, ctx: _Context) -> str:
         return f'you saved the album "{intent.album.name}"' if isinstance(intent, AlbumIntent) else "you saved an album"
     if reason.kind is ReasonKind.FOLLOWED:
         return "you follow the artist"
-    if reason.kind is ReasonKind.PENDING_ALBUM:
-        return "a liked single waiting for its album"
     return "kept by hand when likearr adopted the library"
 
 
@@ -1009,10 +1013,6 @@ def _titles_quoted(titles: Sequence[str]) -> str:
     return quoted[0] if len(quoted) == 1 else ", ".join(quoted[:-1]) + f" and {quoted[-1]}"
 
 
-LOOKUP_FAILED_STEP = "error:metadata"
-"""The resolver's step for an intent whose MusicBrainz lookup failed this run (`core.resolver`)."""
-
-
 def resolution_outcome(resolution: Resolution | ArtistResolution) -> str:
     """Where an intent landed: ``matched``, ``pending`` (a single waiting for its album),
     ``excluded`` (left out by the settings: a remix, a compilation, a denied release), ``failed``
@@ -1025,7 +1025,7 @@ def resolution_outcome(resolution: Resolution | ArtistResolution) -> str:
         return "pending"
     if is_excluded(resolution):
         return "excluded"
-    if resolution.step == LOOKUP_FAILED_STEP:
+    if is_lookup_failed(resolution.step):
         return "failed"
     if resolution.step == AMBIGUOUS_SAME_NAME_STEP:
         return "ambiguous"

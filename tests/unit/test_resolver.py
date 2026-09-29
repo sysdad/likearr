@@ -2939,15 +2939,14 @@ def test_without_the_relationship_lookup_the_try_shape_stays_unmapped() -> None:
 
 
 @pytest.mark.parametrize(
-    ("spotify_credit", "title", "mb_credit", "direction", "secondary", "step"),
+    ("spotify_credit", "title", "mb_credit", "secondary", "step"),
     [
-        # Clyde Lawrence is a member of Lawrence: the relation is on Clyde's side, forward.
-        ("Lawrence", "Homesick", "Clyde Lawrence", "forward", (), "track:album"),
+        # Clyde Lawrence is a member of Lawrence.
+        ("Lawrence", "Homesick", "Clyde Lawrence", (), "track:album"),
         (
             "David Bromberg",
             "Reckless Abandon/Bandit In a Bathing Suit",
             "David Bromberg Band",
-            "backward",
             (),
             "track:album",
         ),
@@ -2955,7 +2954,6 @@ def test_without_the_relationship_lookup_the_try_shape_stays_unmapped() -> None:
             "Max Roach",
             "Verve Jazz Masters 44",
             "The Clifford Brown\u2013Max Roach Quintet",
-            "backward",
             (SecondaryType.COMPILATION,),
             "track:non-studio",
         ),
@@ -2965,13 +2963,12 @@ def test_the_other_measured_shapes_are_taken(
     spotify_credit: str,
     title: str,
     mb_credit: str,
-    direction: str,
     secondary: tuple[SecondaryType, ...],
     step: str,
 ) -> None:
     found = rg("rg-found", title, artist_mbid="mb-credited", artist_name=mb_credit, secondary=secondary)
     lookup = FakeLookup(
-        relations={"mb-credited": [relation("mb-spotify", spotify_credit, direction=direction)]},
+        relations={"mb-credited": [relation("mb-spotify", spotify_credit)]},
         tracklists={"rg-found": ["Another Song", "A Song"]},
     ).add(found)
     intent = track_intent("A Song", spotify_album(title, artists=(spotify_credit,)), artists=(spotify_credit,))
@@ -3044,7 +3041,7 @@ def test_no_other_relationship_type_joins_two_credits(kind: str) -> None:
     """Clyde and Gracie Lawrence are siblings, and that is no reason to file her records under him."""
     assert kind not in JOINING_RELATIONSHIPS
     homesick = rg("rg-homesick", "Homesick", artist_mbid="mb-clyde", artist_name="Clyde Lawrence")
-    lookup = FakeLookup(relations={"mb-clyde": [relation("mb-lawrence", "Lawrence", kind, "forward")]}).add(homesick)
+    lookup = FakeLookup(relations={"mb-clyde": [relation("mb-lawrence", "Lawrence", kind)]}).add(homesick)
     intent = track_intent("Homesick", spotify_album("Homesick", artists=("Lawrence",)), artists=("Lawrence",))
     assert _related(intent, lookup).status == ResolutionStatus.UNMAPPED
 
@@ -3113,8 +3110,8 @@ def test_an_unrelated_artist_sharing_the_title_does_not_stop_the_related_one() -
     homesick = rg("rg-h", "Homesick", artist_mbid="mb-clyde", artist_name="Clyde Lawrence", released="2020-01-01")
     lookup = FakeLookup(
         relations={
-            "mb-clyde": [relation("mb-lawrence", "Lawrence", direction="forward")],
-            "mb-stranger": [relation("mb-orch", "Lawrence Welk Orchestra", direction="forward")],
+            "mb-clyde": [relation("mb-lawrence", "Lawrence")],
+            "mb-stranger": [relation("mb-orch", "Lawrence Welk Orchestra")],
         },
         tracklists={"rg-h": ["Homesick"], "rg-s": ["Homesick"]},
     ).add(stranger, homesick)
