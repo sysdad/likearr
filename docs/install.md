@@ -127,26 +127,50 @@ Scheduled runs start after this first reviewed apply. Until then each one change
 
 ## Taking over an existing library
 
-You don't need this for a library you curated by hand: likearr never unmonitors a release it didn't
-monitor, so a plain run leaves your existing monitors alone.
+likearr never unmonitors a release it didn't monitor, so a plain run leaves the albums you already
+monitor in Lidarr alone.
 
-`adopt` is for a library that grew mostly from Lidarr's own import lists. It claims every monitored
-release a Spotify source still wants, keeps what you list, and **unmonitors everything else,
-including releases you monitored by hand**.
+Before your first apply, **Review changes** opens with **Albums you already monitor**:
 
-1. Disable Lidarr's own Spotify import lists.
-2. Write a keep file: one release group MBID, or `artist:<mbid>`, per line.
-3. Plan, read `adopt.json`, then apply:
+- **The ones that match what you like on Spotify.** Leave **Let likearr manage them** ticked and
+  likearr owns them from the apply on: if you unlike one later, it's unmonitored.
+- **The ones that don't match.** They stay monitored, and likearr never touches them.
 
-   ```
-   likearr adopt --keep keep.txt --out adopt.json -c /data/config.toml
-   likearr adopt --apply adopt.json -c /data/config.toml
-   ```
+The section is gone after the first apply. To keep managing albums you monitor by hand later, turn
+on **Settings -> Advanced -> Also manage albums you monitor later**
+(`[rules] manage_monitored = true`). Each plan then lists them under **Albums to start managing**.
 
-4. Then plan and apply a normal run, as in [First run](#plan-and-apply).
+From a terminal, `adopt` does the same claim, as its own reviewed plan:
 
-Don't use `adopt` to recover a lost state database: it would unmonitor every hand-monitored
-release. [Restore from backup](troubleshooting.md#restoring-from-backup) instead.
+```
+likearr adopt --out adopt.json -c /data/config.toml
+likearr adopt --apply adopt.json -c /data/config.toml
+```
+
+### Unmonitoring the rest
+
+For a library that grew mostly from Lidarr's own import lists, you can also unmonitor every album
+you monitor that matches nothing you like. **This unmonitors albums you monitored by hand, and
+that's hard to undo.** Files stay on disk.
+
+- In the browser: open **Advanced: Unmonitor the albums that don't match** in that section, tick
+  it, and tick **Keep** on any album to leave monitored.
+- From a terminal: disable Lidarr's own Spotify import lists, write a keep file (one release group
+  MBID, or `artist:<mbid>`, per line), then:
+
+  ```
+  likearr adopt --unmonitor-rest --keep keep.txt --out adopt.json -c /data/config.toml
+  likearr adopt --apply adopt.json -c /data/config.toml
+  ```
+
+An album is **held**, left monitored, when MusicBrainz couldn't say this run whether you like it:
+its artist's catalogue couldn't be read, a followed artist of that name couldn't be looked up, or a
+liked song or saved album of that name and artist couldn't be looked up. Plan again later to sort
+them. The holds match by name: a Various Artists album, or an artist spelled differently in Lidarr,
+may not be held.
+
+Don't unmonitor the rest to recover a lost state database: it would unmonitor every
+hand-monitored release. [Restore from backup](troubleshooting.md#restoring-from-backup) instead.
 
 ## More than one instance or Spotify account
 
@@ -165,8 +189,8 @@ On a shared Lidarr:
 
 - If one person unlikes a release the other still wants, it is unmonitored and then monitored again
   by the other instance's next run.
-- Don't run `adopt` on a second instance. If you must, list everything the first instance and the
-  other person want in its keep file.
+- Don't unmonitor the rest (`adopt --unmonitor-rest`, or the web option) on a second instance. If
+  you must, list everything the first instance and the other person want in its keep file.
 - Clean up lists everything the other person likes as unneeded. Check every candidate against both
   accounts before you stage it.
 

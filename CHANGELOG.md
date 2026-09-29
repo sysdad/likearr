@@ -11,6 +11,26 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
 
 ## [Unreleased]
 
+### Added
+
+- **Review changes lists the albums you already monitor** before your first apply: the ones that
+  match what you like can be handed to likearr, and the rest stay as they are unless you choose to
+  unmonitor them.
+- **Settings -> Advanced -> Also manage albums you monitor later** (`[rules] manage_monitored`,
+  off by default): every run then manages albums you monitor by hand that match what you like.
+
+### Changed
+
+- **`adopt` no longer unmonitors anything by default.** It claims what matches and leaves the
+  rest. Use `--unmonitor-rest` for the old behaviour; `--keep` now needs it.
+
+### Fixed
+
+- **Unmonitoring the rest holds back an album MusicBrainz couldn't check** instead of unmonitoring
+  it: a saved album or liked song of that title and artist whose lookup failed (Lidarr's fallback
+  included), or a followed artist of that name whose lookup failed. The album is listed as held
+  with the reason.
+
 ## [0.5.2]
 
 ### Added

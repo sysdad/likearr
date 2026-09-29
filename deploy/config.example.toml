@@ -96,6 +96,9 @@ allow_remix_releases = true
 keep_remix_only_tracks = true
 # Release group MBIDs never to monitor for a song or followed artist. A saved album still wins.
 deny_releases = []
+# true: every run also manages albums you monitor in Lidarr yourself that match what you like, so
+# unliking one later unmonitors it. Settings > Advanced.
+manage_monitored = false
 
 [guards]
 # A scheduled run that would unmonitor more than this many releases unmonitors none of them and

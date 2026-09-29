@@ -265,7 +265,7 @@ def last_change(view: StatusView) -> RunSummary | None:
         if not run.applied:
             continue
         counts = run.record.counts
-        changed = sum(counts.get(k, 0) for k in ("monitored", "unmonitored", "added", "new_items_none"))
+        changed = sum(counts.get(k, 0) for k in ("monitored", "unmonitored", "added", "new_items_none", "claimed"))
         if changed or run.record.status not in _APPLIED:
             return run
     return None
@@ -281,9 +281,11 @@ def change_summary(run: RunSummary) -> str:
     monitored, unmonitored, added = counts.get("monitored", 0), counts.get("unmonitored", 0), counts.get("added", 0)
     none_set = counts.get("new_items_none", 0)
     new_items = f", set {_count(none_set, 'artist')} to {_NEW_ITEMS_NONE}" if none_set else ""
+    claimed = counts.get("claimed", 0)
+    managed = f" {_count(claimed, 'album')} you already monitored now managed." if claimed else ""
     return (
         f"Monitored {_count(monitored, 'release')}, unmonitored {unmonitored}, "
-        f"added {_count(added, 'artist')}{new_items}."
+        f"added {_count(added, 'artist')}{new_items}.{managed}"
     )
 
 
@@ -315,6 +317,8 @@ def pending_changes(view: StatusView, *, schedule_on: bool, first_applied: bool,
         parts.append(f"{_count(added, 'artist')} to add")
     if none_set:
         parts.append(f"{_count(none_set, 'artist')} to set to {_NEW_ITEMS_NONE}")
+    if claimed := counts.get("claimed", 0):
+        parts.append(f"{_count(claimed, 'album')} to start managing")
     if not parts:
         return None
     held = False

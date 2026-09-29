@@ -26,9 +26,9 @@ from likearr.core.prune import PruneReport, PruneRow, build_prune_report
 from likearr.fsio import write_atomic
 from likearr.models import EXIT_ERROR, EXIT_OK, PrimaryType, ReleaseKey, ResolutionStatus, SecondaryType
 from likearr.ports import LidarrError, LidarrMetadataError, SourceError
-from likearr.shell.commands import _view_of_everything
 from likearr.shell.context import Context
 from likearr.shell.output import emit
+from likearr.shell.plan import view_of_everything
 from likearr.shell.run import plan
 
 __all__ = [
@@ -56,7 +56,7 @@ def prune_report_command(ctx: Context, *, out: Path = Path("prune.json"), now: d
 
     report = build_prune_report(
         result.desired,
-        _view_of_everything(ctx),
+        view_of_everything(ctx),
         ctx.state.owned_releases(),
         list(result.resolve_result.resolutions.values()),
         now=now,

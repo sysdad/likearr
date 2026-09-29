@@ -351,13 +351,13 @@ def test_adoption_claims_what_is_wanted_and_offers_the_rest(corpus: Corpus, libr
     view.artists[stranger.artist_mbid] = lidarr_artist(stranger.artist_mbid, id=99, name=stranger.artist_name)
     view.albums[stranger.artist_mbid] = {stranger.mbid: lidarr_album(stranger, id=999, monitored=True, files=12)}
 
-    plan = plan_adoption(desired, view, {}, {f"artist:{stranger.artist_mbid}"}, now=NOW)
+    plan = plan_adoption(desired, view, {}, {f"artist:{stranger.artist_mbid}"}, now=NOW, unmonitor_rest=True)
     assert not plan.unmonitor
     assert [k.key.rg_mbid for k in plan.keep_as_manual] == [stranger.mbid]
     assert len(plan.claim) == len(desired.releases)
     assert all(not c.is_manual for c in plan.claim)
 
-    dropped = plan_adoption(desired, view, {}, set(), now=NOW)
+    dropped = plan_adoption(desired, view, {}, set(), now=NOW, unmonitor_rest=True)
     assert [u.key.rg_mbid for u in dropped.unmonitor] == [stranger.mbid]
 
 

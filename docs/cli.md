@@ -19,7 +19,7 @@ logging. Exit codes are in [Troubleshooting](troubleshooting.md#exit-codes).
 | `auth` | Connects likearr to your Spotify account. |
 | `doctor` | Checks config, Lidarr, MusicBrainz and Spotify. Changes nothing. |
 | `setup-profiles` | Creates the metadata profiles, the tag and the root folder defaults in Lidarr. |
-| `adopt` | Takes over a library whose monitoring predates likearr. |
+| `adopt` | Lets likearr manage albums you already monitor that match what you like. |
 | `playlists` | Lists your Spotify playlists and which ones a run can read. Changes nothing. |
 | `explain` | Says why a release, song or artist is or isn't monitored. |
 | `lidarr-files` | Lists the files Lidarr holds for releases a plan would unmonitor. Changes nothing. |
@@ -41,6 +41,11 @@ logging. Exit codes are in [Troubleshooting](troubleshooting.md#exit-codes).
 - `--accept-shrink` - on a plan: let a source or artist that shrank unmonitor anyway.
 - `--accept-health` - on an apply: stop reporting this run's new problems as new.
 - `--force` - apply a stale plan anyway. Rarely what you want.
+- `--claim-existing` - on a first apply: let likearr manage the albums you already monitor that
+  match what you like (the plan's "Albums you already monitor").
+- `--unmonitor-rest` - on a first apply: unmonitor the albums you already monitor that match
+  nothing you like. Held albums stay monitored.
+- `--keep FILE` - with `--unmonitor-rest`: release group MBIDs to leave monitored, one per line.
 
 ### `auth`
 
@@ -61,11 +66,15 @@ logging. Exit codes are in [Troubleshooting](troubleshooting.md#exit-codes).
 
 ### `adopt`
 
-- `--keep FILE` - releases and artists to keep monitored: one release group MBID or
-  `artist:<mbid>` per line.
+By default it only claims: albums you monitor that match what you like become likearr's, and the
+rest are left as they are. The plan says which mode it is in, and `--apply` does exactly that.
+
+- `--unmonitor-rest` - also unmonitor every monitored album nothing on Spotify wants and the keep
+  file doesn't list. Albums MusicBrainz couldn't check this run are held, not unmonitored.
+- `--keep FILE` - with `--unmonitor-rest` only: releases and artists to keep monitored, one release
+  group MBID or `artist:<mbid>` per line.
 - `--out FILE` - where to write the plan (default `adopt.json`).
-- `--apply [FILE]` - apply that reviewed plan. Unmonitors every monitored release no source wants
-  and the keep file doesn't list.
+- `--apply [FILE]` - apply that reviewed plan. Refused if those albums changed since.
 
 ### `playlists`
 

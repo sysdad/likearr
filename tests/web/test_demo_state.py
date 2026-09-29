@@ -114,3 +114,25 @@ def test_not_added_has_entries_across_reasons(client: TestClient, demo: tuple[Pa
     for group, title in info.not_added:
         assert group in page, group
         assert title in page, title
+
+
+def test_the_first_review_demo_lists_the_albums_already_monitored(tmp_path: Path) -> None:
+    info = _script().build_first_review(tmp_path, now=NOW)
+    app = create_app(
+        WebSettings(
+            config_path=tmp_path / "config.toml",
+            password=PASSWORD,
+            cli=[sys.executable, "-c", "raise SystemExit(1)"],
+            now=lambda: NOW,
+            limiter=LoginLimiter(),
+            shutdown_timeout_s=5,
+        )
+    )
+    with TestClient(app, base_url="http://127.0.0.1") as c:
+        assert c.post("/login", data={"password": PASSWORD}, follow_redirects=False).status_code == 303
+        page = html.unescape(c.get(f"/plan/{info.plan_id}").text)
+
+    assert "Albums you already monitor" in page
+    assert "5 match what you like on Spotify." in page
+    assert "4 don't match." in page
+    assert "Help!" in page and "Held" in page

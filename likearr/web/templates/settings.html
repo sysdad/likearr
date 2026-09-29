@@ -151,7 +151,7 @@
 </fieldset>
 
 {% if not config_error %}
-<details class="panel advanced" id="advanced"{% if errors.get("prune.enabled") %} open{% endif %}>
+<details class="panel advanced" id="advanced"{% if errors.get("prune.enabled") or errors.get("rules.manage_monitored") %} open{% endif %}>
   <summary>Advanced</summary>
   <fieldset class="cleanup" id="cleanup">
     <legend>Clean up</legend>
@@ -170,6 +170,23 @@
       {% endif %}
     </form>
     {% if errors.get("prune.enabled") %}<p class="error">{{ errors["prune.enabled"] }}</p>{% endif %}
+  </fieldset>
+  <fieldset class="manage-monitored" id="manage-monitored">
+    <legend>Albums you monitor yourself</legend>
+    <p class="note">Turn this on to let likearr start managing any albums you've monitored by hand in Lidarr when they match your Spotify likes or saves. If you unlike one later, it's unmonitored.</p>
+    <form method="post" action="/settings/manage-monitored">
+      <input type="hidden" name="file_hash" value="{{ file_hash }}">
+      {% if manage_monitored %}
+      <input type="hidden" name="enabled" value="0">
+      <p>Also manage albums you monitor later: on.</p>
+      <button type="submit">Turn off</button>
+      {% else %}
+      <input type="hidden" name="enabled" value="1">
+      <p>Also manage albums you monitor later: off.</p>
+      <button type="submit">Turn on</button>
+      {% endif %}
+    </form>
+    {% if errors.get("rules.manage_monitored") %}<p class="error">{{ errors["rules.manage_monitored"] }}</p>{% endif %}
   </fieldset>
 </details>
 {% endif %}

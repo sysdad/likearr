@@ -206,6 +206,7 @@ def plan(
         max_refreshes=ctx.config.lidarr.max_refreshes_per_run,
         last_gap_refreshes=ctx.state.last_gap_refreshes(),
         gap_refresh_interval_hours=ctx.config.lidarr.recent_gap_refresh_hours,
+        manage_monitored=ctx.config.rules.manage_monitored,
     )
     diff = replace(diff, config_fingerprint=ctx.config.plan_fingerprint)
 
@@ -240,6 +241,18 @@ def plan(
         ),
         tagged_without_state=lost,
     )
+
+
+def view_of_everything(ctx: Context) -> LidarrView:
+    """Every artist's albums, loaded one artist at a time.
+
+    `adopt`, a first check's "Albums you already monitor" and `prune-report` are about precisely
+    what likearr does *not* know about, so the planning view - which loads albums only for artists
+    some source or ownership record named - is blind to exactly the rows they exist to find. This
+    is still one ``?artistId=`` request per artist and never an unfiltered ``GET /album``.
+    """
+    artists = ctx.lidarr.load_view(None).artists
+    return ctx.lidarr.load_view(sorted(artists))
 
 
 def _persist_lidarr_negative_cache(ctx: Context, *, now: datetime) -> None:

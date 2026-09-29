@@ -610,24 +610,36 @@ def plan_cleanup(text: str, enabled: bool, *, base_dir: Path) -> SaveCheck:
     shows a review page and lets Settings offer promote-save's Spotify write access; nothing moves
     and nothing reaches Spotify until a command is run by hand. The ledger and old prune jobs are
     never touched."""
-    was = parse_config(tomllib.loads(text), base_dir=base_dir).prune.enabled
+    return _plan_flag(text, "prune", "enabled", enabled, base_dir=base_dir)
+
+
+def plan_manage_monitored(text: str, enabled: bool, *, base_dir: Path) -> SaveCheck:
+    """`[rules] manage_monitored`. Saves at once, no confirm, either way: it changes what likearr
+    owns, never what Lidarr monitors, and the next plan lists the albums it starts managing."""
+    return _plan_flag(text, "rules", "manage_monitored", enabled, base_dir=base_dir)
+
+
+def _plan_flag(text: str, section_name: str, key: str, enabled: bool, *, base_dir: Path) -> SaveCheck:
+    """Set one boolean, keeping the rest of the file as it is."""
+    was = bool(getattr(getattr(parse_config(tomllib.loads(text), base_dir=base_dir), section_name), key))
     doc = tomlkit.parse(text)
-    if "prune" not in doc:
-        doc.add("prune", tomlkit.table())
-    section = doc["prune"]
+    if section_name not in doc:
+        doc.add(section_name, tomlkit.table())
+    section = doc[section_name]
+    name = f"{section_name}.{key}"
     if not isinstance(section, dict):  # `prune = "x"` or `[[prune]]`: loads (never fatal), but no key to set
-        return SaveCheck(new_text=text, errors={"prune.enabled": "[prune] must be a table; fix it in config.toml"})
+        return SaveCheck(new_text=text, errors={name: f"[{section_name}] must be a table; fix it in config.toml"})
     # A hand-written `enabled = "yes"` parses as off: writing a boolean over it is a change too.
-    written = section.get("enabled", False)
-    section["enabled"] = enabled
+    written = section.get(key, False)
+    section[key] = enabled
     new_text = tomlkit.dumps(doc)
 
     changed = was != enabled or not isinstance(written, bool)
-    check = SaveCheck(new_text=new_text, changes=[Change("prune", "enabled", was, enabled)] if changed else [])
+    check = SaveCheck(new_text=new_text, changes=[Change(section_name, key, was, enabled)] if changed else [])
     try:
         parse_config(tomllib.loads(new_text), base_dir=base_dir)
     except (ConfigError, tomllib.TOMLDecodeError) as exc:
-        check.errors["prune.enabled"] = str(exc)
+        check.errors[name] = str(exc)
     return check
 
 

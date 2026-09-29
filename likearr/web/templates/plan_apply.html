@@ -14,6 +14,22 @@
 {% else %}
 <section>
   {% include "_plan_counts.html" %}
+  {% if existing %}
+  <h2>Albums you already monitor</h2>
+  <div class="plan-counts">
+    <div class="card"><span class="n{% if not existing.claim %} zero{% endif %}">{{ existing.claim }}</span><span class="what">to manage</span></div>
+    {% if existing.unmonitor_rest %}
+    <div class="card"><span class="n{% if not existing.unmonitor %} zero{% endif %}">{{ existing.unmonitor }}</span><span class="what">to unmonitor{% if existing.kept %} <span class="note">({{ existing.kept }} kept)</span>{% endif %}</span></div>
+    <div class="card"><span class="n{% if not existing.held %} zero{% endif %}">{{ existing.held }}</span><span class="what">held, stay monitored</span></div>
+    {% endif %}
+  </div>
+  {% if existing.unmonitor_rest and existing.unmonitor %}
+  <div class="banner tone-bad"><div class="text"><p class="title">{{ existing.unmonitor }} album{{ "" if existing.unmonitor == 1 else "s" }} you monitor will be unmonitored in Lidarr.</p>
+    <p>That's hard to undo by hand. Their files stay on disk.</p></div></div>
+  {% elif not existing.unmonitor_rest %}
+  <p class="note">Albums that don't match stay monitored.</p>
+  {% endif %}
+  {% endif %}
   {% if guards %}
   <p>These guards still hold back what they held back:</p>
   <ul>{% for g in guards %}<li>{{ g }}</li>{% endfor %}</ul>
@@ -23,6 +39,8 @@
 </section>
 <form method="post" action="/plan/{{ meta.id }}/apply" class="plan">
   <input type="hidden" name="plan_token" value="{{ meta.plan_token }}">
+  {% if existing %}{% for name, value in existing.fields %}<input type="hidden" name="{{ name }}" value="{{ value }}">
+  {% endfor %}{% endif %}
   {% if accept_preset %}
   <div class="banner tone-warn" id="accept"><div class="text"><p class="title">Accept the name collision as known</p>
     <p>The ticked box under Advanced stops flagging the skip as a problem{% if has_mqtt %}, here and in Home Assistant{% endif %}. The artist stays skipped.</p>

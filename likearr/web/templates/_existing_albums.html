@@ -1,0 +1,43 @@
+{# A first check's "Albums you already monitor": what to do with albums Lidarr already monitors
+   that likearr doesn't own. Its fields belong to the empty `existing` form, which the Apply
+   buttons submit to the confirm step. Needs `review.existing` and `meta`. #}
+{% with existing = review.existing %}
+<form id="existing" method="post" action="/plan/{{ meta.id }}/confirm"></form>
+<section class="plan-section existing" id="existing-albums">
+  <h2>Albums you already monitor</h2>
+  {% if existing.claim %}
+  <p>{{ existing.claim | length }} match what you like on Spotify.</p>
+  <label class="check"><input type="checkbox" name="claim" value="1" form="existing" checked> Let likearr manage them <span class="optional">If you unlike one later, it's unmonitored.</span></label>
+  <details>
+    <summary>Show the {{ existing.claim | length }} album{{ "" if existing.claim | length == 1 else "s" }}</summary>
+    <div class="table-wrap"><table class="plan-rows">
+      <thead><tr><th>Album</th><th>Artist</th><th>Wanted because</th></tr></thead>
+      <tbody>{% for row in existing.claim %}<tr><td>{{ row.Album }}</td><td>{{ row.Artist }}</td><td>{{ row.why }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </details>
+  {% endif %}
+  {% if existing.rest %}
+  <p>{{ existing.rest | length }} don't match. They stay monitored, and likearr never touches them.</p>
+  <details>
+    <summary>Show the {{ existing.rest | length }} album{{ "" if existing.rest | length == 1 else "s" }}</summary>
+    <div class="table-wrap"><table class="plan-rows">
+      <thead><tr><th>Album</th><th>Artist</th></tr></thead>
+      <tbody>{% for row in existing.rest %}<tr><td>{{ row.Album }}</td><td>{{ row.Artist }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </details>
+  <details class="panel advanced" id="unmonitor-rest">
+    <summary>Advanced: Unmonitor the albums that don't match</summary>
+    <div class="banner tone-bad"><div class="text"><p class="title">These albums are unmonitored in Lidarr.</p>
+      <p>That's hard to undo by hand. Their files stay on disk. Tick any to keep.</p></div></div>
+    <label class="check"><input type="checkbox" name="unmonitor_rest" value="1" form="existing"> Unmonitor the albums that don't match</label>
+    {% if existing.held %}<p class="note">{{ existing.held }} held: a lookup failed this run, so they stay monitored.</p>{% endif %}
+    <div class="table-wrap"><table class="plan-rows">
+      <thead><tr><th>Keep</th><th>Album</th><th>Artist</th></tr></thead>
+      <tbody>{% for row in existing.rest %}<tr>
+        {% if row.held %}<td class="note" title="{{ row.held }}">Held</td>{% else %}<td><input type="checkbox" name="keep" value="{{ row.rg }}" form="existing" aria-label="Keep {{ row.Album }}"></td>{% endif %}
+        <td>{{ row.Album }}</td><td>{{ row.Artist }}{% if row.held %} <span class="note">({{ row.held }})</span>{% endif %}</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </details>
+  {% endif %}
+</section>
+{% endwith %}

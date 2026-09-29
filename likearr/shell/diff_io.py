@@ -30,6 +30,7 @@ from likearr.models import (
     Guard,
     MonitorRelease,
     NameCollision,
+    OwnedRelease,
     Profile,
     ProfileRatchet,
     Reason,
@@ -172,6 +173,7 @@ def diff_summary(diff: Diff) -> dict[str, int]:
         "catalogue_gaps": sum(1 for u in diff.unmapped if is_catalogue_gap(u) and not is_recent_catalogue_gap(u)),
         "catalogue_gaps_recent": sum(1 for u in diff.unmapped if is_recent_catalogue_gap(u)),
         "projected_wanted": diff.projected_wanted,
+        "claim": len(diff.claim),
     }
 
 
@@ -233,6 +235,7 @@ def diff_to_dict(diff: Diff) -> dict[str, Any]:
         "pending": [_resolution_to_dict(p) for p in diff.pending],
         "unmapped": [_unresolved_to_dict(u) for u in diff.unmapped],
         "projected_wanted": diff.projected_wanted,
+        "claim": [_owned_to_dict(c) for c in diff.claim],
     }
 
 
@@ -291,11 +294,35 @@ def diff_from_dict(raw: Mapping[str, Any]) -> Diff:
                 (_key_from_dict(u["key"]), _reasons_from_list(u.get("reasons"))) for u in _items(raw, "update_reasons")
             ],
             name_collisions=[_collision_from_dict(c) for c in _items(raw, "name_collisions")],
+            claim=[_owned_from_dict(c) for c in _items(raw, "claim")],
         )
     except DiffFileError:
         raise
     except (KeyError, TypeError, ValueError) as exc:
         raise DiffFileError(f"this does not look like a likearr diff file: {exc}") from exc
+
+
+def _owned_to_dict(record: OwnedRelease) -> dict[str, Any]:
+    return {
+        "key": _key_to_dict(record.key),
+        "reasons": _reasons_to_list(record.reasons),
+        "step": record.step,
+        "resolver_version": record.resolver_version,
+        "monitored_at": record.monitored_at.isoformat(),
+        "lidarr_album_id": record.lidarr_album_id,
+    }
+
+
+def _owned_from_dict(raw: Mapping[str, Any]) -> OwnedRelease:
+    album_id = raw.get("lidarr_album_id")
+    return OwnedRelease(
+        key=_key_from_dict(raw["key"]),
+        reasons=_reasons_from_list(raw.get("reasons")),
+        step=str(raw.get("step") or ""),
+        resolver_version=int(raw["resolver_version"]),
+        monitored_at=datetime.fromisoformat(str(raw["monitored_at"])),
+        lidarr_album_id=int(album_id) if album_id is not None else None,
+    )
 
 
 def _items(raw: Mapping[str, Any], key: str) -> Sequence[Mapping[str, Any]]:
@@ -327,11 +354,15 @@ def _ratchet_from_dict(raw: Mapping[str, Any]) -> ProfileRatchet:
 # ---------------------------------------------------------------------------- files
 
 
-def write_diff(diff: Diff, path: Path) -> None:
+def write_diff(diff: Diff, path: Path, *, existing_albums: Mapping[str, Any] | None = None) -> None:
     """Write `diff.json` (pretty-printed, stable ordering) creating parent directories. 0600:
-    a plan names every artist and release it will touch."""
+    a plan names every artist and release it will touch. `existing_albums` is a first check's
+    "Albums you already monitor" (`shell.adopt_io.existing_to_dict`), written alongside."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    write_atomic(path, json.dumps(diff_to_dict(diff), indent=2) + "\n", mode=0o600)
+    raw = diff_to_dict(diff)
+    if existing_albums is not None:
+        raw["existing_albums"] = dict(existing_albums)
+    write_atomic(path, json.dumps(raw, indent=2) + "\n", mode=0o600)
 
 
 def diff_from_run_dict(raw: Mapping[str, Any]) -> Diff:
@@ -356,7 +387,7 @@ def diff_from_run_dict(raw: Mapping[str, Any]) -> Diff:
     """
     if not isinstance(raw, Mapping):
         raise DiffFileError("stored run diff is not a JSON object")
-    return diff_from_dict({**raw, "update_reasons": [], "pending": [], "unmapped": []})
+    return diff_from_dict({**raw, "update_reasons": [], "pending": [], "unmapped": [], "claim": []})
 
 
 def read_diff(path: Path) -> Diff:
