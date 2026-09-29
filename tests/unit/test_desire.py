@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from likearr.core.desire import CATALOGUE_TOO_LARGE_STEP, build_desired
-from likearr.core.resolver import ResolveResult, resolve_all
+from likearr.core.resolver import ARTIST_VARIOUS_ARTISTS_STEP, ResolveResult, resolve_all
 from likearr.models import (
+    VARIOUS_ARTISTS_MBID,
     ArtistResolution,
     PrimaryType,
     Profile,
@@ -112,6 +113,38 @@ def test_an_unresolvable_followed_artist_lands_in_unmapped() -> None:
     assert not desired.releases
     assert len(desired.unmapped) == 1
     assert desired.unmapped[0].step == "artist:search"
+
+
+def test_a_followed_various_artists_page_wants_nothing_and_browses_nothing() -> None:
+    lookup = FakeLookup(artists={VARIOUS_ARTISTS_MBID: "Various Artists"})
+    desired, _ = _desire(snapshot(artists=[artist_intent("Various Artists")]), lookup)
+    assert not desired.releases
+    assert VARIOUS_ARTISTS_MBID not in desired.artists
+    assert VARIOUS_ARTISTS_MBID not in desired.followed_artists
+    assert [u.step for u in desired.unmapped] == [ARTIST_VARIOUS_ARTISTS_STEP]
+    assert "artist_release_groups" not in lookup.calls
+
+
+def test_a_resolved_various_artists_answer_is_skipped_when_building_the_desired_set() -> None:
+    """An answer that reached `build_desired` resolved to Various Artists is still never browsed."""
+    intent = artist_intent("Various Artists")
+    lookup = FakeLookup()
+    result = ResolveResult(
+        artist_resolutions={
+            intent.reason.key: ArtistResolution(
+                intent_key=intent.reason.key,
+                status=ResolutionStatus.RESOLVED,
+                artist_mbid=VARIOUS_ARTISTS_MBID,
+                artist_name="Various Artists",
+                step="artist:spotify-url",
+            )
+        }
+    )
+    desired = build_desired(snapshot(artists=[intent]), result, lookup, albums_only_artists=set())
+    assert not desired.releases
+    assert VARIOUS_ARTISTS_MBID not in desired.followed_artists
+    assert [u.step for u in desired.unmapped] == [ARTIST_VARIOUS_ARTISTS_STEP]
+    assert "artist_release_groups" not in lookup.calls
 
 
 def test_a_catalogue_lookup_failure_reports_the_artist_instead_of_dropping_it() -> None:

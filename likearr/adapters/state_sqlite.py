@@ -17,6 +17,7 @@ import dataclasses
 import enum
 import json
 import sqlite3
+import time
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from datetime import UTC, date, datetime
@@ -176,7 +177,8 @@ CREATE TABLE IF NOT EXISTS runs (
 
 CREATE TABLE IF NOT EXISTS scheduler_state (
     id        INTEGER PRIMARY KEY CHECK (id = 1),
-    last_fire TEXT NOT NULL
+    last_fire TEXT NOT NULL,
+    cancelled INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS first_apply (
@@ -466,6 +468,15 @@ def _diff_to_json(diff: Diff) -> str:
     return json.dumps(dataclasses.asdict(diff), default=_json_default, sort_keys=True)
 
 
+_WAL_RETRY_SECONDS = 10.0
+_WAL_RETRY_PAUSE = 0.05
+
+
+def _is_busy(e: sqlite3.OperationalError) -> bool:
+    message = str(e).lower()
+    return "locked" in message or "busy" in message
+
+
 class SqliteState:
     """Ownership state, backed by a single SQLite file (WAL mode).
 
@@ -485,9 +496,23 @@ class SqliteState:
         self._ensure_schema()
 
     def _configure_pragmas(self) -> None:
-        self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA busy_timeout=5000")
+        self._switch_to_wal()
         self._conn.execute("PRAGMA foreign_keys=ON")
+
+    def _switch_to_wal(self) -> None:
+        """Set WAL mode, retrying while another process holds the file (two processes opening a
+        brand-new database at once). Stops retrying after `_WAL_RETRY_SECONDS`; each attempt can
+        also wait out the busy timeout."""
+        deadline = time.monotonic() + _WAL_RETRY_SECONDS
+        while True:
+            try:
+                self._conn.execute("PRAGMA journal_mode=WAL")
+                return
+            except sqlite3.OperationalError as e:
+                if not _is_busy(e) or time.monotonic() >= deadline:
+                    raise
+                time.sleep(_WAL_RETRY_PAUSE)
 
     def _ensure_schema(self) -> None:
         """Create anything missing, then record the version.
@@ -506,10 +531,13 @@ class SqliteState:
         self._conn.executescript(_SCHEMA_SQL)
         self._add_column("health_baseline_meta", "rules", "TEXT NOT NULL DEFAULT ''")
         self._add_column("scheduler_state", "cancelled", "INTEGER NOT NULL DEFAULT 0")
+        # One statement, so two processes opening a new file cannot both insert a version row.
+        self._conn.execute(
+            "INSERT INTO schema_version (version) SELECT ? WHERE NOT EXISTS (SELECT 1 FROM schema_version)",
+            (SCHEMA_VERSION,),
+        )
         row = self._conn.execute("SELECT version FROM schema_version").fetchone()
-        if row is None:
-            self._conn.execute("INSERT INTO schema_version (version) VALUES (?)", (SCHEMA_VERSION,))
-        elif row["version"] < SCHEMA_VERSION:
+        if row["version"] < SCHEMA_VERSION:
             with self.transaction():
                 if row["version"] < 8:
                     self._mark_applied_if_it_ever_applied()
@@ -528,10 +556,19 @@ class SqliteState:
         )
 
     def _add_column(self, table: str, column: str, declaration: str) -> None:
-        """Add a column to an existing table, once. SQLite has no `ADD COLUMN IF NOT EXISTS`."""
+        """Add a column to an existing table, once. SQLite has no `ADD COLUMN IF NOT EXISTS`.
+
+        Another process opening the same file can add it between the check and the ALTER; its
+        "duplicate column" error means the column is there, which is all this wants.
+        """
         existing = {row["name"] for row in self._conn.execute(f"PRAGMA table_info({table})")}
-        if column not in existing:
+        if column in existing:
+            return
+        try:
             self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {declaration}")
+        except sqlite3.OperationalError as e:
+            if "duplicate column" not in str(e).lower():
+                raise
 
     def schema_version(self) -> int:
         """The version recorded in the file. `doctor` and tests read it."""

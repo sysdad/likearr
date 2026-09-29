@@ -178,6 +178,25 @@ _LATIN_LETTERS = str.maketrans({"ø": "o", "æ": "ae", "œ": "oe", "ł": "l", "�
 "Straße" still equals "Strasse" and "Ærø" equals "Aero" once letters outside ``[a-z]`` are kept."""
 
 
+_KANA_VOICING_MARKS = frozenset("\u3099\u309a")
+"""The combining dakuten and handakuten that NFKD splits off voiced kana."""
+
+
+def _strip_marks(decomposed: str) -> str:
+    """Drop the combining marks of an NFKD string, except a kana voicing mark that recomposes
+    with the letter before it ("ハ" + dakuten is "バ"). Nothing else is recomposed."""
+    out: list[str] = []
+    for c in decomposed:
+        if c in _KANA_VOICING_MARKS:
+            if out:
+                composed = unicodedata.normalize("NFC", out[-1] + c)
+                if len(composed) == 1:
+                    out[-1] = composed
+        elif not unicodedata.combining(c):
+            out.append(c)
+    return "".join(out)
+
+
 def _fold(text: str) -> str:
     """Lowercase, strip diacritics and punctuation, collapse whitespace; keep every letter.
 
@@ -185,9 +204,11 @@ def _fold(text: str) -> str:
     letters that do not decompose (``ø``, ``ł``) and the non-Latin half of a mixed-script string,
     so "MØ" equalled "M" and "Часть 1" equalled "Глава 1". The MusicBrainz adapter's
     own normaliser folds through `fold_title` too, so the two sides cannot drift apart.
+
+    The kana voicing marks (dakuten and handakuten) are kept and recomposed, so "バ", "パ" and
+    "ハ" stay three different letters; a half-width "ﾊﾞ" folds to "バ".
     """
-    decomposed = unicodedata.normalize("NFKD", text)
-    stripped = "".join(c for c in decomposed if not unicodedata.combining(c))
+    stripped = _strip_marks(unicodedata.normalize("NFKD", text))
     lowered = stripped.lower().translate(_LATIN_LETTERS).replace("&", " and ")
     kept = "".join(c if c.isalnum() else " " for c in lowered)
     folded = _SPACES.sub(" ", kept).strip()
@@ -217,7 +238,10 @@ def normalize_title(title: str) -> str:
     head = _BARE_FEAT.split(out, maxsplit=1)[0]
     if head != out and not _too_short_for_a_credit(head):
         out = head
-    return _fold(out)
+    folded = _fold(out)
+    # A title that is only a qualifier ("(Live)") would fold to "" and equal every other such
+    # title, so it keeps the fold of the whole title instead.
+    return folded or _fold(title)
 
 
 def _too_short_for_a_credit(head: str) -> bool:

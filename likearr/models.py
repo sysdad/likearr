@@ -22,7 +22,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import date, datetime
 
-RESOLVER_VERSION = 12
+RESOLVER_VERSION = 13
 """The version of the resolution rules. Every cached resolution records the version that made it.
 A bump re-resolves every cached answer on the next run, so bump it whenever a change can alter
 what a song, album or artist resolves to."""
