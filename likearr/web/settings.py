@@ -591,6 +591,9 @@ def plan_resume(text: str, *, base_dir: Path) -> SaveCheck:
     if "schedule" not in doc:
         doc.add("schedule", tomlkit.table())
     doc["schedule"]["enabled"] = True
+    for stale in ("paused_reason", "paused_at"):
+        if stale in doc["schedule"]:
+            del doc["schedule"][stale]
     new_text = tomlkit.dumps(doc)
 
     check = SaveCheck(new_text=new_text, changes=[Change("schedule", "enabled", was_enabled, True)])
@@ -665,7 +668,7 @@ def preview_schedule(
     same bad line.
     """
     try:
-        validate_cron_and_timezone(cron, timezone)
+        validate_cron_and_timezone(cron, timezone, now=now)
     except ConfigError as exc:
         return SchedulePreview(error=str(exc))
     expr = parse_cron(cron)
@@ -744,6 +747,10 @@ def plan_schedule(text: str, cron: str, timezone: str, *, base_dir: Path, now: d
     old = parse_config(tomllib.loads(text), base_dir=base_dir).schedule
     cron = cron.strip()
     timezone = timezone.strip()
+    try:
+        validate_cron_and_timezone(cron, timezone, now=now)
+    except ConfigError as exc:
+        return SaveCheck(new_text=text, errors={"schedule.cron": str(exc)})
     changes: list[Change] = []
     if cron != old.cron:
         changes.append(Change("schedule", "cron", old.cron, cron))
@@ -755,8 +762,8 @@ def plan_schedule(text: str, cron: str, timezone: str, *, base_dir: Path, now: d
     doc = tomlkit.parse(text)
     if "schedule" not in doc:
         doc.add("schedule", tomlkit.table())
-    doc["schedule"]["cron"] = cron
-    doc["schedule"]["timezone"] = timezone
+    for change in changes:
+        doc["schedule"][change.key] = change.new
     new_text = tomlkit.dumps(doc)
 
     check = SaveCheck(new_text=new_text, changes=changes)

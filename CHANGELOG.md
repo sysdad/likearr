@@ -26,6 +26,12 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
 
 ### Fixed
 
+- **Config and schedule checks name the problem.** A `[spotify] playlists` that isn't a list, a
+  zero or negative `[lidarr] refresh_timeout_s`, a non-ASCII `LIKEARR_MUSICBRAINZ_CONTACT` and a
+  cron line that never fires (like `0 0 30 2 *`) now fail with a message naming the key. A
+  `[ui] password` line points at `LIKEARR_UI_PASSWORD`.
+- **Settings' schedule saves are stricter.** An empty cron or timezone is refused, a timezone-only
+  change no longer pins the cron, and Resume clears the old pause reason and time.
 - **An album you monitor by hand is no longer unmonitored again** because likearr still tracked it:
   likearr now stops tracking an album you no longer like once Lidarr already shows it unmonitored,
   or no longer has it. The plan and the review show how many.
