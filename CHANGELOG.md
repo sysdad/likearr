@@ -48,6 +48,9 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
   (Live)", "(Acoustic)" or "(Demo)", only an edition such as "(Deluxe Edition)" or "Remastered".
   The artist must be the album's main credit. The plan shows the Spotify title and artists when
   they differ.
+- **A brief Spotify outage no longer fails a run as quickly.** Reads retry a server or network
+  error for a few minutes. If Spotify is still failing, Status says so plainly, naming what it
+  was reading, and the full error is in the run's log.
 - **`prune-report` refuses when the Spotify read was incomplete**, and `prune-stage --apply`
   refuses too, rather than listing albums you still want.
 - **A Clean up review that trashes nothing skips the move preview** and its commands.

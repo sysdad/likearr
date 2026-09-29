@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from likearr.adapters.spotify import NOTHING_CHANGED_RETRY
 from likearr.adapters.state_sqlite import RunRow
 from likearr.config import is_mbid
 from likearr.core.cron import CronError, longest_gap
@@ -238,7 +239,12 @@ def _headline(record: HealthRecord) -> str:
             return f"Stopped part-way: {record.changes_made}{planned} changes made. {_why_stopped(record)}"
         if not record.dry_run and record.lidarr_changed:
             return f"Stopped part-way: Lidarr settings may have changed, no planned change made. {_why_stopped(record)}"
-        if not record.dry_run and record.changes_made == 0 and record.lidarr_changed is False:
+        if (
+            not record.dry_run
+            and record.changes_made == 0
+            and record.lidarr_changed is False
+            and not (record.message or "").endswith(NOTHING_CHANGED_RETRY)
+        ):
             return f"Failed, and changed nothing: {_why_stopped(record)}"
         return f"Failed: {record.message or 'see the log'}"
     if record.status is RunStatus.STALE:
@@ -690,7 +696,8 @@ def health_glance(
     run = describe_run(published, now=now, tz=tz)
     problems: list[tuple[str, str]] = []
     if record.status is RunStatus.ERROR:
-        problems.append((f"The last run failed: {record.message or 'see its log'}.", "#history"))
+        reason = (record.message or "see its log").removesuffix(".")
+        problems.append((f"The last run failed: {reason}.", "#history"))
     elif record.status is RunStatus.STALE:
         problems.append(
             ("The last apply was refused: Spotify or Lidarr changed since its check. Check again.", "#history")
