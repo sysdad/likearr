@@ -11,6 +11,8 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
 
 ## [Unreleased]
 
+## [0.5.3]
+
 ### Added
 
 - **Review changes lists the albums you already monitor** before your first apply: the ones that
