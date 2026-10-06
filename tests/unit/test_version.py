@@ -23,7 +23,7 @@ def test_dunder_version_matches_the_installed_distribution() -> None:
 
 
 def test_dunder_version_is_the_pyproject_version() -> None:
-    assert likearr.__version__ == "0.5.2"
+    assert likearr.__version__ == "0.5.3"
 
 
 def test_resolve_version_falls_back_when_the_package_is_not_installed(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -7,7 +7,7 @@
 
 services:
   likearr:
-    image: ghcr.io/sysdad/likearr:0.5.2
+    image: ghcr.io/sysdad/likearr:0.5.3
     # build:
     #   context: .
     #   # To run as your data folder's owner instead of 1000:1000:
@@ -29,7 +29,7 @@ services:
 
   # For commands you run by hand: `docker compose run --rm likearr-cli <command> -c /data/config.toml`.
   likearr-cli:
-    image: ghcr.io/sysdad/likearr:0.5.2
+    image: ghcr.io/sysdad/likearr:0.5.3
     # build:
     #   context: .
     #   # Keep in step with the likearr service above.
@@ -53,7 +53,7 @@ services:
   # A second instance for another Spotify account: its own data folder, port and env file (with its
   # own LIKEARR_UI_PASSWORD). See docs/install.md, "More than one instance or Spotify account".
   # likearr-2:
-  #   image: ghcr.io/sysdad/likearr:0.5.2
+  #   image: ghcr.io/sysdad/likearr:0.5.3
   #   container_name: likearr-2
   #   env_file:
   #     - .env.likearr-2
