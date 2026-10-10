@@ -407,6 +407,41 @@ def test_an_apply_records_the_view_after_its_changes(tmp_path: Path, sink: Captu
     assert last.view.album(ReleaseKey("artist-1", "rg-1")).monitored  # type: ignore[union-attr]
 
 
+def test_a_run_records_todays_coverage_point(tmp_path: Path, sink: CapturingSink) -> None:
+    """The chart's point carries the same counts as the coverage card the facts give."""
+    from zoneinfo import ZoneInfo
+
+    from likearr.shell.last_run import read_last_run, release_counts
+
+    with context_for(tmp_path, sink) as ctx:
+        run_command(ctx, now=NOW, out=tmp_path / "diff.json", do_apply=True, scheduled=True)
+        points = ctx.state.coverage_history()
+        day = NOW.astimezone(ZoneInfo(ctx.config.schedule.timezone)).date()
+
+    last = read_last_run(tmp_path / "last-run.json")
+    assert last is not None
+    assert [(p.day, p.releases, p.monitored, p.downloaded) for p in points] == [
+        (day, *release_counts(last.desired, last.view))
+    ]
+    assert points[0].monitored > 0, "the apply's monitors count"
+
+
+def test_failing_to_record_coverage_changes_nothing_about_the_run(
+    tmp_path: Path, sink: CapturingSink, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from likearr.adapters.state_sqlite import SqliteState
+
+    def boom(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("disk full")
+
+    monkeypatch.setattr(SqliteState, "record_coverage", boom)
+    with context_for(tmp_path, sink) as ctx:
+        code = run_command(ctx, now=NOW, out=tmp_path / "diff.json", do_apply=False)
+
+    assert code == 0
+    assert (tmp_path / "last-run.json").exists()
+
+
 def test_failing_to_record_for_explain_changes_nothing_about_the_run(
     tmp_path: Path, sink: CapturingSink, monkeypatch: pytest.MonkeyPatch
 ) -> None:

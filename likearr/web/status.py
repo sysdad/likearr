@@ -24,13 +24,13 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from likearr.adapters.spotify import NOTHING_CHANGED_RETRY
-from likearr.adapters.state_sqlite import RunRow
+from likearr.adapters.state_sqlite import CoveragePoint, RunRow
 from likearr.config import is_mbid
 from likearr.core.cron import CronError, longest_gap
 from likearr.core.explain import resolution_outcome
 from likearr.models import APPLIED_STATUSES, EXIT_BUSY, HealthRecord, NameCollision, RunStatus, SourceKind
 from likearr.playlist_names import playlist_url
-from likearr.shell.last_run import LastRun
+from likearr.shell.last_run import LastRun, release_counts
 from likearr.shell.run import CONDITION_TEXT
 
 __all__ = [
@@ -787,12 +787,8 @@ def coverage(last: LastRun) -> Coverage:
         if outcome == "matched" and key in last.artist_resolutions:
             outcome = "matched-artist"
         outcomes[outcome] += 1
-    wanted = list(last.desired.releases)
-    albums = {key: last.view.album(key) for key in wanted}
-    monitored = [k for k, a in albums.items() if a is not None and a.monitored]
-    downloaded = sum(1 for k in monitored if albums[k].has_files)  # type: ignore[union-attr]
-    monitored_set = set(monitored)
-    unmonitored = [k for k in wanted if k not in monitored_set]
+    releases, monitored, downloaded = release_counts(last.desired, last.view)
+    unmonitored = [k for k in last.desired.releases if not ((a := last.view.album(k)) is not None and a.monitored)]
     dry = not last.applied
     would = sum(1 for k in unmonitored if k in (last.monitor or ())) if dry else 0
     return Coverage(
@@ -807,10 +803,50 @@ def coverage(last: LastRun) -> Coverage:
         excluded=outcomes["excluded"],
         lookup_failed=outcomes["failed"],
         pending=outcomes["pending"],
-        releases=len(wanted),
-        monitored=len(monitored),
+        releases=releases,
+        monitored=monitored,
         downloaded=downloaded,
-        waiting=len(monitored) - downloaded,
+        waiting=monitored - downloaded,
         not_monitored=len(unmonitored),
         would_monitor=would,
+    )
+
+
+# ---------------------------------------------------------------- coverage over time
+
+
+@dataclass(frozen=True, slots=True)
+class CoverageTrend:
+    """The coverage chart: percent downloaded per day as SVG points in a 100 x 100 box (x by date,
+    so a gap in runs shows as one; y on a fixed 0-100% scale, 0 at the bottom)."""
+
+    line: str
+    """Polyline points."""
+    area: str
+    """Polygon points: the line closed down to the 0% baseline."""
+    first: CoveragePoint
+    last: CoveragePoint
+    first_pct: int
+    last_pct: int
+
+
+def _pct(point: CoveragePoint) -> float:
+    return 100 * point.downloaded / point.releases if point.releases else 0.0
+
+
+def coverage_trend(points: Sequence[CoveragePoint]) -> CoverageTrend | None:
+    """The chart for `points` (oldest first), or ``None`` until there are two days to compare."""
+    if len(points) < 2:
+        return None
+    first, last = points[0], points[-1]
+    span = max((last.day - first.day).days, 1)
+    coords = [(round(100 * (p.day - first.day).days / span, 2), round(100 - _pct(p), 2)) for p in points]
+    line = " ".join(f"{x},{y}" for x, y in coords)
+    return CoverageTrend(
+        line=line,
+        area=f"{coords[0][0]},100 {line} {coords[-1][0]},100",
+        first=first,
+        last=last,
+        first_pct=round(_pct(first)),
+        last_pct=round(_pct(last)),
     )

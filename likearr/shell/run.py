@@ -33,10 +33,12 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from likearr.adapters.health import publish_all
 from likearr.adapters.http import redact
 from likearr.adapters.lock import LockHeld, run_lock
+from likearr.adapters.state_sqlite import CoveragePoint
 from likearr.config import Config
 from likearr.core.adopt import AdoptPlan, adopt_digest, plan_adoption
 from likearr.core.desire import CATALOGUE_TOO_LARGE_STEP
@@ -593,8 +595,9 @@ def _record_for_explain(
     applied: ApplyResult | None = None,
     refused: bool = False,
 ) -> None:
-    """Keep what this run saw for `explain --from-last-run` (see `shell.last_run`). Last, and
-    best-effort: it never raises, and nothing about the run depends on it."""
+    """Keep what this run saw for `explain --from-last-run` (see `shell.last_run`), and today's
+    point for the Status page's coverage chart. Last, and best-effort: it never raises, and
+    nothing about the run depends on it."""
     last_run.record_last_run(
         last_run.facts_path(ctx.config),
         lambda: last_run.last_run_facts(
@@ -614,6 +617,22 @@ def _record_for_explain(
             refused=refused,
         ),
     )
+    _record_coverage(ctx, result, now=now, executed=executed, applied=applied)
+
+
+def _record_coverage(
+    ctx: Context, result: PlanResult, *, now: datetime, executed: Diff | None, applied: ApplyResult | None
+) -> None:
+    """Store today's release counts, in the schedule's timezone. Never raises."""
+    try:
+        view = result.view
+        if executed is not None and applied is not None:
+            view = last_run.view_after_apply(view, executed, applied)
+        releases, monitored, downloaded = last_run.release_counts(result.desired, view)
+        day = now.astimezone(ZoneInfo(ctx.config.schedule.timezone)).date()
+        ctx.state.record_coverage(CoveragePoint(day=day, releases=releases, monitored=monitored, downloaded=downloaded))
+    except Exception:
+        log.warning("could not record this run's coverage", exc_info=True)
 
 
 def _exit_code_of(status: RunStatus) -> int:

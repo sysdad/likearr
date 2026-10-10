@@ -122,6 +122,22 @@
     {% endwith %}{% endif %}
   </div>
   {% endif %}
+  {% if trend %}{% with t = trend %}
+  {% set since = t.first.day.strftime("%d %b %Y") %}{% set latest = t.last.day.strftime("%d %b %Y") %}
+  <div class="card stat trend">
+    <span class="label">Downloaded over time</span>
+    <span class="sub">{{ t.first_pct }}% on {{ since }}, {{ t.last_pct }}% on {{ latest }}</span>
+    <div class="trend-plot">
+      <div class="trend-y" aria-hidden="true"><span>100%</span><span>50%</span><span>0%</span></div>
+      <svg viewBox="0 0 100 100" width="100%" height="128" preserveAspectRatio="none" role="img" aria-label="Percent downloaded: {{ t.first_pct }}% on {{ since }}, {{ t.last_pct }}% on {{ latest }}">
+        <g class="grid" stroke="currentColor" stroke-opacity=".2" vector-effect="non-scaling-stroke"><line x1="0" x2="100" y1="0" y2="0"/><line x1="0" x2="100" y1="50" y2="50"/><line x1="0" x2="100" y1="100" y2="100"/></g>
+        <polygon class="area" fill="none" points="{{ t.area }}"/>
+        <polyline class="line" fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke" points="{{ t.line }}"/>
+      </svg>
+      <div class="trend-x" aria-hidden="true"><span>{{ since }}</span><span>{{ latest }}</span></div>
+    </div>
+  </div>
+  {% endwith %}{% endif %}
 </section>
 
 {% if view.collisions %}{% with collisions = view.collisions %}{% include "_collisions.html" %}{% endwith %}{% endif %}

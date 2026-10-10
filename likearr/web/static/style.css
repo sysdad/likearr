@@ -118,6 +118,15 @@ progress.meter { appearance: none; -webkit-appearance: none; width: 100%; height
 progress.meter::-webkit-progress-bar { background: var(--line); border-radius: 999px; }
 progress.meter::-webkit-progress-value { background: var(--ok); border-radius: 999px; }
 progress.meter::-moz-progress-bar { background: var(--ok); border-radius: 999px; }
+.trend { margin: 0 0 var(--s4); }
+.trend-plot { display: grid; grid-template-columns: auto 1fr; gap: var(--s1) var(--s2); margin-top: var(--s2); }
+.trend-plot svg { display: block; width: 100%; height: 8rem; overflow: visible; }
+.trend-y { display: flex; flex-direction: column; justify-content: space-between; line-height: 1; height: calc(8rem + 1em); margin: -.5em 0; }
+.trend-y, .trend-x { color: var(--muted); font-size: var(--t-xs); font-variant-numeric: tabular-nums; }
+.trend-x { grid-column: 2; display: flex; justify-content: space-between; }
+.trend-plot .grid line { stroke: var(--line); stroke-opacity: 1; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.trend-plot .area { fill: var(--ok-soft); }
+.trend-plot .line { fill: none; stroke: var(--ok); stroke-width: 2; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
 
 /* ---- disclosures */
 details { margin: var(--s3) 0; }
