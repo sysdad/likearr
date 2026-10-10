@@ -45,7 +45,7 @@ from likearr.models import (
     SecondaryType,
 )
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 """Current schema version this module knows how to read and write.
 
 2: `health_baseline` / `health_baseline_meta`, for the run-to-run comparison in `core.health`.
@@ -90,6 +90,10 @@ anything - any `owned_releases` row, or a health baseline (only an apply writes 
 existing install keeps its schedule running with no step from the user. It runs once, keyed on
 the version stamp, so an `adopt --apply` after the upgrade never counts. Additive for a rollback
 too: an older image ignores the table, and never stamps the version back down.
+
+9: `coverage_history`, one row per day of the release counts behind the Status page's coverage
+card, for its chart. Additive, a new table only: an older file gains it empty, and the chart
+starts at the first run after the upgrade. An older image ignores it.
 """
 
 _SCHEMA_SQL = """
@@ -185,9 +189,29 @@ CREATE TABLE IF NOT EXISTS first_apply (
     id         INTEGER PRIMARY KEY CHECK (id = 1),
     applied_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS coverage_history (
+    day        TEXT PRIMARY KEY,
+    releases   INTEGER NOT NULL,
+    monitored  INTEGER NOT NULL,
+    downloaded INTEGER NOT NULL
+);
 """
 
 _MAX_RUNS = 200
+
+MAX_COVERAGE_DAYS = 730
+"""How many daily coverage points are kept: two years, a few kilobytes."""
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class CoveragePoint:
+    """One day's release counts, as the last run of that day read them."""
+
+    day: date
+    releases: int
+    monitored: int
+    downloaded: int
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -906,6 +930,41 @@ class SqliteState:
                 "DELETE FROM runs WHERE id NOT IN (SELECT id FROM runs ORDER BY id DESC LIMIT ?)",
                 (_MAX_RUNS,),
             )
+
+    def record_coverage(self, point: CoveragePoint) -> None:
+        """Store `point` as its day's, replacing an earlier run's from the same day, and keep only
+        the newest `MAX_COVERAGE_DAYS` days."""
+        with self.transaction():
+            self._conn.execute(
+                """
+                INSERT INTO coverage_history (day, releases, monitored, downloaded) VALUES (?, ?, ?, ?)
+                ON CONFLICT (day) DO UPDATE SET
+                    releases = excluded.releases,
+                    monitored = excluded.monitored,
+                    downloaded = excluded.downloaded
+                """,
+                (point.day.isoformat(), point.releases, point.monitored, point.downloaded),
+            )
+            self._conn.execute(
+                "DELETE FROM coverage_history WHERE day NOT IN "
+                "(SELECT day FROM coverage_history ORDER BY day DESC LIMIT ?)",
+                (MAX_COVERAGE_DAYS,),
+            )
+
+    def coverage_history(self) -> list[CoveragePoint]:
+        """Every stored coverage point, oldest first."""
+        rows = self._conn.execute(
+            "SELECT day, releases, monitored, downloaded FROM coverage_history ORDER BY day"
+        ).fetchall()
+        return [
+            CoveragePoint(
+                day=date.fromisoformat(row["day"]),
+                releases=row["releases"],
+                monitored=row["monitored"],
+                downloaded=row["downloaded"],
+            )
+            for row in rows
+        ]
 
     def last_run(self) -> HealthRecord | None:
         """The most recently recorded run's health record, if any."""

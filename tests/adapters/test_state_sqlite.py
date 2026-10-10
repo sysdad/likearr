@@ -9,8 +9,10 @@ from typing import Any
 
 import pytest
 
+from likearr.adapters import state_sqlite
 from likearr.adapters.state_sqlite import (
     SCHEMA_VERSION,
+    CoveragePoint,
     SqliteState,
     resolution_from_json,
     resolution_to_json,
@@ -1244,7 +1246,7 @@ def test_a_v7_file_that_owns_releases_migrates_as_already_applied(tmp_path: Path
     path = _v7_file(tmp_path / "v7.sqlite", owned=True)
 
     with SqliteState(path) as state:
-        assert state.schema_version() == SCHEMA_VERSION == 8
+        assert state.schema_version() == SCHEMA_VERSION
         assert state.first_apply_at() is not None
 
 
@@ -1498,3 +1500,44 @@ def test_run_id_in_job_ignores_dry_skipped_and_paused_records(state: SqliteState
     state.record_run(_health_record(ts=1040, dry_run=False), None)
     (applied, *_) = state.run_history(limit=10)
     assert state.run_id_in_job(1000, 1100) == applied.id
+
+
+def test_coverage_history_keeps_one_point_per_day_the_latest_winning(tmp_path: Path) -> None:
+    """Schema 9: a second run on the same day replaces that day's point; days read oldest first."""
+    with SqliteState(tmp_path / "fresh.sqlite") as state:
+        assert state.coverage_history() == []
+        state.record_coverage(CoveragePoint(day=date(2026, 10, 2), releases=10, monitored=8, downloaded=5))
+        state.record_coverage(CoveragePoint(day=date(2026, 10, 1), releases=10, monitored=6, downloaded=4))
+        state.record_coverage(CoveragePoint(day=date(2026, 10, 2), releases=11, monitored=9, downloaded=7))
+
+        assert state.coverage_history() == [
+            CoveragePoint(day=date(2026, 10, 1), releases=10, monitored=6, downloaded=4),
+            CoveragePoint(day=date(2026, 10, 2), releases=11, monitored=9, downloaded=7),
+        ]
+
+
+def test_coverage_history_keeps_only_the_newest_days(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(state_sqlite, "MAX_COVERAGE_DAYS", 3)
+    with SqliteState(tmp_path / "fresh.sqlite") as state:
+        for offset in range(5):
+            state.record_coverage(
+                CoveragePoint(day=date(2026, 10, 1) + timedelta(days=offset), releases=1, monitored=1, downloaded=1)
+            )
+
+        assert [p.day.day for p in state.coverage_history()] == [3, 4, 5]
+
+
+def test_a_v8_file_gains_an_empty_coverage_history(tmp_path: Path) -> None:
+    path = tmp_path / "v8.sqlite"
+    with SqliteState(path) as state:
+        state.record_first_apply(datetime(2026, 9, 25, tzinfo=UTC))
+    conn = sqlite3.connect(str(path))
+    conn.execute("DROP TABLE coverage_history")
+    conn.execute("UPDATE schema_version SET version = 8")
+    conn.commit()
+    conn.close()
+
+    with SqliteState(path) as state:
+        assert state.schema_version() == SCHEMA_VERSION == 9
+        assert state.coverage_history() == []
+        assert state.first_apply_at() is not None

@@ -11,6 +11,16 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
 
 ## [Unreleased]
 
+### Added
+
+- **Status charts percent downloaded over time**, one point a day, below the In Lidarr card. It
+  appears once two days are recorded; history starts at the first run after upgrading.
+
+### Upgrade notes
+
+- The state database moves to schema 9 (a new table, nothing rewritten). Rolling back to an older
+  image is safe; it ignores the table.
+
 ## [0.5.3]
 
 ### Added

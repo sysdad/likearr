@@ -196,7 +196,7 @@ def last_run_facts(
     `refused` marks an apply that found its plan stale. `unmonitor` and `guards` are the plan's,
     so Explain says a release is unmonitored only when the plan does it."""
     if executed is not None and applied is not None:
-        view = _after_apply(view, executed, applied)
+        view = view_after_apply(view, executed, applied)
     keys = set(desired.releases) | set(owned_keys)
     artist_mbids = set(desired.artists) | {k.artist_mbid for k in keys}
     albums = [album for key in sorted(keys, key=lambda k: (k.artist_mbid, k.rg_mbid)) if (album := view.album(key))]
@@ -222,7 +222,16 @@ def last_run_facts(
     }
 
 
-def _after_apply(view: LidarrView, executed: Diff, applied: _Applied) -> LidarrView:
+def release_counts(desired: DesiredState, view: LidarrView) -> tuple[int, int, int]:
+    """``(releases, monitored, downloaded)`` for what `desired` wants, as `view` shows it in
+    Lidarr: the counts behind the Status page's coverage card and its chart."""
+    albums = [view.album(key) for key in desired.releases]
+    monitored = [a for a in albums if a is not None and a.monitored]
+    return len(albums), len(monitored), sum(1 for a in monitored if a.has_files)
+
+
+def view_after_apply(view: LidarrView, executed: Diff, applied: _Applied) -> LidarrView:
+    """`view` with the apply's monitors and unmonitors made, less what Lidarr refused."""
     # An artist Lidarr refused to add is skipped the same way: it is not in Lidarr at all.
     # One someone else added first is in Lidarr, but none of the plan's changes to it were made.
     skipped = set(applied.skipped_artists) | set(applied.unknown_artists) | set(applied.foreign_artists)

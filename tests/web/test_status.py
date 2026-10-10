@@ -962,3 +962,35 @@ def test_short_message_never_invents_text_it_did_not_truncate_from() -> None:
 
     assert result != message
     assert message.startswith(result.rstrip("…"))
+
+
+from likearr.adapters.state_sqlite import CoveragePoint  # noqa: E402
+from likearr.web.status import coverage_trend  # noqa: E402
+
+
+def _point(day: int, downloaded: int, releases: int = 10) -> CoveragePoint:
+    return CoveragePoint(
+        day=datetime(2026, 10, day).date(), releases=releases, monitored=releases, downloaded=downloaded
+    )
+
+
+def test_no_trend_until_there_are_two_days() -> None:
+    assert coverage_trend([]) is None
+    assert coverage_trend([_point(1, 5)]) is None
+
+
+def test_the_trend_spaces_days_by_date_on_a_fixed_percent_scale() -> None:
+    trend = coverage_trend([_point(1, 2), _point(2, 5), _point(5, 10)])
+
+    assert trend is not None
+    assert trend.line == "0.0,80.0 25.0,50.0 100.0,0.0"  # day 2 is a quarter of the way to day 5
+    assert trend.area == "0.0,100 0.0,80.0 25.0,50.0 100.0,0.0 100.0,100"
+    assert (trend.first_pct, trend.last_pct) == (20, 100)
+
+
+def test_a_day_with_nothing_wanted_plots_at_zero() -> None:
+    trend = coverage_trend([_point(1, 0, releases=0), _point(2, 3, releases=4)])
+
+    assert trend is not None
+    assert trend.line == "0.0,100.0 100.0,25.0"
+    assert (trend.first_pct, trend.last_pct) == (0, 75)

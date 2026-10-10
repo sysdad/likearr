@@ -8,7 +8,7 @@ import os
 import re
 import time
 from collections.abc import Iterator, MutableMapping, Sequence
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -2403,6 +2403,23 @@ def test_status_counts_coverage_and_links_what_could_not_be_matched(client: Test
     assert "% downloaded" in page
     assert '<a href="/unmatched#unmatched">Couldn\'t be matched</a>' in page
     assert "<strong>Nobody - Lost Album</strong>" in unmatched
+
+
+def test_status_charts_coverage_once_two_days_are_recorded(client: TestClient, data_dir: Path) -> None:
+    from likearr.adapters.state_sqlite import CoveragePoint
+
+    _login(client)
+    with SqliteState(data_dir / "state.sqlite") as state:
+        state.record_coverage(CoveragePoint(day=date(2026, 9, 1), releases=10, monitored=8, downloaded=4))
+    assert "Downloaded over time" not in client.get("/").text
+
+    with SqliteState(data_dir / "state.sqlite") as state:
+        state.record_coverage(CoveragePoint(day=date(2026, 9, 8), releases=10, monitored=9, downloaded=7))
+    page = client.get("/").text
+
+    assert "Downloaded over time" in page
+    assert "40% on 01 Sep 2026, 70% on 08 Sep 2026" in page
+    assert 'points="0.0,60.0 100.0,30.0"' in page
 
 
 def test_the_waiting_for_a_download_note_links_to_lidarr_when_an_address_is_configured(

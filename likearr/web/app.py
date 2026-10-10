@@ -92,6 +92,7 @@ from likearr.web.status import (
     ago,
     build_status,
     coverage,
+    coverage_trend,
     describe_run,
     first_run_checklist,
     health_glance,
@@ -361,9 +362,11 @@ def status(request: Request) -> Response:
     published = None
     last_fire_at = None
     first_applied = False
+    trend_points = []
     if not state_missing:  # never create it: see healthz
         with SqliteState(config.state_db) as state:
             rows = state.run_history(HISTORY_ROWS)
+            trend_points = state.coverage_history()
             published = state.last_published_run()
             last_fire_at = state.last_scheduled_fire()
             first_applied = state.first_apply_at() is not None
@@ -408,6 +411,7 @@ def status(request: Request) -> Response:
             ),
             "checklist": checklist,
             "coverage": coverage(last) if last is not None else None,
+            "trend": coverage_trend(trend_points),
             "reauth": reauth,
             "reauth_note": reauth_note,
             "has_token": has_token,
