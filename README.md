@@ -63,7 +63,7 @@ fill in [`deploy/env.example`](deploy/env.example) as `.env` beside it.
 ```yaml
 services:
   likearr:
-    image: ghcr.io/sysdad/likearr:0.5.3
+    image: ghcr.io/sysdad/likearr:0.5.4
     environment:
       LIKEARR_LIDARR_URL: "http://lidarr:8686"              # how this container reaches Lidarr
       LIKEARR_LIDARR_API_KEY: "<your lidarr api key>"       # Lidarr Settings -> General -> Security

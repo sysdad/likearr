@@ -56,7 +56,7 @@ Without Compose, run the same image with `docker run`:
 
 ```
 docker run -d --name likearr --env-file .env -v "$PWD/likearr-data:/data" -p 8770:8770 \
-  --memory 768m --stop-timeout 1800 --restart unless-stopped ghcr.io/sysdad/likearr:0.5.3
+  --memory 768m --stop-timeout 1800 --restart unless-stopped ghcr.io/sysdad/likearr:0.5.4
 ```
 
 ## Lidarr setup

@@ -12,7 +12,7 @@ body:
     attributes:
       label: likearr version
       description: Output of `likearr --version`.
-      placeholder: likearr 0.5.3
+      placeholder: likearr 0.5.4
     validations:
       required: true
   - type: input
