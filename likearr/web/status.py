@@ -788,9 +788,11 @@ def coverage(last: LastRun) -> Coverage:
             outcome = "matched-artist"
         outcomes[outcome] += 1
     releases, monitored, downloaded = release_counts(last.desired, last.view)
-    unmonitored = [k for k in last.desired.releases if not ((a := last.view.album(k)) is not None and a.monitored)]
     dry = not last.applied
-    would = sum(1 for k in unmonitored if k in (last.monitor or ())) if dry else 0
+    would = 0
+    if dry:
+        unmonitored = (k for k in last.desired.releases if not ((a := last.view.album(k)) is not None and a.monitored))
+        would = sum(1 for k in unmonitored if k in (last.monitor or ()))
     return Coverage(
         as_of=last.ran_at,
         label=last.label,
@@ -807,7 +809,7 @@ def coverage(last: LastRun) -> Coverage:
         monitored=monitored,
         downloaded=downloaded,
         waiting=monitored - downloaded,
-        not_monitored=len(unmonitored),
+        not_monitored=releases - monitored,
         would_monitor=would,
     )
 
