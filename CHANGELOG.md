@@ -11,6 +11,8 @@ descriptions, not here. Future releases go back to the fuller `Added` / `Changed
 
 ## [Unreleased]
 
+## [0.5.4]
+
 ### Added
 
 - **Status charts percent downloaded over time**, one point a day, below the In Lidarr card. It
