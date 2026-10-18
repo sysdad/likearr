@@ -14,7 +14,7 @@
 FROM ghcr.io/astral-sh/uv:0.6@sha256:4a6c9444b126bd325fba904bff796bf91fb777bf6148d60109c4cb1de2ffc497 AS uv
 
 # ---------------------------------------------------------------- builder
-FROM python:3.12-slim@sha256:2f17fc044b579bab302c2e8054d3a686e2cb9a83de48e70534b94cd8ebbe06a9 AS builder
+FROM python:3.12-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1 AS builder
 
 COPY --from=uv /uv /uvx /bin/
 
@@ -53,7 +53,7 @@ RUN /app/.venv/bin/python -m compileall -q -f --invalidation-mode checked-hash /
     && chmod -R a+rX /app/likearr /app/.venv
 
 # ---------------------------------------------------------------- final
-FROM python:3.12-slim@sha256:2f17fc044b579bab302c2e8054d3a686e2cb9a83de48e70534b94cd8ebbe06a9 AS final
+FROM python:3.12-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1 AS final
 
 ARG LIKEARR_UID=1000
 ARG LIKEARR_GID=1000
